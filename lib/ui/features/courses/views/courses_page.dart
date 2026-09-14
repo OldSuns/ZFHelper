@@ -1,0 +1,931 @@
+import 'package:flutter/material.dart';
+import 'package:zf_core/zf_core.dart';
+
+import '../../../core/app_theme.dart';
+import '../view_models/courses_view_model.dart';
+import 'course_details_sheet.dart';
+import 'course_list_tile.dart';
+import 'selection_operation_card.dart';
+
+class CoursesPage extends StatefulWidget {
+  const CoursesPage({
+    required this.viewModel,
+    required this.schoolName,
+    required this.onOpenSettings,
+    super.key,
+  });
+
+  final CoursesViewModel viewModel;
+  final String schoolName;
+  final VoidCallback onOpenSettings;
+
+  @override
+  State<CoursesPage> createState() => _CoursesPageState();
+}
+
+enum _CourseAction { accounts, information, clearCache, clearHistory, settings }
+
+class _CoursesPageState extends State<CoursesPage> {
+  final _scroll = ScrollController();
+  final _pendingOperations = <String>{};
+  late final TextEditingController _search;
+
+  CoursesViewModel get model => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _search = TextEditingController(text: model.query);
+    model.addListener(_syncSearch);
+  }
+
+  @override
+  void didUpdateWidget(covariant CoursesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewModel == model) return;
+    oldWidget.viewModel.removeListener(_syncSearch);
+    model.addListener(_syncSearch);
+    _syncSearch();
+  }
+
+  void _syncSearch() {
+    if (_search.text == model.query) return;
+    _search.value = TextEditingValue(
+      text: model.query,
+      selection: TextSelection.collapsed(offset: model.query.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    model.removeListener(_syncSearch);
+    _search.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _message(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _showTab(CoursePageTab tab) {
+    model.setTab(tab);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  Future<void> _refresh() async {
+    final scope = model.account?.account.scope;
+    final refreshed = await model.refresh();
+    if (!mounted || !refreshed || model.account?.account.scope != scope) return;
+    _message(model.rounds.isEmpty ? '学校当前没有开放的选课轮次' : '课程与已选记录已更新并保存在本机');
+  }
+
+  Future<void> _chooseAccount() async {
+    final accounts = model.data.library.accounts;
+    final selected = model.account?.account.scope;
+    final scope = await showModalBottomSheet<AccountScope>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _ChoiceSheet(
+        title: '本机保存的选课账号',
+        children: [
+          for (final account in accounts)
+            ListTile(
+              title: Text(account.account.schoolName),
+              subtitle: Text(
+                '${account.account.accountName} · '
+                '${account.account.loginName}\n'
+                '${account.catalogs.length} 个已保存轮次',
+              ),
+              selected: selected == account.account.scope,
+              trailing: selected == account.account.scope
+                  ? const Icon(Icons.check_rounded)
+                  : null,
+              onTap: () => Navigator.of(context).pop(account.account.scope),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || scope == null) return;
+    if (await model.selectAccount(scope) && mounted && _scroll.hasClients) {
+      _scroll.jumpTo(0);
+    }
+  }
+
+  Future<void> _chooseRound() async {
+    final scope = model.account?.account.scope;
+    final rounds = model.rounds;
+    final selected = model.round?.key;
+    final key = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => _ChoiceSheet(
+        title: '选择学校开放的轮次',
+        children: [
+          for (final round in rounds)
+            ListTile(
+              title: Text(round.label),
+              subtitle: round.term == null ? null : Text(round.term!.label),
+              selected: selected == round.key,
+              trailing: selected == round.key
+                  ? const Icon(Icons.check_rounded)
+                  : null,
+              onTap: () => Navigator.of(context).pop(round.key),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || key == null) return;
+    if (model.account?.account.scope != scope) {
+      _message('账号已切换，请重新选择轮次');
+      return;
+    }
+    if (await model.selectRound(key) && mounted && _scroll.hasClients) {
+      _scroll.jumpTo(0);
+    }
+  }
+
+  Future<void> _openCourse(CourseOffering course) async {
+    final scope = model.account?.account.scope;
+    if (scope == null) return;
+    final details = model.sections(course);
+    final started = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => CourseDetailsSheet(
+        viewModel: model,
+        requestedCourse: course,
+        requestScope: scope,
+        initialFuture: details,
+        onOpenSettings: () {
+          Navigator.of(context).pop();
+          widget.onOpenSettings();
+        },
+      ),
+    );
+    if (mounted && started == true) _showTab(CoursePageTab.operations);
+  }
+
+  Future<void> _showSelected(SelectedCourse course) {
+    final account = model.account?.account;
+    final term = course.term ?? model.round?.term;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(course.name),
+        scrollable: true,
+        content: SelectableText(
+          [
+            if (account != null)
+              '${account.schoolName} · ${account.accountName}',
+            '课程编号：${course.courseId}',
+            '教学班编号：${course.sectionId}',
+            '学期：${term?.label ?? '学校未标注'}',
+            '教师：${course.teacher ?? '学校未提供'}',
+            '时间：${course.time ?? '学校未提供'}',
+            '地点：${course.location ?? '学校未提供'}',
+            '来自最近一次读取的学校已选记录。',
+          ].join('\n\n'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _operate(String id, Future<bool> Function() action) async {
+    if (_pendingOperations.contains(id)) return;
+    setState(() => _pendingOperations.add(id));
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _pendingOperations.remove(id));
+    }
+  }
+
+  Future<void> _resume(SelectionOperation operation) async {
+    final target = operation.target;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('继续选课？'),
+        scrollable: true,
+        content: Text(
+          '${target.schoolName} · ${target.accountName}\n'
+          '${target.name}\n${target.round.label}\n\n'
+          '继续前会先核对学校已选记录。'
+          '${operation.mode == SelectionMode.watch ? '\n本次将重新捡漏 ${operation.duration.inMinutes} 分钟，检查间隔 ${operation.interval.inSeconds} 秒。' : ''}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('继续执行'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && confirmed == true) {
+      await _operate(operation.id, () => model.resume(operation.id));
+    }
+  }
+
+  Future<void> _showInformation() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('选课数据与运行说明'),
+      scrollable: true,
+      content: SelectableText(
+        [
+          if (model.account case final account?) ...[
+            '${account.account.schoolName} · ${account.account.accountName}',
+            if (account.roundsFetchedAt case final updated?)
+              '轮次更新：${courseDateTime(updated, seconds: true)}',
+          ],
+          if (model.catalog case final catalog?) ...[
+            '课程更新：${courseDateTime(catalog.fetchedAt, seconds: true)}\n'
+                '${catalog.courses.length} 门课程',
+            if (catalog.selectedFetchedAt case final updated?)
+              '已选更新：${courseDateTime(updated, seconds: true)}\n'
+                  '${catalog.selectedCourses.length} 条已选记录',
+          ],
+          '课程与已选记录按学校、账号和轮次保存在本机。查看已保存的轮次不会自动更新；点击更新后读取学校的最新数据。',
+          '搜索与筛选只作用于当前轮次已保存的完整列表。余量来自上次查询，实际选课前会重新读取。',
+          '立即选课只执行一次；持续捡漏由你手动启动，到期或点击停止后结束。学校明确确认的已选记录才会标记为选课成功。',
+          '所有账号的运行进度统一显示在操作记录中。关闭软件后重新打开，暂停的操作需手动继续，结果待核实的操作需先核实。',
+        ].join('\n\n'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _clearCache() async {
+    final account = model.account;
+    if (account == null) return;
+    final confirmed = await _confirm(
+      '清除本机选课数据？',
+      '将清除 ${account.account.schoolName} · ${account.account.accountName} '
+          '在本机保存的轮次、可选课程与已选记录，之后需要重新查询。'
+          '操作记录会保留，学校的选课结果不会改变。',
+      '清除本机数据',
+    );
+    if (!mounted || !confirmed) return;
+    if (model.account?.account.scope != account.account.scope) {
+      _message('账号已切换，请重新确认要清除的数据');
+      return;
+    }
+    if (await model.clearCurrentCache()) _message('本机选课数据已清除');
+  }
+
+  Future<void> _clearHistory() async {
+    final confirmed = await _confirm(
+      '清除已结束的操作记录？',
+      '将清除所有账号已结束的操作记录。正在运行、已暂停及结果待核实的记录会保留。',
+      '清除已结束记录',
+    );
+    if (mounted && confirmed && await model.clearHistory()) {
+      _message('已结束的操作记录已清除');
+    }
+  }
+
+  Future<bool> _confirm(String title, String message, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          scrollable: true,
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> _action(_CourseAction action) async {
+    switch (action) {
+      case _CourseAction.accounts:
+        await _chooseAccount();
+      case _CourseAction.information:
+        await _showInformation();
+      case _CourseAction.clearCache:
+        await _clearCache();
+      case _CourseAction.clearHistory:
+        await _clearHistory();
+      case _CourseAction.settings:
+        widget.onOpenSettings();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: model,
+    builder: (context, _) {
+      final content = CustomScrollView(
+        key: const PageStorageKey('courses-list'),
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverToBoxAdapter(child: _header()),
+          if (model.data.refreshing)
+            const SliverToBoxAdapter(
+              child: LinearProgressIndicator(
+                minHeight: 2,
+                semanticsLabel: '正在更新课程与已选记录',
+              ),
+            ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.list(
+              children: [
+                if (model.data.failure != null) _failure(),
+                _tabs(),
+                if (model.tab != CoursePageTab.operations) ...[
+                  if (model.activeCount > 0 || model.uncertainCount > 0)
+                    _operationNotice(),
+                  if (model.rounds.isNotEmpty) _roundSelector(),
+                  if (model.catalog != null) ...[
+                    const SizedBox(height: 8),
+                    _searchBar(),
+                    _listSummary(),
+                  ],
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      '所有账号的操作记录',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: _records(),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 16 + MediaQuery.paddingOf(context).bottom),
+          ),
+        ],
+      );
+      return SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.contentMaxWidth,
+            ),
+            child: Scrollbar(
+              controller: _scroll,
+              child: model.canRefresh && model.tab != CoursePageTab.operations
+                  ? RefreshIndicator(onRefresh: _refresh, child: content)
+                  : content,
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _header() {
+    final account = model.account?.account;
+    final label = account == null
+        ? (widget.schoolName.isEmpty ? '请先配置学校并登录' : widget.schoolName)
+        : '${account.schoolName} · ${account.accountName}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('选课', style: Theme.of(context).textTheme.headlineSmall),
+                Tooltip(
+                  message: account == null
+                      ? label
+                      : '$label · ${account.loginName}',
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: model.canRefresh ? '更新课程与已选记录' : '登录后更新课程',
+            onPressed: model.busy
+                ? null
+                : model.canRefresh
+                ? _refresh
+                : widget.onOpenSettings,
+            icon: const Icon(Icons.sync_rounded),
+          ),
+          PopupMenuButton<_CourseAction>(
+            tooltip: '选课菜单',
+            onSelected: _action,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _CourseAction.accounts,
+                enabled:
+                    !model.data.loading &&
+                    model.data.library.accounts.isNotEmpty,
+                child: const Text('本机保存的账号'),
+              ),
+              const PopupMenuItem(
+                value: _CourseAction.information,
+                child: Text('更新时间与运行说明'),
+              ),
+              PopupMenuItem(
+                value: _CourseAction.clearCache,
+                enabled: !model.busy && model.account?.roundsFetchedAt != null,
+                child: const Text('清除本机选课数据'),
+              ),
+              PopupMenuItem(
+                value: _CourseAction.clearHistory,
+                enabled: model.data.operations.isNotEmpty,
+                child: const Text('清除已结束的操作记录'),
+              ),
+              const PopupMenuItem(
+                value: _CourseAction.settings,
+                child: Text('学校与登录设置'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabs() => Wrap(
+    spacing: 8,
+    runSpacing: 4,
+    children: [
+      for (final tab in CoursePageTab.values)
+        ChoiceChip(
+          label: Text(switch (tab) {
+            CoursePageTab.available => '可选课程',
+            CoursePageTab.selected => '已选课程',
+            CoursePageTab.operations => '操作记录',
+          }),
+          selected: model.tab == tab,
+          onSelected: (_) => _showTab(tab),
+        ),
+    ],
+  );
+
+  Widget _operationNotice() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Material(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: ListTile(
+        dense: true,
+        title: Text(
+          [
+            if (model.activeCount > 0) '${model.activeCount} 项正在运行',
+            if (model.uncertainCount > 0) '${model.uncertainCount} 项结果待核实',
+          ].join(' · '),
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => _showTab(CoursePageTab.operations),
+      ),
+    ),
+  );
+
+  Widget _roundSelector() => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: OutlinedButton(
+      onPressed: model.busy ? null : _chooseRound,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                [
+                  model.round?.label ?? '选择选课轮次',
+                  if (model.round?.term case final term?) term.label,
+                ].join('\n'),
+                textAlign: TextAlign.start,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.expand_more_rounded),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _searchBar() => LayoutBuilder(
+    builder: (context, constraints) {
+      final search = TextField(
+        controller: _search,
+        onChanged: model.setQuery,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          labelText: '搜索当前轮次',
+          hintText: '课程、代码、教师或地点',
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          suffixIcon: model.query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: '清空课程搜索',
+                  onPressed: () => model.setQuery(''),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+      );
+      if (model.tab == CoursePageTab.selected) return search;
+      final options = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PopupMenuButton<CourseSort>(
+            tooltip: '排序：${_sortLabel(model.sort)}',
+            onSelected: model.setSort,
+            icon: const Icon(Icons.sort_rounded),
+            itemBuilder: (context) => [
+              for (final sort in CourseSort.values)
+                CheckedPopupMenuItem(
+                  value: sort,
+                  checked: model.sort == sort,
+                  child: Text(_sortLabel(sort)),
+                ),
+            ],
+          ),
+          PopupMenuButton<CourseFilter>(
+            tooltip: '筛选：${_filterLabel(model.filter)}',
+            onSelected: model.setFilter,
+            icon: Icon(
+              model.filter == CourseFilter.all
+                  ? Icons.filter_alt_outlined
+                  : Icons.filter_alt_rounded,
+            ),
+            itemBuilder: (context) => [
+              for (final filter in CourseFilter.values)
+                CheckedPopupMenuItem(
+                  value: filter,
+                  checked: model.filter == filter,
+                  child: Text(_filterLabel(filter)),
+                ),
+            ],
+          ),
+        ],
+      );
+      if (constraints.maxWidth < MediaQuery.textScalerOf(context).scale(260)) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            search,
+            Align(alignment: Alignment.centerRight, child: options),
+          ],
+        );
+      }
+      return Row(
+        children: [
+          Expanded(child: search),
+          options,
+        ],
+      );
+    },
+  );
+
+  Widget _listSummary() {
+    final available = model.tab == CoursePageTab.available;
+    final count = available
+        ? model.visibleCourses.length
+        : model.selectedCourses.length;
+    final total = available
+        ? model.catalog!.courses.length
+        : model.catalog!.selectedCourses.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            '$count / $total ${available ? '门课程' : '条已选记录'}'
+            '${model.canRefresh ? '' : ' · 本机缓存'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (available && model.filter != CourseFilter.all)
+            InputChip(
+              label: Text(_filterLabel(model.filter)),
+              onDeleted: () => model.setFilter(CourseFilter.all),
+              deleteButtonTooltipMessage: '清除课程筛选',
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _failure() => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Material(
+      color: Theme.of(context).colorScheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  model.data.failure!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: '关闭选课错误提示',
+              onPressed: model.dismissFailure,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _records() {
+    if (model.tab == CoursePageTab.operations) {
+      final operations = model.operations;
+      if (operations.isEmpty) return SliverToBoxAdapter(child: _emptyState());
+      return SliverList.builder(
+        itemCount: operations.length,
+        itemBuilder: (context, index) {
+          final operation = operations[index];
+          return SelectionOperationCard(
+            key: ValueKey(operation.id),
+            operation: operation,
+            busy: _pendingOperations.contains(operation.id),
+            canQuery: model.canQuery(operation.target.scope),
+            onStop: () =>
+                _operate(operation.id, () => model.stop(operation.id)),
+            onResume: () => _resume(operation),
+            onVerify: () =>
+                _operate(operation.id, () => model.verify(operation.id)),
+            onOpenSettings: widget.onOpenSettings,
+          );
+        },
+      );
+    }
+    if (model.tab == CoursePageTab.selected) {
+      final courses = model.selectedCourses;
+      if (courses.isEmpty) return SliverToBoxAdapter(child: _emptyState());
+      return SliverList.separated(
+        itemCount: courses.length,
+        itemBuilder: (context, index) {
+          final course = courses[index];
+          return ListTile(
+            key: ValueKey(course.key),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 4,
+            ),
+            title: Text(course.name),
+            subtitle: Text(
+              [
+                course.courseId,
+                if (course.teacher != null) course.teacher!,
+                if (course.time != null) course.time!,
+              ].join(' · '),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _showSelected(course),
+          );
+        },
+        separatorBuilder: (context, _) => const Divider(height: 1),
+      );
+    }
+    final courses = model.visibleCourses;
+    if (courses.isEmpty) return SliverToBoxAdapter(child: _emptyState());
+    return SliverList.separated(
+      itemCount: courses.length,
+      itemBuilder: (context, index) {
+        final course = courses[index];
+        return CourseListTile(
+          key: ValueKey(course.key),
+          course: course,
+          isSelected: model.isSelected(course),
+          onTap: () => _openCourse(course),
+        );
+      },
+      separatorBuilder: (context, _) => const Divider(height: 1),
+    );
+  }
+
+  Widget _emptyState() {
+    if (model.data.loading ||
+        (model.data.refreshing &&
+            model.catalog == null &&
+            model.tab != CoursePageTab.operations)) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(model.data.loading ? '正在读取本机选课数据…' : '正在查询学校课程…'),
+          ],
+        ),
+      );
+    }
+    if (!model.data.initialized) {
+      return _EmptyCourses(
+        icon: Icons.storage_rounded,
+        title: '本机选课数据尚未读取完成',
+        message: '请重新读取，已保存的数据会保留。',
+        actionLabel: '重新读取',
+        onAction: model.initialize,
+      );
+    }
+    if (model.tab == CoursePageTab.operations) {
+      return _EmptyCourses(
+        icon: Icons.playlist_add_check_rounded,
+        title: '还没有选课操作',
+        message: '选择课程和具体教学班，手动启动立即选课或持续捡漏。',
+        actionLabel: '查看可选课程',
+        onAction: () => _showTab(CoursePageTab.available),
+      );
+    }
+    final catalog = model.catalog;
+    final total = model.tab == CoursePageTab.available
+        ? catalog?.courses.length
+        : catalog?.selectedCourses.length;
+    if (total != null && total > 0) {
+      return _EmptyCourses(
+        icon: Icons.search_off_rounded,
+        title: '没有符合条件的课程',
+        message: '可以调整搜索内容或筛选条件。',
+        actionLabel: '清空搜索与筛选',
+        onAction: model.clearFilters,
+      );
+    }
+    if (catalog != null) {
+      if (model.tab == CoursePageTab.selected &&
+          catalog.selectedFetchedAt == null) {
+        return _EmptyCourses(
+          icon: Icons.playlist_add_check_rounded,
+          title: '还没有保存的已选记录',
+          message: '更新课程时会同时读取该学期的学校已选记录。',
+          actionLabel: model.canRefresh ? '查询已选记录' : '登录后查询',
+          onAction: model.busy
+              ? null
+              : model.canRefresh
+              ? _refresh
+              : widget.onOpenSettings,
+        );
+      }
+      return _EmptyCourses(
+        icon: Icons.menu_book_outlined,
+        title: model.tab == CoursePageTab.selected ? '学校暂无已选记录' : '此轮次暂无可选课程',
+        message: model.tab == CoursePageTab.selected
+            ? '本次查询没有返回该学期的已选课程。'
+            : '本次查询没有返回课程，学校开放范围可能会变化。',
+        actionLabel: model.canRefresh ? '更新课程' : '登录后更新',
+        onAction: model.busy
+            ? null
+            : model.canRefresh
+            ? _refresh
+            : widget.onOpenSettings,
+      );
+    }
+    final queried = model.account?.roundsFetchedAt != null;
+    return _EmptyCourses(
+      icon: Icons.school_outlined,
+      title: model.account == null
+          ? '登录后查询课程'
+          : queried && model.rounds.isEmpty
+          ? '学校当前未开放选课轮次'
+          : model.round == null
+          ? '还没有保存的课程'
+          : '此轮次还没有保存的课程',
+      message: model.canRefresh
+          ? '查询学校当前开放的选课轮次和课程，成功后保存在本机。'
+          : '请先登录此学校的教务账号。已保存的课程可以离线查看。',
+      actionLabel: model.canRefresh ? '查询课程' : '前往登录',
+      onAction: model.canRefresh ? _refresh : widget.onOpenSettings,
+    );
+  }
+}
+
+class _ChoiceSheet extends StatelessWidget {
+  const _ChoiceSheet({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * .8,
+    ),
+    child: ListView(
+      shrinkWrap: true,
+      padding: EdgeInsets.fromLTRB(
+        8,
+        0,
+        8,
+        16 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+        ),
+        ...children,
+      ],
+    ),
+  );
+}
+
+class _EmptyCourses extends StatelessWidget {
+  const _EmptyCourses({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+  final IconData icon;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 32),
+    child: Column(
+      children: [
+        Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(height: 12),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(message, textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(onPressed: onAction, child: Text(actionLabel)),
+      ],
+    ),
+  );
+}
+
+String _sortLabel(CourseSort sort) => switch (sort) {
+  CourseSort.schoolOrder => '学校顺序',
+  CourseSort.name => '课程名称',
+  CourseSort.available => '余量从多到少',
+};
+
+String _filterLabel(CourseFilter filter) => switch (filter) {
+  CourseFilter.all => '全部课程',
+  CourseFilter.available => '有余量',
+  CourseFilter.unknownCapacity => '余量未知',
+};

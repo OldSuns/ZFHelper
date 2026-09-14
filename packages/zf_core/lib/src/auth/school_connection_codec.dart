@@ -27,6 +27,7 @@ abstract final class SchoolConnectionCodec {
     'schedulePeriodsPath': profile.schedulePeriodsPath,
     'gradePagePath': profile.gradePagePath,
     'gradeQueryPath': profile.gradeQueryPath,
+    'selectionPagePath': profile.selectionPagePath,
     'webLoginUri': profile.webLoginUri?.toString(),
   };
 
@@ -59,6 +60,9 @@ abstract final class SchoolConnectionCodec {
       gradeQueryPath: value.containsKey('gradeQueryPath')
           ? _string(value, 'gradeQueryPath')
           : SchoolConnection.defaultGradeQueryPath,
+      selectionPagePath: value.containsKey('selectionPagePath')
+          ? _string(value, 'selectionPagePath')
+          : SchoolConnection.defaultSelectionPagePath,
       webLoginUri: webLogin == null ? null : Uri.parse(webLogin),
     );
   }

@@ -77,6 +77,28 @@ void main() {
         (await SecureLoginVault().readSchool())?.baseUri,
         testProfile.baseUri,
       );
+
+      final second = StoredLogin(
+        profile: SchoolConnection(
+          name: '另一所学校',
+          baseUri: Uri.parse('https://second.example/teaching/'),
+        ),
+        session: testSession(id: 'second-account'),
+        method: LoginMethod.cookie,
+      );
+      await restarted.write(second);
+      final library = await SecureLoginVault().readAccounts();
+      expect(library.accounts, hasLength(2));
+      expect(library.accounts.first.login, isNull);
+      expect(library.selected?.account.id, 'second-account');
+      expect(library.selected?.profile.baseUri, second.profile.baseUri);
+      await restarted.clear();
+      final signedOut = await SecureLoginVault().readAccounts();
+      expect(signedOut.accounts, hasLength(2));
+      expect(
+        signedOut.accounts.every((account) => account.login == null),
+        isTrue,
+      );
     },
   );
 

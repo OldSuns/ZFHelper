@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
+import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
 import 'support/auth_fakes.dart';
 import 'support/schedule_fakes.dart';
 import 'support/grade_fakes.dart';
+import 'support/course_fakes.dart';
 
 void main() {
   Future<void> pumpApp(
@@ -29,6 +31,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          courses: testCourseRepository(),
           grades: testGradeRepository(),
           auth: testAuth(),
           schedule: testScheduleRepository(),
@@ -119,22 +122,24 @@ void main() {
     expect(find.byType(TimetablePage), findsOneWidget);
   });
 
-  testWidgets('task action routes to courses and Android back returns home', (
-    tester,
-  ) async {
-    await pumpApp(tester);
-    await tester.tap(navigationLabel('任务'));
-    await tester.pumpAndSettle();
-    expect(find.text('还没有选课任务'), findsOneWidget);
+  testWidgets(
+    'three destinations include courses and Android back returns home',
+    (tester) async {
+      await pumpApp(tester);
+      expect(navigationLabel('任务'), findsNothing);
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).destinations,
+        hasLength(3),
+      );
+      await tester.tap(navigationLabel('选课'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoursesPage), findsOneWidget);
 
-    await tester.tap(find.text('前往选课'));
-    await tester.pumpAndSettle();
-    expect(find.text('查看可选课程'), findsOneWidget);
-
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(find.byType(TimetablePage), findsOneWidget);
-  });
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(TimetablePage), findsOneWidget);
+    },
+  );
 
   testWidgets('wide window uses side navigation with the same default page', (
     tester,
@@ -151,7 +156,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('查看可选课程'), findsOneWidget);
+    expect(find.byType(CoursesPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

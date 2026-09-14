@@ -11,6 +11,7 @@ import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
 import '../../../support/grade_fakes.dart';
+import '../../../support/course_fakes.dart';
 
 void main() {
   testWidgets(
@@ -25,6 +26,7 @@ void main() {
       await tester.pumpWidget(
         ZfHelperApp(
           configuration: AppConfiguration(
+            courses: testCourseRepository(),
             grades: testGradeRepository(),
             auth: auth,
             schedule: repository,

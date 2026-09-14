@@ -11,6 +11,7 @@ import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
 import '../../../support/grade_fakes.dart';
+import '../../../support/course_fakes.dart';
 
 void main() {
   testWidgets('finishing a save during back navigation keeps settings open', (
@@ -38,6 +39,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          courses: testCourseRepository(),
           grades: testGradeRepository(),
           schedule: testScheduleRepository(),
           auth: auth,
@@ -96,6 +98,22 @@ final class _DeferredWriteVault implements LoginVault {
   final releaseWrite = Completer<void>();
   StoredLogin? _saved;
   SchoolConnection? _school;
+  StoredLoginLibrary? _library;
+
+  @override
+  Future<StoredLoginLibrary> readAccounts() async =>
+      _library ?? StoredLoginLibrary.fromLogin(_saved);
+
+  @override
+  Future<void> writeAccounts(StoredLoginLibrary library) async {
+    final selected = library.selected?.login;
+    if (selected == null) {
+      await clear();
+    } else {
+      await write(selected);
+    }
+    _library = library;
+  }
 
   @override
   Future<SchoolConnection?> readSchool() async => _school;

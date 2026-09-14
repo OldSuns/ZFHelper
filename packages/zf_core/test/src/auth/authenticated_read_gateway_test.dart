@@ -122,6 +122,20 @@ void main() {
         expect(forwarded.uri, _postQuery.uri.resolve('updated-query.html'));
         expect(forwarded.form, _postQuery.form);
         expect(forwarded.headers, _postQuery.headers);
+
+        transport.handlers.add(
+          (request) => textResponse(
+            request,
+            '',
+            status: status,
+            headers: {
+              'location': ['updated-submit.html'],
+            },
+          ),
+        );
+        final beforeSubmission = transport.requests.length;
+        expect((await gateway.sendMutation(_postQuery)).statusCode, status);
+        expect(transport.requests.length, beforeSubmission + 1);
       },
     );
   }

@@ -14,6 +14,7 @@ final class SecureLoginVault implements LoginVault {
           );
 
   static const _key = 'zfhelper.active_login.v1';
+  static const _accountsKey = 'zfhelper.accounts.v1';
   static const _schoolKey = 'zfhelper.selected_school.v1';
   final FlutterSecureStorage _storage;
 
@@ -42,10 +43,19 @@ final class SecureLoginVault implements LoginVault {
   }
 
   @override
-  Future<StoredLogin?> read() async {
+  Future<StoredLoginLibrary> readAccounts() async {
     try {
+      final accounts = await _storage.read(key: _accountsKey);
+      if (accounts != null) return StoredLoginLibraryCodec.decode(accounts);
       final payload = await _storage.read(key: _key);
-      return payload == null ? null : StoredLoginCodec.decode(payload);
+      if (payload == null) return StoredLoginLibrary();
+      final library = StoredLoginLibrary.fromLogin(
+        StoredLoginCodec.decode(payload),
+      );
+      // Establish the new library before deleting the old single-account key.
+      // A failed migration leaves the original encrypted record available.
+      await writeAccounts(library);
+      return library;
     } on PlatformException {
       throw const LoginFailure(
         LoginFailureCode.storage,
@@ -60,26 +70,53 @@ final class SecureLoginVault implements LoginVault {
   }
 
   @override
-  Future<void> write(StoredLogin login) async {
+  Future<void> writeAccounts(StoredLoginLibrary library) async {
     try {
-      await _storage.write(key: _key, value: StoredLoginCodec.encode(login));
-    } on PlatformException {
-      throw const LoginFailure(
-        LoginFailureCode.storage,
-        '登录已验证，但未能保存到本机；本次连接可用，请在设置中重试',
+      await _storage.write(
+        key: _accountsKey,
+        value: StoredLoginLibraryCodec.encode(library),
       );
-    }
-  }
-
-  @override
-  Future<void> clear() async {
-    try {
       await _storage.delete(key: _key);
     } on PlatformException {
       throw const LoginFailure(
         LoginFailureCode.storage,
-        '本次连接已停止，但保存的登录信息未能清除，请重试清除',
+        '账号信息未能完整写入安全存储，请重试；重启后仍可能读取此前保存的信息',
       );
+    } on FormatException {
+      throw const LoginFailure(LoginFailureCode.storage, '账号信息格式异常，无法写入安全存储');
     }
+  }
+
+  @override
+  Future<StoredLogin?> read() async => (await readAccounts()).selected?.login;
+
+  @override
+  Future<void> write(StoredLogin login) async {
+    final library = await readAccounts();
+    final account = StoredAuthAccount.fromLogin(login);
+    await writeAccounts(
+      StoredLoginLibrary(
+        accounts: [
+          for (final saved in library.accounts)
+            if (saved.scope != account.scope) saved,
+          account,
+        ],
+        selectedScope: account.scope,
+      ),
+    );
+  }
+
+  @override
+  Future<void> clear() async {
+    final library = await readAccounts();
+    await writeAccounts(
+      StoredLoginLibrary(
+        accounts: [
+          for (final saved in library.accounts)
+            saved.scope == library.selectedScope ? saved.withoutLogin() : saved,
+        ],
+        selectedScope: library.selectedScope,
+      ),
+    );
   }
 }

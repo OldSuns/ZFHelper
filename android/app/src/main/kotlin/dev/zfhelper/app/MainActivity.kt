@@ -1,5 +1,6 @@
 package dev.zfhelper.app
 
+import android.content.Context
 import android.net.Uri
 import android.webkit.CookieManager
 import android.webkit.WebViewClient
@@ -15,6 +16,39 @@ private const val LOGIN_COOKIE_CHANNEL = "zfhelper/login_cookies"
 
 class MainActivity : FlutterActivity() {
     private var loginCookieChannel: MethodChannel? = null
+    private val selectionRuntime: SelectionRuntimeHost
+        get() = (application as ZfHelperApplication).selectionRuntime
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine =
+        (application as ZfHelperApplication).sharedFlutterEngine
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
+    override fun onResume() {
+        super.onResume()
+        selectionRuntime.activityResumed(this)
+    }
+
+    override fun onPause() {
+        selectionRuntime.activityPaused(this)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        selectionRuntime.activityDestroyed(this)
+        super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == SELECTION_NOTIFICATION_PERMISSION_REQUEST) {
+            selectionRuntime.notificationPermissionResult()
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

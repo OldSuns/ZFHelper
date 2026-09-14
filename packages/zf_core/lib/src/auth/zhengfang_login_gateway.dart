@@ -13,7 +13,10 @@ import 'school_connection.dart';
 /// to the same attempt. Verified read-only queries share the transport and may
 /// run concurrently. A redirect alone never establishes a session.
 final class ZhengfangLoginGateway
-    implements LoginGateway, AuthenticatedReadClient {
+    implements
+        LoginGateway,
+        AuthenticatedReadClient,
+        AuthenticatedMutationClient {
   ZhengfangLoginGateway({
     required this._profile,
     required this._transport,
@@ -112,6 +115,17 @@ final class ZhengfangLoginGateway
       throw const LoginFailure(LoginFailureCode.expired, '教务登录状态已失效，请重新登录');
     }
     return response;
+  }
+
+  @override
+  Future<AuthHttpResponse> sendMutation(AuthHttpRequest request) async {
+    _ensureOpen();
+    if (!_hasVerifiedIdentity) {
+      throw const LoginFailure(LoginFailureCode.expired, '请先核验教务登录状态');
+    }
+    // Redirects (especially 307/308) are returned to result verification. Once
+    // sent, a submission must never be replayed by the authentication layer.
+    return _send(request);
   }
 
   @override

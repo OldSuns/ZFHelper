@@ -1,16 +1,17 @@
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../ui/core/app_theme.dart';
-import '../ui/core/empty_state_card.dart';
-import '../ui/core/feature_page.dart';
 import '../ui/features/auth/view_models/auth_view_model.dart';
 import '../ui/features/auth/views/school_connection_page.dart';
 import '../ui/features/auth/views/login_page.dart';
 import '../ui/features/grades/view_models/grades_view_model.dart';
 import '../ui/features/grades/views/grades_page.dart';
+import '../ui/features/courses/view_models/courses_view_model.dart';
+import '../ui/features/courses/views/courses_page.dart';
 import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/account_settings_page.dart';
@@ -19,7 +20,6 @@ import 'app_configuration.dart';
 enum AppDestination {
   timetable('课表', Icons.calendar_month_outlined, Icons.calendar_month),
   courses('选课', Icons.search_rounded, Icons.search_rounded),
-  tasks('任务', Icons.task_alt_outlined, Icons.task_alt_rounded),
   grades('成绩', Icons.assessment_outlined, Icons.assessment_rounded);
 
   const AppDestination(this.label, this.icon, this.selectedIcon);
@@ -43,6 +43,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final TimetableViewModel _timetable;
   late final AuthViewModel _auth;
   late final GradesViewModel _grades;
+  late final CoursesViewModel _courses;
+  bool _checkingExit = false;
 
   @override
   void initState() {
@@ -51,10 +53,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       repository: widget.configuration.schedule,
       clock: widget.configuration.clock,
     );
-    _auth = AuthViewModel(widget.configuration.auth);
+    _auth = AuthViewModel(
+      widget.configuration.auth,
+      onRemoveAccountData: widget.configuration.removeAccountData,
+    );
     _grades = GradesViewModel(repository: widget.configuration.grades);
+    _courses = CoursesViewModel(repository: widget.configuration.courses);
     unawaited(_timetable.initialize());
     unawaited(_grades.initialize());
+    unawaited(_courses.initialize());
     unawaited(_auth.restore());
     WidgetsBinding.instance.addObserver(this);
   }
@@ -64,9 +71,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _timetable.dispose();
     _grades.dispose();
+    _courses.dispose();
     _auth.dispose();
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
+    unawaited(widget.configuration.courses.dispose());
     unawaited(widget.configuration.auth.dispose());
     super.dispose();
   }
@@ -78,6 +87,45 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (_auth.state.canRestoreSession && !_auth.state.isBusy) {
         unawaited(_auth.restore());
       }
+    }
+  }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    final repository = widget.configuration.courses;
+    if (!repository.hasActiveOperations) return AppExitResponse.exit;
+    if (_checkingExit || !mounted) return AppExitResponse.cancel;
+    _checkingExit = true;
+    try {
+      final exit = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('退出并暂停选课？'),
+          content: const Text('关闭软件会停止后续尝试。已发送的请求不能撤回，重新打开后可在选课页核实结果或继续。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('继续运行'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('暂停并退出'),
+            ),
+          ],
+        ),
+      );
+      if (exit != true) return AppExitResponse.cancel;
+      if (await repository.pauseForExit()) return AppExitResponse.exit;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(repository.state.failure ?? '选课状态未保存，请稍后重试退出'),
+          ),
+        );
+      }
+      return AppExitResponse.cancel;
+    } finally {
+      _checkingExit = false;
     }
   }
 
@@ -145,7 +193,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ],
               Expanded(
                 child: ListenableBuilder(
-                  listenable: Listenable.merge([_auth, _timetable, _grades]),
+                  listenable: Listenable.merge([
+                    _auth,
+                    _timetable,
+                    _grades,
+                    _courses,
+                  ]),
                   builder: (context, _) => _buildPage(),
                 ),
               ),
@@ -179,7 +232,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _timetable.data.library.accounts.isEmpty &&
         !_grades.data.loading &&
         _grades.data.failure == null &&
-        _grades.data.library.accounts.isEmpty) {
+        _grades.data.library.accounts.isEmpty &&
+        !_courses.data.loading &&
+        _courses.data.failure == null &&
+        _courses.data.library.accounts.isEmpty) {
       return SchoolConnectionPage(
         isNewSchool: true,
         onSave: _auth.configureSchool,
@@ -193,51 +249,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         isSignedIn: _auth.state.isSignedIn,
         onOpenSettings: _openSettings,
       ),
-      AppDestination.courses => _connectionPage(
-        title: '选课',
-        icon: Icons.search_rounded,
-        heading: '查看可选课程',
-        message: '连接教务账号后，查看可选教学班、教师与剩余名额。',
+      AppDestination.courses => CoursesPage(
+        viewModel: _courses,
+        schoolName: _auth.state.profile?.name ?? '尚未设置学校',
+        onOpenSettings: _openSettings,
       ),
       AppDestination.grades => GradesPage(
         viewModel: _grades,
         schoolName: _auth.state.profile?.name ?? '尚未设置学校',
         onOpenSettings: _openSettings,
       ),
-      AppDestination.tasks => FeaturePage(
-        title: '任务',
-        schoolName: _auth.state.profile?.name ?? '尚未设置学校',
-        onOpenSettings: _openSettings,
-        children: [
-          EmptyStateCard(
-            icon: Icons.task_alt_outlined,
-            title: '还没有选课任务',
-            message: '在选课页选择目标课程后，可以创建即时、定时或捡漏任务。',
-            actionLabel: '前往选课',
-            onAction: () => _selectDestination(AppDestination.courses.index),
-          ),
-        ],
-      ),
     };
   }
-
-  Widget _connectionPage({
-    required String title,
-    required IconData icon,
-    required String heading,
-    required String message,
-  }) => FeaturePage(
-    title: title,
-    schoolName: _auth.state.profile?.name ?? '尚未设置学校',
-    onOpenSettings: _openSettings,
-    children: [
-      EmptyStateCard(
-        icon: icon,
-        title: heading,
-        message: _auth.state.isSignedIn ? '教务账号已验证，$title查询功能尚未接入。' : message,
-        actionLabel: '账号与设置',
-        onAction: _openSettings,
-      ),
-    ],
-  );
 }

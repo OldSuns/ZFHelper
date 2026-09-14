@@ -30,6 +30,49 @@ void main() {
     expect({first, same, school, account}, hasLength(3));
   });
 
+  test('account-bound reads survive selection; mutations never replay and logout revokes identity', () async {
+    final late = Completer<AuthHttpResponse>();
+    final first = _ReadingGateway()..onRead = (_) => late.future;
+    first.login.onPassword = (_) => LoginSuccess(stateTestSession());
+    final second = _ReadingGateway();
+    second.login.onPassword = (_) =>
+        LoginSuccess(stateTestSession(id: 'student-b'));
+    final repository = _repository([first, second]);
+    await _signIn(repository);
+    final identity = repository.state.knownIdentity!;
+    final reading = repository.runAccountRead(
+      identity,
+      (client) => client.sendRead(_query),
+    );
+
+    await _signIn(repository);
+    expect(repository.isCurrentIdentity(identity), isFalse);
+    expect(repository.isAccountIdentityCurrent(identity), isTrue);
+    expect(first.login.closed, isFalse);
+    late.complete(_response('original account'));
+    expect((await reading).text, 'original account');
+    expect(await repository.selectAccount(identity.scope), isTrue);
+    expect(repository.state.knownIdentity!.generation, identity.generation);
+
+    first.onRead = (_) => throw _expired;
+    final before = first.requests.length;
+    await expectLater(
+      repository.runAccountMutation(
+        identity,
+        (client) => client.sendRead(_query),
+      ),
+      throwsA(_failure(LoginFailureCode.expired)),
+    );
+    expect(first.requests.length, before + 1);
+    expect(first.login.verificationCalls, isEmpty);
+    expect(first.login.passwordCalls, hasLength(1));
+    expect(await repository.signOutAccount(identity.scope), isTrue);
+    expect(repository.isAccountIdentityCurrent(identity), isFalse);
+    expect(repository.state.accounts, hasLength(2));
+    expect(await repository.removeAccount(identity.scope), isTrue);
+    expect(repository.state.accounts, hasLength(1));
+  });
+
   test(
     'verified reads reuse the current gateway without another identity check',
     () async {
@@ -530,7 +573,11 @@ AuthHttpResponse _response([String body = 'schedule']) =>
 Matcher _failure(LoginFailureCode code) =>
     isA<LoginFailure>().having((failure) => failure.code, 'code', code);
 
-final class _ReadingGateway implements LoginGateway, AuthenticatedReadClient {
+final class _ReadingGateway
+    implements
+        LoginGateway,
+        AuthenticatedReadClient,
+        AuthenticatedMutationClient {
   final login = StateTestGateway();
   final requests = <AuthHttpRequest>[];
   FutureOr<AuthHttpResponse> Function(AuthHttpRequest)? onRead;
@@ -542,6 +589,10 @@ final class _ReadingGateway implements LoginGateway, AuthenticatedReadClient {
     if (handler == null) throw StateError('Unexpected authenticated read.');
     return handler(request);
   }
+
+  @override
+  Future<AuthHttpResponse> sendMutation(AuthHttpRequest request) =>
+      sendRead(request);
 
   @override
   Future<LoginStep> loginPassword(LoginCredentials credentials) =>

@@ -102,7 +102,8 @@ void main() {
           repository.state.profile!.baseUri,
           stateTestOtherProfile.baseUri,
         );
-        expect(first.closed, isTrue);
+        expect(first.closed, isFalse);
+        expect(repository.state.accounts, hasLength(2));
         expect(second.passwordCalls, isEmpty);
       },
     );
@@ -302,6 +303,8 @@ void main() {
     expect(await signingIn, isFalse);
     await signingOut;
     expect(vault.events, [
+      'read:start',
+      'read:complete',
       'write:start',
       'write:complete',
       'clear:start',

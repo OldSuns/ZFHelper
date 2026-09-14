@@ -230,6 +230,23 @@ final class GradeRepository {
     _emit();
   }
 
+  Future<bool> removeAccount(AccountScope scope) {
+    _cancelRead();
+    return _localChange(() async {
+      final remaining = _library.accounts
+          .where((item) => item.account.scope != scope)
+          .toList();
+      final next = GradeLibrary(
+        accounts: remaining,
+        selectedAccount: _library.selectedAccount == scope
+            ? remaining.firstOrNull?.account.scope
+            : _library.selectedAccount,
+      );
+      await _store.write(next);
+      _library = next;
+    });
+  }
+
   Future<bool> _localChange(Future<void> Function() action) async {
     await initialize();
     if (!_initialized || _closed) return false;

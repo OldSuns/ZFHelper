@@ -14,6 +14,7 @@ final class SchoolConnection {
     this.schedulePeriodsPath,
     this.gradePagePath = defaultGradePagePath,
     this.gradeQueryPath = defaultGradeQueryPath,
+    this.selectionPagePath = defaultSelectionPagePath,
     this.webLoginUri,
   }) : name = name.trim(),
        baseUri = normalizeSchoolBaseUri(baseUri) {
@@ -35,6 +36,7 @@ final class SchoolConnection {
       ?schedulePeriodsPath,
       gradePagePath,
       gradeQueryPath,
+      selectionPagePath,
     ]) {
       final endpoint = Uri.parse(path);
       if (path.trim().isEmpty || endpoint.hasScheme || endpoint.hasAuthority) {
@@ -58,6 +60,7 @@ final class SchoolConnection {
     String? schedulePeriodsPath,
     String gradePagePath = defaultGradePagePath,
     String gradeQueryPath = defaultGradeQueryPath,
+    String selectionPagePath = defaultSelectionPagePath,
     String webLoginAddress = '',
   }) => SchoolConnection(
     name: name,
@@ -71,6 +74,7 @@ final class SchoolConnection {
     schedulePeriodsPath: schedulePeriodsPath?.trim(),
     gradePagePath: gradePagePath.trim(),
     gradeQueryPath: gradeQueryPath.trim(),
+    selectionPagePath: selectionPagePath.trim(),
     webLoginUri: webLoginAddress.trim().isEmpty
         ? null
         : Uri.parse(webLoginAddress.trim()),
@@ -86,12 +90,15 @@ final class SchoolConnection {
   static const defaultGradePagePath = 'cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005';
   static const defaultGradeQueryPath =
       'cjcx/cjcx_cxDgXscj.html?doType=query&gnmkdm=N305005';
+  static const defaultSelectionPagePath =
+      'xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=N253512';
 
   final String schedulePagePath;
   final String scheduleQueryPath;
   final String? schedulePeriodsPath;
   final String gradePagePath;
   final String gradeQueryPath;
+  final String selectionPagePath;
   final Uri? webLoginUri;
 
   SchoolIdentity get school =>
@@ -107,5 +114,6 @@ final class SchoolConnection {
       : baseUri.resolve(schedulePeriodsPath!);
   Uri get gradePageUri => baseUri.resolve(gradePagePath);
   Uri get gradeQueryUri => baseUri.resolve(gradeQueryPath);
+  Uri get selectionPageUri => baseUri.resolve(selectionPagePath);
   Uri get browserUri => webLoginUri ?? loginUri;
 }

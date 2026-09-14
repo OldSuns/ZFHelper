@@ -33,6 +33,7 @@ AuthRepository testAuth({
 
 final class TestLoginVault implements LoginVault {
   StoredLogin? saved;
+  StoredLoginLibrary? library;
   SchoolConnection? school;
   LoginFailure? writeFailure;
   LoginFailure? schoolWriteFailure;
@@ -41,6 +42,21 @@ final class TestLoginVault implements LoginVault {
 
   @override
   Future<SchoolConnection?> readSchool() async => school;
+
+  @override
+  Future<StoredLoginLibrary> readAccounts() async =>
+      library ?? StoredLoginLibrary.fromLogin(saved);
+
+  @override
+  Future<void> writeAccounts(StoredLoginLibrary value) async {
+    final selected = value.selected?.login;
+    if (selected == null) {
+      await clear();
+    } else {
+      await write(selected);
+    }
+    library = value;
+  }
 
   @override
   Future<void> writeSchool(SchoolConnection profile) async {

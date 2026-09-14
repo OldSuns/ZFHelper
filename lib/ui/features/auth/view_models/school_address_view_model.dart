@@ -47,6 +47,7 @@ final class SchoolAddressViewModel extends ChangeNotifier {
         initialProfile.schedulePeriodsPath != null ||
         initialProfile.gradePagePath != defaults.gradePagePath ||
         initialProfile.gradeQueryPath != defaults.gradeQueryPath ||
+        initialProfile.selectionPagePath != defaults.selectionPagePath ||
         initialProfile.webLoginUri != null;
   }
 
@@ -87,6 +88,7 @@ final class SchoolAddressViewModel extends ChangeNotifier {
       schedulePeriodsPath: initialProfile.schedulePeriodsPath,
       gradePagePath: initialProfile.gradePagePath,
       gradeQueryPath: initialProfile.gradeQueryPath,
+      selectionPagePath: initialProfile.selectionPagePath,
       webLoginUri: initialProfile.webLoginUri,
     );
   }
