@@ -283,7 +283,7 @@ ScheduleLibrary _readLibrary(Database database) {
 StoredScheduleAccount _decodeAccount(Row row) {
   final catalog = _optionalString(row['catalog_payload']);
   final account = StoredScheduleAccount(
-    account: ScheduleAccountRecord(
+    account: AcademicAccountRecord(
       scope: AccountScope(
         schoolId: _string(row['school_id']),
         accountId: _string(row['account_id']),

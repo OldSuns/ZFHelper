@@ -25,6 +25,8 @@ abstract final class SchoolConnectionCodec {
     'schedulePagePath': profile.schedulePagePath,
     'scheduleQueryPath': profile.scheduleQueryPath,
     'schedulePeriodsPath': profile.schedulePeriodsPath,
+    'gradePagePath': profile.gradePagePath,
+    'gradeQueryPath': profile.gradeQueryPath,
     'webLoginUri': profile.webLoginUri?.toString(),
   };
 
@@ -49,6 +51,14 @@ abstract final class SchoolConnectionCodec {
       schedulePeriodsPath: legacyLogin
           ? null
           : _optionalString(value, 'schedulePeriodsPath'),
+      // School and login records saved before grades had no grade paths.
+      // Only an absent key is legacy data; present invalid values stay errors.
+      gradePagePath: value.containsKey('gradePagePath')
+          ? _string(value, 'gradePagePath')
+          : SchoolConnection.defaultGradePagePath,
+      gradeQueryPath: value.containsKey('gradeQueryPath')
+          ? _string(value, 'gradeQueryPath')
+          : SchoolConnection.defaultGradeQueryPath,
       webLoginUri: webLogin == null ? null : Uri.parse(webLogin),
     );
   }

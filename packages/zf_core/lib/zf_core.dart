@@ -16,6 +16,14 @@ export 'src/auth/zhengfang_login_gateway.dart';
 export 'src/auth/account_scope.dart';
 export 'src/auth/authenticated_read_client.dart';
 export 'src/academic/zhengfang_schedule_gateway.dart';
+export 'src/academic/zhengfang_grade_gateway.dart';
+export 'src/grades/grade_record.dart';
+export 'src/grades/grade_snapshot.dart';
+export 'src/grades/grade_codec.dart';
+export 'src/grades/grade_parse_exception.dart';
+export 'src/grades/grade_summary.dart';
+export 'src/grades/grade_term_group.dart'
+    show GradeTermGroup, unassignedGradeTermKey;
 export 'src/schedule/academic_term.dart';
 export 'src/schedule/teaching_calendar.dart';
 export 'src/schedule/schedule_entry.dart';

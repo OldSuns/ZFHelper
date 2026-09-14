@@ -7,6 +7,8 @@ void main() {
     name: '原学校',
     baseUri: Uri.parse('https://old.example/education/'),
     loginPath: 'custom/login.html',
+    gradePagePath: 'custom/grades',
+    gradeQueryPath: 'custom/grades?doType=query',
     webLoginUri: Uri.parse('https://identity.example/cas/login'),
   );
 
@@ -55,6 +57,8 @@ void main() {
       'https://new.example/jwglxt/xtgl/login_slogin.html',
     );
     expect(next.webLoginUri, isNull);
+    expect(next.gradePagePath, SchoolConnection.defaultGradePagePath);
+    expect(next.gradeQueryPath, SchoolConnection.defaultGradeQueryPath);
     expect(original.loginPath, 'custom/login.html');
     expect(original.webLoginUri!.host, 'identity.example');
   });
@@ -66,8 +70,35 @@ void main() {
     expect(next.name, '新名称');
     expect(next.loginPath, original.loginPath);
     expect(next.webLoginUri, original.webLoginUri);
+    expect(next.gradePagePath, original.gradePagePath);
+    expect(next.gradeQueryPath, original.gradeQueryPath);
     expect(next.baseUri, original.baseUri);
     expect(model.resetsCustomSettings, isFalse);
+  });
+
+  test('changing schools identifies custom grade endpoints for reset', () {
+    for (final profile in [
+      SchoolConnection(
+        name: '原学校',
+        baseUri: original.baseUri,
+        gradePagePath: 'custom/grades',
+      ),
+      SchoolConnection(
+        name: '原学校',
+        baseUri: original.baseUri,
+        gradeQueryPath: 'custom/grades?doType=query',
+      ),
+    ]) {
+      final model = SchoolAddressViewModel(
+        initialProfile: profile,
+        address: 'new.example/jwglxt/',
+      );
+      addTearDown(model.dispose);
+      expect(model.resetsCustomSettings, isTrue);
+      final next = model.submit('新学校')!;
+      expect(next.gradePagePath, SchoolConnection.defaultGradePagePath);
+      expect(next.gradeQueryPath, SchoolConnection.defaultGradeQueryPath);
+    }
   });
 
   test(

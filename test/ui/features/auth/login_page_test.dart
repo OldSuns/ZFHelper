@@ -14,6 +14,7 @@ import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
 import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
+import '../../../support/grade_fakes.dart';
 
 void main() {
   final captchaPng = base64Decode(
@@ -48,6 +49,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          grades: testGradeRepository(),
           schedule: testScheduleRepository(),
           auth: auth,
           clock: () => DateTime(2026, 9, 12, 13),
@@ -477,26 +479,58 @@ void main() {
   });
 
   testWidgets(
-    'the gear opens advanced settings and saves a separate SSO entry',
+    'advanced settings preserve grade paths and SSO and can restore defaults',
     (tester) async {
-      await openLogin(tester);
+      final vault = TestLoginVault();
+      await openLogin(tester, vault: vault);
       expect(find.byType(ExpansionTile), findsNothing);
       expect(find.text('RSA 公钥路径'), findsNothing);
       expect(find.byKey(const ValueKey('school-address')), findsNothing);
       expect(find.byKey(const ValueKey('web-login-open')), findsOneWidget);
       await openAdvanced(tester);
       expect(find.byType(LoginAdvancedSettingsPage), findsOneWidget);
+      const gradePaths = {
+        '成绩页面路径': 'results/index',
+        '成绩查询路径': 'results/query?doType=query',
+      };
+      final scrollable = find.byType(Scrollable).first;
+      for (final entry in gradePaths.entries) {
+        final field = find.widgetWithText(TextField, entry.key);
+        await tester.scrollUntilVisible(field, 180, scrollable: scrollable);
+        await tester.enterText(field, entry.value);
+      }
       final sso = find.byKey(const ValueKey('web-login-address'));
-      await tester.ensureVisible(sso);
+      await tester.scrollUntilVisible(sso, 180, scrollable: scrollable);
       await tester.enterText(sso, 'https://sso.other.test/cas/login');
       await tapKey(tester, 'advanced-save');
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.byKey(const ValueKey('web-login-address')), findsNothing);
+      expect(vault.school!.gradePagePath, 'results/index');
+      expect(vault.school!.gradeQueryPath, 'results/query?doType=query');
       await openAdvanced(tester);
+      for (final entry in gradePaths.entries) {
+        final field = find.widgetWithText(TextField, entry.key);
+        await tester.scrollUntilVisible(field, 180, scrollable: scrollable);
+        expect(tester.widget<TextField>(field).controller!.text, entry.value);
+      }
+      await tester.scrollUntilVisible(sso, 180, scrollable: scrollable);
       expect(
         tester.widget<TextField>(sso).controller!.text,
         'https://sso.other.test/cas/login',
       );
+      final reset = find.text('恢复默认设置');
+      await tester.scrollUntilVisible(reset, 180, scrollable: scrollable);
+      await tester.tap(reset);
+      await tapKey(tester, 'advanced-save');
+      expect(
+        vault.school!.gradePagePath,
+        SchoolConnection.defaultGradePagePath,
+      );
+      expect(
+        vault.school!.gradeQueryPath,
+        SchoolConnection.defaultGradeQueryPath,
+      );
+      expect(vault.school!.webLoginUri, isNull);
     },
   );
 

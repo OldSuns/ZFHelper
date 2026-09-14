@@ -710,7 +710,7 @@ StoredScheduleAccount _account({
   Map<String, ScheduleSettings> settings = const {},
   String? selectedTermKey,
 }) => StoredScheduleAccount(
-  account: ScheduleAccountRecord(
+  account: AcademicAccountRecord(
     scope: AccountScope(schoolId: schoolId, accountId: accountId),
     schoolName: '测试大学',
     accountName: '测试同学',

@@ -78,26 +78,26 @@ final class TestScheduleStore implements ScheduleStore {
 final class TestScheduleSource implements ScheduleSource {
   TestScheduleSource({this._account});
 
-  final _changes = StreamController<ScheduleAccountChange>.broadcast(
+  final _changes = StreamController<AcademicAccountChange>.broadcast(
     sync: true,
   );
-  ScheduleAccountRecord? _account;
+  AcademicAccountRecord? _account;
   int generation = 0;
   int requests = 0;
   Future<ScheduleImportResult> Function(AcademicTerm? term)? onRead;
 
-  void connect(ScheduleAccountRecord? account, {bool selectForViewing = true}) {
+  void connect(AcademicAccountRecord? account, {bool selectForViewing = true}) {
     _account = account;
     generation++;
     _changes.add(
-      ScheduleAccountChange(account, selectForViewing: selectForViewing),
+      AcademicAccountChange(account, selectForViewing: selectForViewing),
     );
   }
 
   @override
-  ScheduleAccountRecord? get connectedAccount => _account;
+  AcademicAccountRecord? get connectedAccount => _account;
   @override
-  Stream<ScheduleAccountChange> get accountChanges => _changes.stream;
+  Stream<AcademicAccountChange> get accountChanges => _changes.stream;
 
   @override
   ScheduleReadSession open(AccountScope scope) {
@@ -137,7 +137,7 @@ ScheduleRepository testScheduleRepository({
 
 // Synthetic records model the documented new-Zhengfang response fields.
 // No record below comes from a student's real account or an online request.
-const scheduleTestAccount = ScheduleAccountRecord(
+const scheduleTestAccount = AcademicAccountRecord(
   scope: AccountScope(
     schoolId: 'https://jw.example.test/jwglxt/',
     accountId: 'student-a',

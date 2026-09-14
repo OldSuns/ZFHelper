@@ -38,6 +38,8 @@ class _LoginAdvancedSettingsPageState extends State<LoginAdvancedSettingsPage> {
       '课表页面路径': TextEditingController(text: profile.schedulePagePath),
       '课表查询路径': TextEditingController(text: profile.scheduleQueryPath),
       '作息查询路径（选填）': TextEditingController(text: profile.schedulePeriodsPath),
+      '成绩页面路径': TextEditingController(text: profile.gradePagePath),
+      '成绩查询路径': TextEditingController(text: profile.gradeQueryPath),
     };
     _webAddress = TextEditingController(text: profile.webLoginUri?.toString());
   }
@@ -62,6 +64,8 @@ class _LoginAdvancedSettingsPageState extends State<LoginAdvancedSettingsPage> {
     _paths['课表页面路径']!.text = defaults.schedulePagePath;
     _paths['课表查询路径']!.text = defaults.scheduleQueryPath;
     _paths['作息查询路径（选填）']!.clear();
+    _paths['成绩页面路径']!.text = defaults.gradePagePath;
+    _paths['成绩查询路径']!.text = defaults.gradeQueryPath;
     _webAddress.clear();
     setState(() => _failure = null);
   }
@@ -85,6 +89,8 @@ class _LoginAdvancedSettingsPageState extends State<LoginAdvancedSettingsPage> {
         schedulePeriodsPath: _paths['作息查询路径（选填）']!.text.trim().isEmpty
             ? null
             : _paths['作息查询路径（选填）']!.text.trim(),
+        gradePagePath: _paths['成绩页面路径']!.text.trim(),
+        gradeQueryPath: _paths['成绩查询路径']!.text.trim(),
         webLoginUri: _webAddress.text.trim().isEmpty
             ? null
             : Uri.parse(_webAddress.text.trim()),

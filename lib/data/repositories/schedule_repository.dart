@@ -74,7 +74,7 @@ final class ScheduleRepository {
   final _changes = StreamController<ScheduleRepositoryState>.broadcast(
     sync: true,
   );
-  late final StreamSubscription<ScheduleAccountChange> _subscription;
+  late final StreamSubscription<AcademicAccountChange> _subscription;
   ScheduleLibrary _library = ScheduleLibrary();
   bool _loading = true;
   bool _refreshing = false;
@@ -82,7 +82,7 @@ final class ScheduleRepository {
   bool _closed = false;
   int _readGeneration = 0;
   final _accountEpochs = <AccountScope, int>{};
-  ScheduleAccountChange? _initialAccountChange;
+  AcademicAccountChange? _initialAccountChange;
   ScheduleFailure? _failure;
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
@@ -343,7 +343,7 @@ final class ScheduleRepository {
     return operation;
   }
 
-  void _onAccountChanged(ScheduleAccountChange change) {
+  void _onAccountChanged(AcademicAccountChange change) {
     if (_closed) return;
     if (!_initialized) {
       _initialAccountChange = change;
@@ -367,7 +367,7 @@ final class ScheduleRepository {
     );
   }
 
-  StoredScheduleAccount _withAccount(ScheduleAccountRecord account) {
+  StoredScheduleAccount _withAccount(AcademicAccountRecord account) {
     final previous = _account(account.scope);
     return StoredScheduleAccount(
       account: account,

@@ -131,7 +131,7 @@ void main() {
   test(
     'clearing permits reimport and rejects an editor from before the clear',
     () async {
-      const other = ScheduleAccountRecord(
+      const other = AcademicAccountRecord(
         scope: AccountScope(schoolId: 'other-school', accountId: 'student-b'),
         schoolName: '另一学校',
         accountName: '同学B',

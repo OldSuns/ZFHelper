@@ -21,6 +21,8 @@ void main() {
     schedulePagePath: 'schedule/index?gnmkdm=N2151',
     scheduleQueryPath: 'schedule/query?gnmkdm=N2151',
     schedulePeriodsPath: 'schedule/periods',
+    gradePagePath: 'results/index',
+    gradeQueryPath: 'results/query?doType=query',
     webLoginUri: Uri.parse(
       'https://identity.example/cas/login?service=teaching',
     ),
@@ -101,6 +103,8 @@ void main() {
       expect(restored.profile.schedulePageUri, profile.schedulePageUri);
       expect(restored.profile.scheduleQueryUri, profile.scheduleQueryUri);
       expect(restored.profile.schedulePeriodsUri, profile.schedulePeriodsUri);
+      expect(restored.profile.gradePageUri, profile.gradePageUri);
+      expect(restored.profile.gradeQueryUri, profile.gradeQueryUri);
       expect(restored.profile.browserUri, profile.browserUri);
       expect(restored.profile.browserUri.origin, 'https://identity.example');
       expect(restored.profile.accountUri.origin, 'https://school.example');
@@ -126,22 +130,65 @@ void main() {
   });
 
   test('migrates a version one login without changing its identity', () {
-    final data = jsonDecode(StoredLoginCodec.encode(record))
-        as Map<String, dynamic>;
+    final data =
+        jsonDecode(StoredLoginCodec.encode(record)) as Map<String, dynamic>;
     data['version'] = 1;
     final oldProfile = _object(data, 'profile')
       ..remove('schedulePagePath')
       ..remove('scheduleQueryPath')
-      ..remove('schedulePeriodsPath');
+      ..remove('schedulePeriodsPath')
+      ..remove('gradePagePath')
+      ..remove('gradeQueryPath');
     expect(oldProfile.containsKey('scheduleQueryPath'), isFalse);
 
     final restored = StoredLoginCodec.decode(jsonEncode(data));
     expect(restored.session.account.id, record.session.account.id);
-    expect(restored.profile.schedulePagePath, SchoolConnection.defaultSchedulePath);
-    expect(restored.profile.scheduleQueryPath, SchoolConnection.defaultSchedulePath);
+    expect(
+      restored.profile.schedulePagePath,
+      SchoolConnection.defaultSchedulePath,
+    );
+    expect(
+      restored.profile.scheduleQueryPath,
+      SchoolConnection.defaultSchedulePath,
+    );
     expect(restored.profile.schedulePeriodsPath, isNull);
+    expect(
+      restored.profile.gradePagePath,
+      SchoolConnection.defaultGradePagePath,
+    );
+    expect(
+      restored.profile.gradeQueryPath,
+      SchoolConnection.defaultGradeQueryPath,
+    );
     expect(restored.profile.loginUri, profile.loginUri);
   });
+
+  test(
+    'restores version two logins saved before grade configuration existed',
+    () {
+      final data =
+          jsonDecode(StoredLoginCodec.encode(record)) as Map<String, dynamic>;
+      _object(data, 'profile')
+        ..remove('gradePagePath')
+        ..remove('gradeQueryPath');
+
+      final restored = StoredLoginCodec.decode(jsonEncode(data));
+      expect(
+        restored.profile.gradePagePath,
+        SchoolConnection.defaultGradePagePath,
+      );
+      expect(
+        restored.profile.gradeQueryPath,
+        SchoolConnection.defaultGradeQueryPath,
+      );
+      expect(restored.profile.scheduleQueryUri, profile.scheduleQueryUri);
+      expect(restored.session.account.id, record.session.account.id);
+      expect(
+        restored.session.cookies.first.value,
+        record.session.cookies.first.value,
+      );
+    },
+  );
 
   test('rejects invalid JSON and non-object roots', () {
     for (final payload in ['{', 'null', '[]', '"login"']) {

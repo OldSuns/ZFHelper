@@ -9,6 +9,8 @@ import '../ui/core/feature_page.dart';
 import '../ui/features/auth/view_models/auth_view_model.dart';
 import '../ui/features/auth/views/school_connection_page.dart';
 import '../ui/features/auth/views/login_page.dart';
+import '../ui/features/grades/view_models/grades_view_model.dart';
+import '../ui/features/grades/views/grades_page.dart';
 import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/account_settings_page.dart';
@@ -40,6 +42,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   AppDestination _destination = AppDestination.timetable;
   late final TimetableViewModel _timetable;
   late final AuthViewModel _auth;
+  late final GradesViewModel _grades;
 
   @override
   void initState() {
@@ -49,7 +52,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       clock: widget.configuration.clock,
     );
     _auth = AuthViewModel(widget.configuration.auth);
+    _grades = GradesViewModel(repository: widget.configuration.grades);
     unawaited(_timetable.initialize());
+    unawaited(_grades.initialize());
     unawaited(_auth.restore());
     WidgetsBinding.instance.addObserver(this);
   }
@@ -58,8 +63,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timetable.dispose();
+    _grades.dispose();
     _auth.dispose();
     unawaited(widget.configuration.schedule.dispose());
+    unawaited(widget.configuration.grades.dispose());
     unawaited(widget.configuration.auth.dispose());
     super.dispose();
   }
@@ -138,7 +145,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ],
               Expanded(
                 child: ListenableBuilder(
-                  listenable: Listenable.merge([_auth, _timetable]),
+                  listenable: Listenable.merge([_auth, _timetable, _grades]),
                   builder: (context, _) => _buildPage(),
                 ),
               ),
@@ -169,7 +176,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _auth.state.storageFailure == null &&
         !_timetable.data.loading &&
         _timetable.data.failure == null &&
-        _timetable.data.library.accounts.isEmpty) {
+        _timetable.data.library.accounts.isEmpty &&
+        !_grades.data.loading &&
+        _grades.data.failure == null &&
+        _grades.data.library.accounts.isEmpty) {
       return SchoolConnectionPage(
         isNewSchool: true,
         onSave: _auth.configureSchool,
@@ -189,11 +199,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         heading: '查看可选课程',
         message: '连接教务账号后，查看可选教学班、教师与剩余名额。',
       ),
-      AppDestination.grades => _connectionPage(
-        title: '成绩',
-        icon: Icons.assessment_outlined,
-        heading: '查看学期成绩',
-        message: '连接教务账号后，按学期查看课程成绩、学分与绩点。',
+      AppDestination.grades => GradesPage(
+        viewModel: _grades,
+        schoolName: _auth.state.profile?.name ?? '尚未设置学校',
+        onOpenSettings: _openSettings,
       ),
       AppDestination.tasks => FeaturePage(
         title: '任务',

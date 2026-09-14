@@ -10,6 +10,7 @@ import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
 import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
+import '../../../support/grade_fakes.dart';
 
 void main() {
   testWidgets('finishing a save during back navigation keeps settings open', (
@@ -37,6 +38,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          grades: testGradeRepository(),
           schedule: testScheduleRepository(),
           auth: auth,
           clock: () => DateTime(2026, 9, 12, 13),

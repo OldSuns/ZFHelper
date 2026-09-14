@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:zf_core/src/auth/school_connection.dart';
+import 'package:zf_core/src/auth/school_connection_codec.dart';
 
 void main() {
   test('an explicit business root is not re-inferred from directory names', () {
@@ -68,6 +69,16 @@ void main() {
         profile.accountUri,
         Uri.parse('${scenario.base}xtgl/index_cxYhxxIndex.html'),
       );
+      expect(
+        profile.gradePageUri,
+        Uri.parse('${scenario.base}cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005'),
+      );
+      expect(
+        profile.gradeQueryUri,
+        Uri.parse(
+          '${scenario.base}cjcx/cjcx_cxDgXscj.html?doType=query&gnmkdm=N305005',
+        ),
+      );
     });
   }
 
@@ -81,6 +92,8 @@ void main() {
         publicKeyPath: ' api/public-key ',
         captchaPath: ' api/captcha ',
         accountPath: ' api/account ',
+        gradePagePath: ' results/index ',
+        gradeQueryPath: ' results/query?doType=query ',
         webLoginAddress:
             ' https://identity.example/cas/login?service=teaching ',
       );
@@ -93,12 +106,16 @@ void main() {
         profile.loginUri,
         Uri.parse('https://teaching.example/deployment/login/form.html'),
       );
+      expect(profile.gradePagePath, 'results/index');
+      expect(profile.gradeQueryPath, 'results/query?doType=query');
       expect(
         [
           profile.loginUri,
           profile.publicKeyUri,
           profile.captchaUri,
           profile.accountUri,
+          profile.gradePageUri,
+          profile.gradeQueryUri,
         ].every((uri) => uri.origin == 'https://teaching.example'),
         isTrue,
       );
@@ -144,6 +161,8 @@ void main() {
       'https://identity.example/login',
       '//identity.example/login',
       'javascript:invalid',
+      '',
+      '  ',
     ]) {
       expect(
         () => SchoolConnection(
@@ -153,6 +172,64 @@ void main() {
         ),
         throwsFormatException,
       );
+      expect(
+        () => SchoolConnection(
+          name: '测试学校',
+          baseUri: Uri.parse('https://school.example/'),
+          gradePagePath: path,
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => SchoolConnection(
+          name: '测试学校',
+          baseUri: Uri.parse('https://school.example/'),
+          gradeQueryPath: path,
+        ),
+        throwsFormatException,
+      );
+    }
+  });
+
+  test(
+    'school storage retains grade paths and migrates absent legacy keys',
+    () {
+      final profile = SchoolConnection(
+        name: '测试学校',
+        baseUri: Uri.parse('https://school.example/jwglxt/'),
+        gradePagePath: 'results/index',
+        gradeQueryPath: 'results/query?doType=query',
+      );
+      final restored = SchoolConnectionCodec.decode(
+        SchoolConnectionCodec.encode(profile),
+      );
+      expect(restored.gradePageUri, profile.gradePageUri);
+      expect(restored.gradeQueryUri, profile.gradeQueryUri);
+
+      final legacy = SchoolConnectionCodec.toMap(profile)
+        ..remove('gradePagePath')
+        ..remove('gradeQueryPath');
+      final migrated = SchoolConnectionCodec.fromMap(legacy);
+      expect(migrated.gradePagePath, SchoolConnection.defaultGradePagePath);
+      expect(migrated.gradeQueryPath, SchoolConnection.defaultGradeQueryPath);
+      expect(migrated.school.id, profile.school.id);
+    },
+  );
+
+  test('present invalid grade paths are not treated as legacy omissions', () {
+    final profile = SchoolConnection(
+      name: '测试学校',
+      baseUri: Uri.parse('https://school.example/jwglxt/'),
+    );
+    for (final key in ['gradePagePath', 'gradeQueryPath']) {
+      for (final invalid in [null, '', '  ', 42]) {
+        final saved = SchoolConnectionCodec.toMap(profile)..[key] = invalid;
+        expect(
+          () => SchoolConnectionCodec.fromMap(saved),
+          throwsFormatException,
+          reason: '$key must reject $invalid',
+        );
+      }
     }
   });
 

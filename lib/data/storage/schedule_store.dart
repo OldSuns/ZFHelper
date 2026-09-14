@@ -1,19 +1,8 @@
 import 'package:zf_core/zf_core.dart';
 
-/// Display information that can be read without credentials or a live session.
-final class ScheduleAccountRecord {
-  const ScheduleAccountRecord({
-    required this.scope,
-    required this.schoolName,
-    required this.accountName,
-    required this.loginName,
-  });
+import 'academic_account.dart';
 
-  final AccountScope scope;
-  final String schoolName;
-  final String accountName;
-  final String loginName;
-}
+export 'academic_account.dart';
 
 /// An account's imports and independently saved user changes.
 final class StoredScheduleAccount {
@@ -26,7 +15,7 @@ final class StoredScheduleAccount {
   }) : schedules = Map.unmodifiable(schedules),
        settings = Map.unmodifiable(settings);
 
-  final ScheduleAccountRecord account;
+  final AcademicAccountRecord account;
   final TermCatalog? catalog;
   final Map<String, ScheduleSnapshot> schedules;
   final Map<String, ScheduleSettings> settings;

@@ -7,6 +7,7 @@ import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
 import 'support/auth_fakes.dart';
 import 'support/schedule_fakes.dart';
+import 'support/grade_fakes.dart';
 
 void main() {
   Future<void> pumpApp(
@@ -28,6 +29,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          grades: testGradeRepository(),
           auth: testAuth(),
           schedule: testScheduleRepository(),
           clock: clock ?? () => DateTime(2026, 9, 12, 13),
@@ -90,7 +92,7 @@ void main() {
 
     await tester.tap(navigationLabel('成绩'));
     await tester.pumpAndSettle();
-    expect(find.text('查看学期成绩'), findsOneWidget);
+    expect(find.text('登录后查询成绩'), findsOneWidget);
 
     await tester.tap(navigationLabel('课表'));
     await tester.pumpAndSettle();
