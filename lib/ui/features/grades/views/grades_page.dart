@@ -25,7 +25,7 @@ class GradesPage extends StatefulWidget {
   State<GradesPage> createState() => _GradesPageState();
 }
 
-enum _GradeAction { accounts, information, clear }
+enum _GradeAction { accounts, clear }
 
 class _GradesPageState extends State<GradesPage> {
   static const _workspaceMinHeight = 440.0;
@@ -272,8 +272,6 @@ class _GradesPageState extends State<GradesPage> {
     switch (action) {
       case _GradeAction.accounts:
         _chooseAccount();
-      case _GradeAction.information:
-        _showInformation();
       case _GradeAction.clear:
         _clearCache();
     }
@@ -568,28 +566,30 @@ class _GradesPageState extends State<GradesPage> {
               ],
             ),
           ),
-          if (workspace) ...[
-            const SizedBox(width: 16),
-            FilledButton.tonalIcon(
-              onPressed: busy
-                  ? null
-                  : model.canRefresh
-                  ? _refresh
-                  : widget.onOpenSettings,
-              icon: const Icon(Icons.sync_rounded),
-              label: Text(model.canRefresh ? '更新成绩' : '登录后更新'),
-            ),
-            const SizedBox(width: 8),
-          ] else
-            IconButton(
-              tooltip: model.canRefresh ? '更新成绩' : '登录后更新成绩',
-              onPressed: busy
-                  ? null
-                  : model.canRefresh
-                  ? _refresh
-                  : widget.onOpenSettings,
-              icon: const Icon(Icons.sync_rounded),
-            ),
+          if (model.snapshot?.records.isNotEmpty ?? false) ...[
+            if (workspace) ...[
+              const SizedBox(width: 16),
+              FilledButton.tonalIcon(
+                onPressed: busy
+                    ? null
+                    : model.canRefresh
+                    ? _refresh
+                    : widget.onOpenSettings,
+                icon: const Icon(Icons.sync_rounded),
+                label: Text(model.canRefresh ? '更新成绩' : '登录后更新'),
+              ),
+              const SizedBox(width: 8),
+            ] else
+              IconButton(
+                tooltip: model.canRefresh ? '更新成绩' : '登录后更新成绩',
+                onPressed: busy
+                    ? null
+                    : model.canRefresh
+                    ? _refresh
+                    : widget.onOpenSettings,
+                icon: const Icon(Icons.sync_rounded),
+              ),
+          ],
           PopupMenuButton<_GradeAction>(
             tooltip: '成绩菜单',
             onSelected: _action,
@@ -600,11 +600,6 @@ class _GradesPageState extends State<GradesPage> {
                     !model.data.loading &&
                     model.data.library.accounts.isNotEmpty,
                 child: const Text('本机保存的成绩'),
-              ),
-              PopupMenuItem(
-                value: _GradeAction.information,
-                enabled: model.snapshot != null,
-                child: const Text('更新时间与统计说明'),
               ),
               PopupMenuItem(
                 value: _GradeAction.clear,
@@ -748,11 +743,6 @@ class _GradesPageState extends State<GradesPage> {
                 TextButton(
                   onPressed: model.data.loading ? null : model.retryLocalLoad,
                   child: const Text('重新读取本机成绩'),
-                ),
-              if (failure.kind == GradeFailureKind.authentication)
-                TextButton(
-                  onPressed: widget.onOpenSettings,
-                  child: const Text('前往登录'),
                 ),
             ],
           ),

@@ -4,6 +4,31 @@ import 'package:zf_core/zf_core.dart';
 
 import '../../../../data/storage/schedule_store.dart';
 import '../../../core/adaptive_sheet.dart';
+import '../view_models/timetable_view_model.dart';
+
+Future<bool> selectScheduleTerm(
+  BuildContext context,
+  TimetableViewModel viewModel, {
+  bool forImport = false,
+}) async {
+  final account = viewModel.account;
+  if (account == null) return false;
+  final term = await showScheduleTermPicker(
+    context,
+    account: account,
+    forImport: forImport,
+  );
+  if (!context.mounted || term == null) return false;
+  if (viewModel.account?.account.scope != account.account.scope) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('账号已切换，请重新选择该账号的学期')));
+    return false;
+  }
+  final selected = await viewModel.selectTerm(term);
+  return selected &&
+      viewModel.account?.account.scope == account.account.scope &&
+      viewModel.selectedTerm == term;
+}
 
 Future<AcademicTerm?> showScheduleTermPicker(
   BuildContext context, {
@@ -92,7 +117,7 @@ class _TermPickerState extends State<_TermPicker> {
             Text(
               widget.forImport
                   ? '请选择要导入的学年和学期。也可以手动填写，不依赖学校页面提供选项。'
-                  : '已保存的学期可离线查看。其他学期可手动选择，再点击导入课表。',
+                  : '已保存的学期可离线查看。其他学期可手动选择，再前往“设置 → 课表”导入。',
             ),
             const SizedBox(height: 12),
             for (final term in terms)

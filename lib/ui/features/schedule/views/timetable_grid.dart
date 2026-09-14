@@ -7,16 +7,22 @@ import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import 'course_detail_sheet.dart';
 
-const _minimumGridWidth = 360.0;
+const _minimumDayWidth = 48.0;
 const _maximumGridTextScale = 1.45;
 
 class _GridMetrics {
-  const _GridMetrics({required this.wide, required this.textScale});
+  const _GridMetrics({
+    required this.wide,
+    required this.textScale,
+    required this.dayCount,
+  });
 
   final bool wide;
   final double textScale;
+  final int dayCount;
   double get axisWidth => wide ? 68 : 36;
-  double get rowExtent => wide ? 64 * math.max(1, textScale) : 76;
+  double get rowExtent => 56 * math.max(1, textScale);
+  double dayWidth(double width) => (width - axisWidth) / dayCount;
 }
 
 class TimetableGrid extends StatefulWidget {
@@ -109,14 +115,6 @@ class _TimetableGridState extends State<TimetableGrid> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
-      final metrics = _GridMetrics(
-        wide: constraints.maxWidth >= AppLayout.navigationRailMinWidth,
-        textScale: textScale,
-      );
-      final useAgenda =
-          widget.agenda ||
-          constraints.maxWidth < _minimumGridWidth ||
-          textScale > _maximumGridTextScale;
       final dates = widget.snapshot.calendar.weekDates(widget.week);
       final placed =
           widget.snapshot.entries
@@ -134,6 +132,18 @@ class _TimetableGridState extends State<TimetableGrid> {
               )
               .toList()
             ..sort(compareScheduleEntries);
+      final hasWeekend = placed
+          .followedBy(pending)
+          .any((entry) => (entry.weekday ?? 0) >= DateTime.saturday);
+      final metrics = _GridMetrics(
+        wide: constraints.maxWidth >= AppLayout.navigationRailMinWidth,
+        textScale: textScale,
+        dayCount: hasWeekend ? DateTime.daysPerWeek : DateTime.friday,
+      );
+      final useAgenda =
+          widget.agenda ||
+          metrics.dayWidth(constraints.maxWidth) < _minimumDayWidth ||
+          textScale > _maximumGridTextScale;
       return Semantics(
         container: true,
         label: '第 ${widget.week} 周课表',
@@ -261,9 +271,13 @@ class _TimetableGridState extends State<TimetableGrid> {
     _GridMetrics metrics,
   ) {
     final colors = Theme.of(context).colorScheme;
-    final dayWidth = (width - metrics.axisWidth) / DateTime.daysPerWeek;
+    final dayWidth = metrics.dayWidth(width);
     final todayIndex =
-        dates?.days.indexWhere((day) => _sameDate(day, widget.today)) ?? -1;
+        dates?.days
+            .take(metrics.dayCount)
+            .toList()
+            .indexWhere((day) => _sameDate(day, widget.today)) ??
+        -1;
     final maxPeriod = widget.snapshot.maxPeriod;
     final groups = _courseGroups(placed);
     final currentPeriod = todayIndex < 0 ? null : _currentPeriod();
@@ -476,7 +490,7 @@ class _WeekdayHeader extends StatelessWidget {
               style: theme.textTheme.labelSmall?.copyWith(fontSize: 12),
             ),
           ),
-          for (var day = 1; day <= DateTime.daysPerWeek; day++)
+          for (var day = 1; day <= metrics.dayCount; day++)
             Expanded(
               child: _DayLabel(
                 weekday: day,
@@ -670,45 +684,53 @@ class _CourseCardText extends StatelessWidget {
         height: 1.2,
         color: Theme.of(context).colorScheme.onSurface,
       );
+      final titleStyle = style?.copyWith(fontWeight: FontWeight.w700);
       final lineHeight = MediaQuery.textScalerOf(context).scale(fontSize) * 1.2;
-      final currentHeight = current ? lineHeight + 4 : 0;
+      final currentHeight = current ? lineHeight + 2 : 0;
       final lines = math.max(
         1,
-        ((constraints.maxHeight - currentHeight - 4) / lineHeight).floor(),
+        ((constraints.maxHeight - currentHeight) / lineHeight).floor(),
       );
-      final titleLines = math.min(
-        lines,
-        lines >= 6
-            ? 3
-            : lines >= 3
-            ? 2
-            : 1,
-      );
-      final metadataLines = lines - titleLines;
-      final showPlace = entry.location != null && metadataLines > 0;
+
+      int measureLines(String text, TextStyle? textStyle, int limit) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: textStyle),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: limit,
+        )..layout(maxWidth: constraints.maxWidth);
+        final count = painter.computeLineMetrics().length;
+        painter.dispose();
+        return count;
+      }
+
+      final nameLines = measureLines(entry.name, titleStyle, lines);
+      final placeLines = entry.location == null
+          ? 0
+          : math.min<int>(
+              measureLines(entry.location!, style, 2),
+              lines - math.min<int>(2, nameLines),
+            );
+      final titleLines = math.min(nameLines, lines - placeLines);
       final showTeacher =
-          entry.teacher != null && metadataLines > (showPlace ? 1 : 0);
+          entry.teacher != null && lines > titleLines + placeLines;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (current) ...[
-            Text(
-              '上课',
-              style: style?.copyWith(fontWeight: FontWeight.w700),
-              maxLines: 1,
-            ),
-            const SizedBox(height: 4),
+            Text('上课', style: titleStyle, maxLines: 1),
+            const SizedBox(height: 2),
           ],
           Text(
             entry.name,
             maxLines: titleLines,
             overflow: TextOverflow.ellipsis,
-            style: style?.copyWith(fontWeight: FontWeight.w700),
+            style: titleStyle,
           ),
-          if (showPlace)
+          if (placeLines > 0)
             Text(
               entry.location!,
-              maxLines: 1,
+              maxLines: placeLines,
               overflow: TextOverflow.ellipsis,
               style: style,
             ),
@@ -775,7 +797,7 @@ class _GridTileSurface extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.all(3),
+        padding: const EdgeInsets.all(2),
         child: Ink(
           decoration: BoxDecoration(
             color: Color.alphaBlend(
@@ -788,7 +810,7 @@ class _GridTileSurface extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(8),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
           child: child,
         ),
       ),
@@ -970,7 +992,7 @@ class _GridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dayWidth = (size.width - metrics.axisWidth) / DateTime.daysPerWeek;
+    final dayWidth = metrics.dayWidth(size.width);
     if (todayIndex >= 0) {
       canvas.drawRect(
         Rect.fromLTWH(
@@ -985,7 +1007,7 @@ class _GridPainter extends CustomPainter {
     final line = Paint()
       ..color = lineColor
       ..strokeWidth = 0.7;
-    for (var day = 0; day <= DateTime.daysPerWeek; day++) {
+    for (var day = 0; day <= metrics.dayCount; day++) {
       final x = metrics.axisWidth + day * dayWidth;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
     }
@@ -998,6 +1020,7 @@ class _GridPainter extends CustomPainter {
   @override
   bool shouldRepaint(_GridPainter oldDelegate) =>
       metrics.wide != oldDelegate.metrics.wide ||
+      metrics.dayCount != oldDelegate.metrics.dayCount ||
       metrics.rowExtent != oldDelegate.metrics.rowExtent ||
       periods != oldDelegate.periods ||
       todayIndex != oldDelegate.todayIndex ||

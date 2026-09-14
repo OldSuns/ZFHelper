@@ -42,6 +42,64 @@ void main() {
   });
 
   testWidgets(
+    'weekend columns follow the viewed week and phone cards use the available space',
+    (tester) async {
+      final lesson = _lesson(
+        'long',
+        '中西医结合临床诊疗基础与实践',
+        weekday: 1,
+        start: 1,
+        end: 3,
+        weeks: [1, 2, 3],
+        location: '基础医学教学楼 1203',
+      );
+      final snapshot = _snapshot([
+        lesson,
+        _lesson('saturday', '周六课程', weekday: 6, start: 1, end: 2, weeks: [2]),
+        _lesson('sunday', '周日课程', weekday: 7, start: 1, end: 2, weeks: [3]),
+      ], times: _morningTimes);
+      double? weekdayWidth;
+      for (final week in [1, 2, 3, 1]) {
+        await _pumpGrid(
+          tester,
+          snapshot,
+          week: week,
+          size: const Size(375, 640),
+          today: DateTime(2026, 9, 13, 8, 20),
+        );
+        final card = tester.getRect(
+          find.byKey(const ValueKey('schedule-course-long')),
+        );
+        final weekend = week == 1 ? findsNothing : findsOneWidget;
+        expect(find.byKey(const ValueKey('schedule-date-6')), weekend);
+        expect(find.byKey(const ValueKey('schedule-date-7')), weekend);
+        if (week == 1) {
+          weekdayWidth = card.width;
+          expect(card.height, lessThan(200));
+          expect(
+            tester.getSize(find.text(lesson.name)).height,
+            greaterThan(43.2),
+          );
+          expect(
+            tester.getSize(find.text(lesson.location!)).height,
+            greaterThan(20),
+          );
+          expect(tester.widget<Text>(find.text(lesson.location!)).maxLines, 2);
+          expect(
+            find.byKey(const ValueKey('schedule-current-time')),
+            findsNothing,
+          );
+        } else {
+          expect(card.width, lessThan(weekdayWidth!));
+          final id = week == 2 ? 'saturday' : 'sunday';
+          expect(find.byKey(ValueKey('schedule-course-$id')), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
     'transitive overlaps share a picker and every conflicting course is reachable',
     (tester) async {
       final entries = [
@@ -254,7 +312,7 @@ void main() {
   }
 
   for (final layout in [
-    (size: const Size(320, 640), scale: 1.0),
+    (size: const Size(260, 640), scale: 1.0),
     (size: const Size(375, 640), scale: 2.0),
     (size: const Size(900, 420), scale: 2.0),
   ]) {
@@ -540,12 +598,13 @@ ScheduleEntry _lesson(
   required int start,
   required int end,
   List<int> weeks = const [2],
+  String location = '教学楼 A101',
 }) => ScheduleEntry(
   id: id,
   name: name,
   teachingClassId: 'class-$id',
   teacher: '测试教师',
-  location: '教学楼 A101',
+  location: location,
   weekday: weekday,
   startPeriod: start,
   endPeriod: end,
@@ -585,6 +644,7 @@ Future<void> _pumpGrid(
   Size size = const Size(800, 650),
   Brightness brightness = Brightness.light,
   double textScale = 1,
+  int week = 2,
   DateTime? today,
   bool agenda = false,
   bool active = true,
@@ -604,7 +664,7 @@ Future<void> _pumpGrid(
       home: Scaffold(
         body: TimetableGrid(
           snapshot: snapshot,
-          week: 2,
+          week: week,
           today: today ?? DateTime(2026, 9, 14, 8, 20),
           onCourseTap: onTap ?? (_) {},
           onScroll: onScroll,

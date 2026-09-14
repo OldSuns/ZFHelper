@@ -6,7 +6,9 @@ import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/data/storage/schedule_store.dart';
 import 'package:zfhelper/ui/core/app_theme.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
+import 'package:zfhelper/ui/features/schedule/views/course_editor_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
+import 'package:zfhelper/ui/features/settings/views/schedule_settings_section.dart';
 
 import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
@@ -61,13 +63,13 @@ void main() {
   );
 
   testWidgets(
-    'swipes saved weeks and searches all term courses without networking',
+    'browses cached weeks offline and manages the timetable from settings',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final source = TestScheduleSource();
+      final source = TestScheduleSource()..connect(scheduleTestAccount);
       final snapshot = scheduleTestSnapshot(
         entries: [
           ...scheduleTestSnapshot().entries,
@@ -146,6 +148,37 @@ void main() {
           expect(tester.takeException(), isNull);
         }
         expect(source.requests, 0);
+        expect(tester.takeException(), isNull);
+
+        source.onRead = (_) async => ScheduleImportResult(snapshot: snapshot);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(Brightness.light),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: ScheduleSettingsSection(viewModel: model),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => tester.tap(find.widgetWithText(ListTile, '更新课表')),
+        );
+        await tester.pumpAndSettle();
+        expect(source.requests, 1);
+        expect(model.data.failure, isNull);
+        await tester.ensureVisible(find.byType(SwitchListTile));
+        await tester.runAsync(() => tester.tap(find.byType(SwitchListTile)));
+        await tester.pumpAndSettle();
+        expect(model.agenda, isTrue);
+        expect(repository.state.settings.preferAgenda, isTrue);
+        final addCourse = find.widgetWithText(ListTile, '添加课程');
+        await tester.ensureVisible(addCourse);
+        await tester.tap(addCourse);
+        await tester.pumpAndSettle();
+        expect(find.byType(CourseEditorPage), findsOneWidget);
+        expect(source.requests, 1);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());

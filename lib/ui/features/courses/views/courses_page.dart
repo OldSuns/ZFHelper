@@ -789,6 +789,12 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Widget _header({bool workspace = false}) {
     final account = model.account?.account;
+    final showRefresh = switch (model.tab) {
+      CoursePageTab.available => model.catalog?.courses.isNotEmpty ?? false,
+      CoursePageTab.selected =>
+        model.catalog?.selectedCourses.isNotEmpty ?? false,
+      CoursePageTab.operations => true,
+    };
     final label = account == null
         ? (widget.schoolName.isEmpty ? '请先配置学校并登录' : widget.schoolName)
         : '${account.schoolName} · ${account.accountName}';
@@ -817,15 +823,16 @@ class _CoursesPageState extends State<CoursesPage> {
               ],
             ),
           ),
-          IconButton(
-            tooltip: model.canRefresh ? '更新课程与已选记录' : '登录后更新课程',
-            onPressed: model.busy
-                ? null
-                : model.canRefresh
-                ? _refresh
-                : widget.onOpenSettings,
-            icon: const Icon(Icons.sync_rounded),
-          ),
+          if (showRefresh)
+            IconButton(
+              tooltip: model.canRefresh ? '更新课程与已选记录' : '登录后更新课程',
+              onPressed: model.busy
+                  ? null
+                  : model.canRefresh
+                  ? _refresh
+                  : widget.onOpenSettings,
+              icon: const Icon(Icons.sync_rounded),
+            ),
           PopupMenuButton<_CourseAction>(
             tooltip: '选课菜单',
             onSelected: _action,

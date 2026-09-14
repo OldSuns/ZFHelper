@@ -101,6 +101,7 @@ void main() {
   testWidgets('query is explicit and failed refresh keeps the saved grades', (
     tester,
   ) async {
+    _smallWindow(tester);
     final source = TestGradeSource(account: gradeAccount())
       ..onRead = () async => gradeSnapshot();
     final store = TestGradeStore();

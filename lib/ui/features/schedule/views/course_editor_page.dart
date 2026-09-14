@@ -4,7 +4,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../../data/repositories/schedule_repository.dart';
 import '../../../core/app_theme.dart';
+import '../view_models/timetable_view_model.dart';
+
+Future<bool> showScheduleCourseEditor(
+  BuildContext context,
+  TimetableViewModel viewModel, {
+  ScheduleEntry? entry,
+  ScheduleTarget? target,
+  ScheduleSnapshot? snapshot,
+}) async {
+  final destination = target ?? viewModel.editTarget;
+  final original = snapshot ?? viewModel.schedule;
+  if (destination == null || original == null) return false;
+  final value = await Navigator.of(context).push<ScheduleEntry>(
+    MaterialPageRoute(
+      builder: (context) => CourseEditorPage(
+        entry: entry,
+        initialWeek: viewModel.selectedWeek,
+        visibleWeekCount: viewModel.weekCount,
+        periodCount: original.maxPeriod,
+        onSave: (value) async =>
+            await viewModel.saveLocalEntry(
+              value,
+              target: destination,
+              replacing: entry,
+            )
+            ? null
+            : viewModel.data.failure?.message ?? '保存未完成，请重试',
+      ),
+    ),
+  );
+  return value != null;
+}
 
 class CourseEditorPage extends StatefulWidget {
   const CourseEditorPage({

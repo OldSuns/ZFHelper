@@ -254,7 +254,7 @@ void main() {
         );
         expect(tester.takeException(), isNull);
 
-        final action = find.widgetWithText(FilledButton, '设置');
+        final action = find.widgetWithText(FilledButton, '前往设置');
         await tester.scrollUntilVisible(action, 200);
         await tester.pumpAndSettle();
         await tester.tap(action);
@@ -274,7 +274,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, size: const Size(780, 360));
-    final action = find.widgetWithText(FilledButton, '设置');
+    final action = find.widgetWithText(FilledButton, '前往设置');
     await tester.scrollUntilVisible(action, 200);
     await tester.pumpAndSettle();
     await tester.tap(action);

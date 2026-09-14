@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../../data/repositories/schedule_repository.dart';
-import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/empty_state_card.dart';
 import '../../../core/feature_page.dart';
@@ -14,7 +13,6 @@ import '../view_models/timetable_view_model.dart';
 import 'course_detail_sheet.dart';
 import 'course_editor_page.dart';
 import 'course_search_sheet.dart';
-import 'schedule_calendar_page.dart';
 import 'schedule_picker_sheets.dart';
 import 'timetable_grid.dart';
 
@@ -36,16 +34,6 @@ class TimetablePage extends StatefulWidget {
   State<TimetablePage> createState() => _TimetablePageState();
 }
 
-enum _ScheduleAction {
-  calendar,
-  add,
-  agenda,
-  restore,
-  accounts,
-  schoolTerm,
-  info,
-}
-
 class _TimetablePageState extends State<TimetablePage> {
   TimetableViewModel get model => widget.viewModel;
 
@@ -53,51 +41,6 @@ class _TimetablePageState extends State<TimetablePage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _refresh({bool useSchoolDefault = false}) async {
-    final saved = await model.refresh(useSchoolDefault: useSchoolDefault);
-    if (!mounted) return;
-    if (!saved) {
-      if (model.data.failure?.kind == ScheduleFailureKind.termSelection) {
-        await _chooseTerm(importAfterSelection: true);
-      }
-      return;
-    }
-    if (model.schedule == null ||
-        (useSchoolDefault && model.account?.catalog?.selectedTerm == null)) {
-      _message('学校没有指定默认学期，请选择学期后导入');
-      await _chooseTerm(importAfterSelection: true);
-    } else {
-      _message(
-        model.schedule!.importWarnings.isEmpty
-            ? '课表已保存在本机，下次主动更新前一直可用'
-            : '课程已保存在本机；作息导入有提示，请查看导入信息',
-      );
-    }
-  }
-
-  Future<void> _chooseTerm({bool importAfterSelection = false}) async {
-    final account = model.account;
-    if (account == null) return;
-    final term = await showScheduleTermPicker(
-      context,
-      account: account,
-      forImport: importAfterSelection,
-    );
-    if (!mounted || term == null) return;
-    if (model.account?.account.scope != account.account.scope) {
-      _message('账号已切换，请重新选择该账号的学期');
-      return;
-    }
-    final selected = await model.selectTerm(term);
-    if (selected &&
-        importAfterSelection &&
-        mounted &&
-        model.account?.account.scope == account.account.scope &&
-        model.selectedTerm == term) {
-      await _refresh();
-    }
   }
 
   Future<void> _chooseWeek() async {
@@ -120,39 +63,19 @@ class _TimetablePageState extends State<TimetablePage> {
     model.showTeachingWeek(week);
   }
 
-  Future<void> _calendar() async {
-    final saved = await showScheduleCalendar(context, model);
-    if (!mounted || !saved) return;
-    _message('校历与作息已保存');
-  }
-
   Future<void> _edit({
-    ScheduleEntry? entry,
-    ScheduleTarget? target,
-    ScheduleSnapshot? snapshot,
+    required ScheduleEntry entry,
+    required ScheduleTarget target,
+    required ScheduleSnapshot snapshot,
   }) async {
-    final destination = target ?? model.editTarget;
-    final original = snapshot ?? model.schedule;
-    if (destination == null || original == null) return;
-    final value = await Navigator.of(context).push<ScheduleEntry>(
-      MaterialPageRoute(
-        builder: (context) => CourseEditorPage(
-          entry: entry,
-          initialWeek: model.selectedWeek,
-          visibleWeekCount: model.weekCount,
-          periodCount: original.maxPeriod,
-          onSave: (value) async =>
-              await model.saveLocalEntry(
-                value,
-                target: destination,
-                replacing: entry,
-              )
-              ? null
-              : model.data.failure?.message ?? '保存未完成，请重试',
-        ),
-      ),
+    final saved = await showScheduleCourseEditor(
+      context,
+      model,
+      entry: entry,
+      target: target,
+      snapshot: snapshot,
     );
-    if (!mounted || value == null) return;
+    if (!mounted || !saved) return;
     _message('课程已保存到本机');
   }
 
@@ -194,36 +117,6 @@ class _TimetablePageState extends State<TimetablePage> {
     await _details(current);
   }
 
-  Future<void> _importInfo() async {
-    final snapshot = model.imported;
-    if (snapshot == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('课表导入信息'),
-        scrollable: true,
-        content: SelectableText(
-          [
-            snapshot.term.label,
-            '来源：${snapshot.sourceLabel ?? '教务系统'}',
-            '更新时间：${_savedAt(snapshot.fetchedAt)}',
-            '${snapshot.entries.length} 条学校安排 · ${snapshot.periodTimes.length} 项学校作息',
-            '课表已保存在本机，只有主动导入或更新时才重新获取。',
-            ...snapshot.importWarnings,
-            if (snapshot.calendar.sourceLabel != null)
-              '校历来源：${snapshot.calendar.sourceLabel}',
-          ].join('\n\n'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<bool> _confirm({
     required String title,
     required String message,
@@ -261,104 +154,7 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
     if (await model.removeEntry(entry, target: target)) {
-      _message(imported ? '已隐藏，可在课表菜单中恢复学校安排' : '本地课程已删除');
-    }
-  }
-
-  Future<void> _accounts() async {
-    final accounts = model.data.library.accounts;
-    final action = await showAdaptiveSheet<({AccountScope scope, bool remove})>(
-      context: context,
-      builder: (context) => ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * .75,
-        ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                '本机保存的课表',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            for (final account in accounts)
-              ListTile(
-                title: Text(
-                  '${account.account.schoolName} · ${account.account.accountName}',
-                ),
-                subtitle: Text(
-                  '${account.account.loginName} · ${account.schedules.length} 个学期',
-                ),
-                selected: account.account.scope == model.account?.account.scope,
-                onTap: () =>
-                    Navigator.of(context)
-                        .pop((scope: account.account.scope, remove: false)),
-                trailing: IconButton(
-                  tooltip: '清除此账号的课表',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () =>
-                      Navigator.of(context)
-                          .pop((scope: account.account.scope, remove: true)),
-                ),
-              ),
-            if (accounts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('还没有保存在本机的课表'),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || action == null) return;
-    if (!action.remove) {
-      await model.selectAccount(action.scope);
-      return;
-    }
-    final record = accounts.firstWhere(
-      (item) => item.account.scope == action.scope,
-    );
-    if (!await _confirm(
-          title: '清除此账号的本机课表？',
-          message:
-              '${record.account.schoolName} · ${record.account.accountName} 的所有已保存学期、本地课程和校历校正将被清除。学校数据不受影响。',
-          action: '清除课表',
-        ) ||
-        !mounted) {
-      return;
-    }
-    if (await model.removeSavedAccount(action.scope)) _message('此账号的本机课表已清除');
-  }
-
-  Future<void> _action(_ScheduleAction action) async {
-    switch (action) {
-      case _ScheduleAction.calendar:
-        await _calendar();
-      case _ScheduleAction.add:
-        await _edit();
-      case _ScheduleAction.agenda:
-        await model.toggleAgenda();
-      case _ScheduleAction.accounts:
-        await _accounts();
-      case _ScheduleAction.schoolTerm:
-        await _refresh(useSchoolDefault: true);
-      case _ScheduleAction.info:
-        await _importInfo();
-      case _ScheduleAction.restore:
-        final target = model.editTarget;
-        if (target != null &&
-            await _confirm(
-              title: '恢复学校上课安排？',
-              message: '取消对学校安排的隐藏和本地调整，保留另外添加的本地课程。',
-              action: '恢复',
-            ) &&
-            mounted &&
-            await model.restoreHiddenEntries(target: target)) {
-          _message('学校上课安排已恢复');
-        }
+      _message(imported ? '已隐藏，可在“设置 → 课表”中恢复学校安排' : '本地课程已删除');
     }
   }
 
@@ -412,18 +208,14 @@ class _TimetablePageState extends State<TimetablePage> {
         icon: Icons.calendar_month_outlined,
         title: '课表还没有同步',
         message: model.canRefresh
-            ? '导入整个学期后，可离线查看。仅在你主动更新时重新获取学校课表。'
-            : '连接教务账号后，在这里查看每周课程、上课时间与地点。',
-        actionLabel: model.canRefresh ? '导入课表' : '设置',
-        onAction: model.canRefresh
-            ? (model.data.refreshing ? null : _refresh)
-            : widget.onOpenSettings,
+            ? '在“设置 → 课表”中导入整个学期后，可离线查看每周课程。'
+            : '在设置中连接教务账号并导入课表，即可查看每周课程、上课时间与地点。',
+        actionLabel: '前往设置',
+        onAction: widget.onOpenSettings,
       ),
-      if (model.data.library.accounts.isNotEmpty)
-        TextButton(onPressed: _accounts, child: const Text('本机保存的课表')),
       const SizedBox(height: 16),
       Text(
-        '当前显示日历日期，教学周将根据学校学期安排确定。',
+        '当前显示日历日期，导入后请在设置中填写教学周。',
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodySmall
             ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -432,7 +224,9 @@ class _TimetablePageState extends State<TimetablePage> {
   );
 
   Widget _termButton() => TextButton.icon(
-    onPressed: model.account == null || model.data.loading ? null : _chooseTerm,
+    onPressed: model.account == null || model.data.loading
+        ? null
+        : () => selectScheduleTerm(context, model),
     icon: const Icon(Icons.expand_more, size: 20),
     label: Text(
       model.selectedTerm?.label ?? '选择学期',
@@ -458,10 +252,11 @@ class _TimetablePageState extends State<TimetablePage> {
                 onPressed: model.data.loading ? null : model.retryLocalLoad,
                 child: const Text('重试读取'),
               ),
-            if (failure.kind == ScheduleFailureKind.termSelection)
+            if (model.hasSchedule &&
+                failure.kind == ScheduleFailureKind.termSelection)
               TextButton(
-                onPressed: () => _chooseTerm(importAfterSelection: true),
-                child: const Text('手动选择'),
+                onPressed: widget.onOpenSettings,
+                child: const Text('前往设置'),
               ),
             IconButton(
               tooltip: '关闭课表错误提示',
@@ -518,69 +313,10 @@ class _TimetablePageState extends State<TimetablePage> {
                           ],
                         ),
                       ),
-                      if (wide) ...[
-                        TextButton.icon(
-                          onPressed: _edit,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('添加课程'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _calendar,
-                          icon: const Icon(Icons.tune, size: 18),
-                          label: const Text('校历与作息'),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       IconButton(
                         tooltip: '查找课程',
                         onPressed: _search,
                         icon: const Icon(Icons.search),
-                      ),
-                      IconButton(
-                        tooltip: '更新课表',
-                        onPressed: model.data.refreshing
-                            ? null
-                            : model.canRefresh
-                            ? _refresh
-                            : widget.onOpenSettings,
-                        icon: const Icon(Icons.sync),
-                      ),
-                      PopupMenuButton<_ScheduleAction>(
-                        tooltip: '课表菜单',
-                        onSelected: _action,
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: _ScheduleAction.add,
-                            child: Text('添加本地课程'),
-                          ),
-                          const PopupMenuItem(
-                            value: _ScheduleAction.calendar,
-                            child: Text('校历与作息'),
-                          ),
-                          if (model.canRefresh)
-                            PopupMenuItem(
-                              value: _ScheduleAction.schoolTerm,
-                              enabled: !model.data.refreshing,
-                              child: const Text('导入教务当前学期'),
-                            ),
-                          PopupMenuItem(
-                            value: _ScheduleAction.agenda,
-                            child: Text(model.agenda ? '切换为周网格' : '切换为按天列表'),
-                          ),
-                          if (model.settings.hiddenEntryIds.isNotEmpty)
-                            const PopupMenuItem(
-                              value: _ScheduleAction.restore,
-                              child: Text('恢复学校安排'),
-                            ),
-                          const PopupMenuItem(
-                            value: _ScheduleAction.accounts,
-                            child: Text('本机保存的课表'),
-                          ),
-                          const PopupMenuItem(
-                            value: _ScheduleAction.info,
-                            child: Text('导入信息'),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -600,26 +336,11 @@ class _TimetablePageState extends State<TimetablePage> {
                           width: 260,
                           child: _weekNavigation(compact: compact),
                         ),
-                        const SizedBox(width: 8),
-                        _currentWeekButton(),
-                        const SizedBox(width: 16),
-                        SegmentedButton<bool>(
-                          showSelectedIcon: false,
-                          segments: const [
-                            ButtonSegment(
-                              value: false,
-                              icon: Icon(Icons.calendar_view_week_outlined),
-                              label: Text('周课表'),
-                            ),
-                            ButtonSegment(
-                              value: true,
-                              icon: Icon(Icons.view_agenda_outlined),
-                              label: Text('列表'),
-                            ),
-                          ],
-                          selected: {model.agenda},
-                          onSelectionChanged: (_) => model.toggleAgenda(),
-                        ),
+                        if (model.currentPosition.status !=
+                            TeachingWeekStatus.unknown) ...[
+                          const SizedBox(width: 8),
+                          _currentWeekButton(),
+                        ],
                       ],
                     ),
                   )
@@ -634,7 +355,9 @@ class _TimetablePageState extends State<TimetablePage> {
                             child: _termButton(),
                           ),
                         ),
-                        _currentWeekButton(),
+                        if (model.currentPosition.status !=
+                            TeachingWeekStatus.unknown)
+                          _currentWeekButton(),
                       ],
                     ),
                   ),
@@ -694,16 +417,8 @@ class _TimetablePageState extends State<TimetablePage> {
   );
 
   Widget _currentWeekButton() => TextButton(
-    onPressed: model.isCurrentWeek
-        ? null
-        : model.currentPosition.status == TeachingWeekStatus.unknown
-        ? _calendar
-        : model.returnToCurrentWeek,
-    child: Text(
-      model.currentPosition.status == TeachingWeekStatus.unknown
-          ? '设置教学周'
-          : '回到本周',
-    ),
+    onPressed: model.isCurrentWeek ? null : model.returnToCurrentWeek,
+    child: const Text('回到本周'),
   );
 
   Widget _weekNavigation({required bool compact}) => Row(
@@ -747,12 +462,6 @@ class _TimetablePageState extends State<TimetablePage> {
       ),
     ],
   );
-
-  static String _savedAt(DateTime timestamp) {
-    final date = timestamp.toLocal();
-    return '${date.year}/${date.month}/${date.day} '
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-  }
 }
 
 class _TeachingWeeks extends StatefulWidget {

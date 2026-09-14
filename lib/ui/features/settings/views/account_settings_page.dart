@@ -191,7 +191,7 @@ class AccountSettingsPage extends StatelessWidget {
           ],
       ],
     ];
-    if (!wide) {
+    if (!wide || state.schools.isEmpty) {
       return ListView(
         key: const PageStorageKey('account-settings-mobile'),
         padding: const EdgeInsets.all(AppLayout.pagePadding),
