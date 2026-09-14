@@ -16,6 +16,7 @@ abstract final class SchoolConnectionCodec {
   }
 
   static Map<String, Object?> toMap(SchoolConnection profile) => {
+    'id': profile.school.id,
     'name': profile.name,
     'baseUri': profile.baseUri.toString(),
     'loginPath': profile.loginPath,
@@ -37,6 +38,7 @@ abstract final class SchoolConnectionCodec {
     }
     final webLogin = _optionalString(value, 'webLoginUri');
     return SchoolConnection(
+      schoolId: value.containsKey('id') ? _string(value, 'id') : null,
       name: _string(value, 'name'),
       baseUri: Uri.parse(_string(value, 'baseUri')),
       loginPath: _string(value, 'loginPath'),

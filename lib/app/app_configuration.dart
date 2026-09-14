@@ -12,7 +12,9 @@ import '../data/storage/sqlite_schedule_store.dart';
 import '../data/storage/sqlite_grade_store.dart';
 import '../data/storage/sqlite_selection_store.dart';
 import '../platform/secure_login_vault.dart';
+import '../platform/secure_appearance_store.dart';
 import '../platform/selection_runtime.dart';
+import '../ui/features/settings/view_models/appearance_view_model.dart';
 
 typedef AppClock = DateTime Function();
 
@@ -23,6 +25,7 @@ final class AppConfiguration {
     required this.schedule,
     required this.grades,
     required this.courses,
+    required this.appearance,
   });
 
   factory AppConfiguration.standard() {
@@ -43,6 +46,7 @@ final class AppConfiguration {
       },
     );
     return AppConfiguration(
+      appearance: AppearanceViewModel(store: SecureAppearanceStore()),
       auth: auth,
       clock: DateTime.now,
       courses: CourseRepository(
@@ -84,6 +88,36 @@ final class AppConfiguration {
   final ScheduleRepository schedule;
   final GradeRepository grades;
   final CourseRepository courses;
+  final AppearanceViewModel appearance;
+
+  Future<void> removeSchoolData(String schoolId) async {
+    await Future.wait([
+      courses.initialize(),
+      schedule.initialize(),
+      grades.initialize(),
+    ]);
+    if (!courses.state.initialized ||
+        !schedule.state.initialized ||
+        !grades.state.initialized) {
+      throw const LoginFailure(
+        LoginFailureCode.storage,
+        '本地数据尚未完整读取，学校未移除。请先在对应页面重试读取数据，再移除学校。',
+      );
+    }
+    final scopes = <AccountScope>{
+      for (final account in auth.state.accounts) account.scope,
+      for (final account in courses.state.library.accounts)
+        account.account.scope,
+      for (final account in schedule.state.library.accounts)
+        account.account.scope,
+      for (final account in grades.state.library.accounts)
+        account.account.scope,
+      for (final operation in courses.state.operations) operation.target.scope,
+    }.where((scope) => scope.schoolId == schoolId).toList();
+    for (final scope in scopes) {
+      await removeAccountData(scope);
+    }
+  }
 
   Future<void> removeAccountData(AccountScope scope) async {
     // The account owner invalidates its session before reaching this callback.

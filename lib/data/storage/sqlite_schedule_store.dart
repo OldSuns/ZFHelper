@@ -33,7 +33,7 @@ final class SqliteScheduleStore implements ScheduleStore {
   }
 
   @override
-  Future<void> selectAccount(AccountScope scope) async {
+  Future<void> selectAccount(AccountScope? scope) async {
     await _enqueue(_SelectAccount(scope));
   }
 
@@ -123,7 +123,7 @@ final class _SaveAccount extends _StoreCommand {
 final class _SelectAccount extends _StoreCommand {
   const _SelectAccount(this.scope);
 
-  final AccountScope scope;
+  final AccountScope? scope;
 
   @override
   String get operation => 'selectAccount';
@@ -355,7 +355,11 @@ void _saveAccount(
   if (select) _setSelectedScope(database, account.scope);
 }
 
-void _selectAccount(Database database, AccountScope scope) {
+void _selectAccount(Database database, AccountScope? scope) {
+  if (scope == null) {
+    _setSelectedScope(database, null);
+    return;
+  }
   _validateScope(scope);
   final existing = database.select(
     'SELECT 1 FROM schedule_accounts WHERE school_id = ? AND account_id = ?',
@@ -415,11 +419,11 @@ AccountScope? _selectedScope(Database database) {
   return AccountScope(schoolId: schoolId, accountId: accountId);
 }
 
-void _setSelectedScope(Database database, AccountScope scope) {
+void _setSelectedScope(Database database, AccountScope? scope) {
   database.execute(
     'UPDATE schedule_metadata SET selected_school_id = ?, '
     'selected_account_id = ? WHERE id = 1',
-    [scope.schoolId, scope.accountId],
+    [scope?.schoolId, scope?.accountId],
   );
 }
 

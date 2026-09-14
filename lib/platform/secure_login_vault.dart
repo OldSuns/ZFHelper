@@ -14,32 +14,44 @@ final class SecureLoginVault implements LoginVault {
           );
 
   static const _key = 'zfhelper.active_login.v1';
-  static const _accountsKey = 'zfhelper.accounts.v1';
+  static const _accountsKey = 'zfhelper.accounts.v2';
+  static const _legacyAccountsKey = 'zfhelper.accounts.v1';
   static const _schoolKey = 'zfhelper.selected_school.v1';
   final FlutterSecureStorage _storage;
 
   @override
-  Future<SchoolConnection?> readSchool() async {
-    try {
-      final payload = await _storage.read(key: _schoolKey);
-      return payload == null ? null : SchoolConnectionCodec.decode(payload);
-    } on PlatformException {
-      throw const LoginFailure(LoginFailureCode.storage, '无法读取本机保存的学校设置，请重试');
-    } on FormatException {
-      throw const LoginFailure(LoginFailureCode.storage, '保存的学校设置格式异常，请重新设置学校');
-    }
-  }
+  Future<SchoolConnection?> readSchool() async =>
+      (await readAccounts()).selectedSchool?.profile;
 
   @override
   Future<void> writeSchool(SchoolConnection profile) async {
-    try {
-      await _storage.write(
-        key: _schoolKey,
-        value: SchoolConnectionCodec.encode(profile),
-      );
-    } on PlatformException {
-      throw const LoginFailure(LoginFailureCode.storage, '学校设置未能保存到本机，请重试');
-    }
+    final library = await readAccounts();
+    final id = profile.school.id;
+    final previous = library.schools
+        .where((school) => school.profile.school.id == id)
+        .firstOrNull;
+    await writeAccounts(
+      StoredLoginLibrary(
+        schools: [
+          for (final school in library.schools)
+            if (school.profile.school.id != id) school,
+          StoredSchool(
+            profile: profile,
+            lastAccountId: previous?.lastAccountId,
+          ),
+        ],
+        accounts: [
+          for (final account in library.accounts)
+            account.scope.schoolId == id
+                ? account.withProfile(profile)
+                : account,
+        ],
+        selectedSchoolId: id,
+        selectedScope: library.selectedScope?.schoolId == id
+            ? library.selectedScope
+            : null,
+      ),
+    );
   }
 
   @override
@@ -47,13 +59,44 @@ final class SecureLoginVault implements LoginVault {
     try {
       final accounts = await _storage.read(key: _accountsKey);
       if (accounts != null) return StoredLoginLibraryCodec.decode(accounts);
-      final payload = await _storage.read(key: _key);
-      if (payload == null) return StoredLoginLibrary();
-      final library = StoredLoginLibrary.fromLogin(
-        StoredLoginCodec.decode(payload),
+      final legacyAccounts = await _storage.read(key: _legacyAccountsKey);
+      final payload = legacyAccounts == null
+          ? await _storage.read(key: _key)
+          : null;
+      final schoolPayload = await _storage.read(key: _schoolKey);
+      if (legacyAccounts == null && payload == null && schoolPayload == null) {
+        return StoredLoginLibrary();
+      }
+      final old = legacyAccounts != null
+          ? StoredLoginLibraryCodec.decode(legacyAccounts)
+          : StoredLoginLibrary.fromLogin(
+              payload == null ? null : StoredLoginCodec.decode(payload),
+            );
+      final schools = {
+        for (final school in old.schools) school.profile.school.id: school,
+      };
+      final school = schoolPayload == null
+          ? null
+          : SchoolConnectionCodec.decode(schoolPayload);
+      if (school != null) {
+        schools[school.school.id] = StoredSchool(
+          profile: school,
+          lastAccountId: schools[school.school.id]?.lastAccountId,
+        );
+      }
+      final library = StoredLoginLibrary(
+        accounts: [
+          for (final account in old.accounts)
+            account.withProfile(schools[account.scope.schoolId]!.profile),
+        ],
+        schools: schools.values.toList(),
+        selectedScope: old.selectedScope,
+        selectedSchoolId:
+            old.selectedScope?.schoolId ??
+            school?.school.id ??
+            old.selectedSchoolId,
       );
-      // Establish the new library before deleting the old single-account key.
-      // A failed migration leaves the original encrypted record available.
+      // Commit the whole directory before removing any legacy encrypted keys.
       await writeAccounts(library);
       return library;
     } on PlatformException {
@@ -77,6 +120,8 @@ final class SecureLoginVault implements LoginVault {
         value: StoredLoginLibraryCodec.encode(library),
       );
       await _storage.delete(key: _key);
+      await _storage.delete(key: _legacyAccountsKey);
+      await _storage.delete(key: _schoolKey);
     } on PlatformException {
       throw const LoginFailure(
         LoginFailureCode.storage,
@@ -96,9 +141,21 @@ final class SecureLoginVault implements LoginVault {
     final account = StoredAuthAccount.fromLogin(login);
     await writeAccounts(
       StoredLoginLibrary(
+        schools: [
+          for (final school in library.schools)
+            if (school.profile.school.id != account.scope.schoolId) school,
+          StoredSchool(
+            profile: login.profile,
+            lastAccountId: account.account.id,
+          ),
+        ],
+        selectedSchoolId: account.scope.schoolId,
         accounts: [
           for (final saved in library.accounts)
-            if (saved.scope != account.scope) saved,
+            if (saved.scope != account.scope)
+              saved.scope.schoolId == account.scope.schoolId
+                  ? saved.withProfile(login.profile)
+                  : saved,
           account,
         ],
         selectedScope: account.scope,
@@ -111,6 +168,8 @@ final class SecureLoginVault implements LoginVault {
     final library = await readAccounts();
     await writeAccounts(
       StoredLoginLibrary(
+        schools: library.schools,
+        selectedSchoolId: library.selectedSchoolId,
         accounts: [
           for (final saved in library.accounts)
             saved.scope == library.selectedScope ? saved.withoutLogin() : saved,

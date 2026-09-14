@@ -16,6 +16,7 @@ final class SchoolAddressViewModel extends ChangeNotifier {
   String? _parseError;
   String? _nameError;
   bool _submitted = false;
+  String? _draftSchoolId;
 
   Uri? get recognizedAddress => _recognizedAddress;
   String? get addressError => _submitted ? _parseError : null;
@@ -73,10 +74,26 @@ final class SchoolAddressViewModel extends ChangeNotifier {
     if (address == null || _nameError != null) return null;
     final displayName = name.trim();
     final initialProfile = this.initialProfile;
-    if (initialProfile == null || address != initialProfile.baseUri) {
-      return SchoolConnection(name: displayName, baseUri: address);
+    if (initialProfile == null) {
+      final profile = _draftSchoolId == null
+          ? SchoolConnection.create(name: displayName, baseUri: address)
+          : SchoolConnection(
+              schoolId: _draftSchoolId,
+              name: displayName,
+              baseUri: address,
+            );
+      _draftSchoolId = profile.school.id;
+      return profile;
+    }
+    if (address != initialProfile.baseUri) {
+      return SchoolConnection(
+        schoolId: initialProfile.school.id,
+        name: displayName,
+        baseUri: address,
+      );
     }
     return SchoolConnection(
+      schoolId: initialProfile.school.id,
       name: displayName,
       baseUri: address,
       loginPath: initialProfile.loginPath,

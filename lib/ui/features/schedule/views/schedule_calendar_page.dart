@@ -3,6 +3,32 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../core/app_theme.dart';
+import '../view_models/timetable_view_model.dart';
+
+Future<bool> showScheduleCalendar(
+  BuildContext context,
+  TimetableViewModel viewModel,
+) async {
+  final snapshot = viewModel.imported;
+  final target = viewModel.editTarget;
+  if (snapshot == null || target == null) return false;
+  final settings = viewModel.settings;
+  final today = viewModel.today;
+  final saved = await Navigator.of(context).push<ScheduleSettings>(
+    MaterialPageRoute(
+      builder: (context) => ScheduleCalendarPage(
+        snapshot: snapshot,
+        settings: settings,
+        today: today,
+        onSave: (value) async =>
+            await viewModel.saveSettings(value, target: target)
+            ? null
+            : viewModel.data.failure?.message ?? '保存未完成，请重试',
+      ),
+    ),
+  );
+  return saved != null;
+}
 
 class ScheduleCalendarPage extends StatefulWidget {
   const ScheduleCalendarPage({

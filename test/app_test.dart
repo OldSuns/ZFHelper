@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
+import 'package:zfhelper/data/storage/appearance_store.dart';
+import 'package:zfhelper/platform/secure_appearance_store.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/settings_page.dart';
 
 import 'support/auth_fakes.dart';
 import 'support/schedule_fakes.dart';
 import 'support/grade_fakes.dart';
 import 'support/course_fakes.dart';
+import 'support/settings_fakes.dart';
 
 void main() {
   Future<void> pumpApp(
@@ -18,6 +23,7 @@ void main() {
     double textScale = 1,
     Brightness brightness = Brightness.light,
     AppClock? clock,
+    AppearanceStore? appearanceStore,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -31,6 +37,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          appearance: testAppearance(store: appearanceStore),
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           auth: testAuth(),
@@ -46,6 +53,66 @@ void main() {
     of: find.byType(NavigationBar),
     matching: find.text(label),
   );
+
+  testWidgets('appearance choices apply globally and survive app recreation', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+
+    Future<void> choose(String label) async {
+      final entry = find.widgetWithText(ListTile, '外观');
+      await tester.scrollUntilVisible(entry, 150);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await choose('深色');
+    expect(
+      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Brightness.dark,
+    );
+    expect(await SecureAppearanceStore().read(), AppAppearance.dark);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    expect(
+      Theme.of(tester.element(find.byType(TimetablePage))).brightness,
+      Brightness.dark,
+    );
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+    await choose('浅色');
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Brightness.light,
+    );
+
+    await choose('跟随系统');
+    expect(
+      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Brightness.dark,
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Brightness.light,
+    );
+    expect(await SecureAppearanceStore().read(), AppAppearance.system);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Android-sized startup opens timetable for the target school', (
     tester,
@@ -102,25 +169,32 @@ void main() {
     expect(find.text('9月14日 — 9月20日'), findsOneWidget);
   });
 
-  testWidgets('account settings offers generic login and returns', (
-    tester,
-  ) async {
-    await pumpApp(tester);
-    await tester.tap(navigationLabel('账号与设置'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'settings opens account management and returns through both pages',
+    (tester) async {
+      await pumpApp(tester);
+      await tester.tap(navigationLabel('设置'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AccountSettingsPage), findsOneWidget);
+      expect(find.text('这所学校还没有账号'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('add-account')))
+            .onPressed,
+        isNotNull,
+      );
 
-    expect(find.byType(AccountSettingsPage), findsOneWidget);
-    expect(find.text('支持自定义学校与新正方教务地址'), findsOneWidget);
-    expect(find.text('尚未连接'), findsOneWidget);
-    expect(
-      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-      isNotNull,
-    );
-
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(find.byType(TimetablePage), findsOneWidget);
-  });
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(TimetablePage), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'four destinations include courses and Android back returns home',
@@ -133,7 +207,7 @@ void main() {
             .destinations
             .cast<NavigationDestination>()
             .map((destination) => destination.label),
-        ['课表', '选课', '成绩', '账号与设置'],
+        ['课表', '选课', '成绩', '设置'],
       );
       await tester.tap(navigationLabel('选课'));
       await tester.pumpAndSettle();
@@ -180,12 +254,17 @@ void main() {
         );
         expect(tester.takeException(), isNull);
 
-        final action = find.widgetWithText(FilledButton, '账号与设置');
+        final action = find.widgetWithText(FilledButton, '设置');
         await tester.scrollUntilVisible(action, 200);
         await tester.pumpAndSettle();
         await tester.tap(action);
         await tester.pumpAndSettle();
-        expect(find.byType(AccountSettingsPage), findsOneWidget);
+        expect(find.byType(SettingsPage), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.widgetWithText(ListTile, '关于应用'),
+          200,
+        );
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       },
     );
@@ -195,12 +274,12 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, size: const Size(780, 360));
-    final action = find.widgetWithText(FilledButton, '账号与设置');
+    final action = find.widgetWithText(FilledButton, '设置');
     await tester.scrollUntilVisible(action, 200);
     await tester.pumpAndSettle();
     await tester.tap(action);
     await tester.pumpAndSettle();
-    expect(find.byType(AccountSettingsPage), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -210,13 +289,13 @@ void main() {
     await pumpApp(tester, size: const Size(900, 360), textScale: 2);
     final settings = find.descendant(
       of: find.byType(NavigationRail),
-      matching: find.text('账号与设置'),
+      matching: find.text('设置'),
     );
     await tester.ensureVisible(settings);
     await tester.pumpAndSettle();
     await tester.tap(settings);
     await tester.pumpAndSettle();
-    expect(find.byType(AccountSettingsPage), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -258,7 +337,7 @@ void main() {
   ) async {
     var now = DateTime(2026, 9, 13, 23, 59);
     await pumpApp(tester, clock: () => now);
-    await tester.tap(navigationLabel('账号与设置'));
+    await tester.tap(navigationLabel('设置'));
     await tester.pumpAndSettle();
 
     now = DateTime(2026, 9, 14);

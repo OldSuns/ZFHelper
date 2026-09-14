@@ -12,6 +12,7 @@ import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
 import '../../../support/grade_fakes.dart';
 import '../../../support/course_fakes.dart';
+import '../../../support/settings_fakes.dart';
 
 void main() {
   testWidgets('finishing a save during back navigation keeps settings open', (
@@ -39,6 +40,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          appearance: testAppearance(),
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           schedule: testScheduleRepository(),
@@ -48,9 +50,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(NavigationDestination, '账号与设置'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '设置'));
     await tester.pumpAndSettle();
-    final openLogin = find.text('登录 / 更换学校');
+    await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
+    await tester.pumpAndSettle();
+    final openLogin = find.byKey(const ValueKey('add-account'));
     await tester.scrollUntilVisible(
       openLogin,
       200,
@@ -88,7 +92,7 @@ void main() {
 
     expect(find.byType(LoginPage), findsNothing);
     expect(find.byType(AccountSettingsPage), findsOneWidget);
-    expect(find.widgetWithText(AppBar, '账号与设置'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, '账号与学校'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

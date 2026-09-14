@@ -47,8 +47,8 @@ abstract interface class ScheduleStore {
     bool select = false,
   });
 
-  /// Selects an existing account, failing when its record is missing.
-  Future<void> selectAccount(AccountScope scope);
+  /// Selects an existing account, or clears the selection with `null`.
+  Future<void> selectAccount(AccountScope? scope);
 
   /// Removes an account and all its imported and local schedule data.
   ///

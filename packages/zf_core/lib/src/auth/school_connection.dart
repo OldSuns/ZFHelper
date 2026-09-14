@@ -1,8 +1,11 @@
+import 'dart:math';
+
 import '../school_identity.dart';
 import 'school_address.dart';
 
 final class SchoolConnection {
   SchoolConnection({
+    String? schoolId,
     required String name,
     required Uri baseUri,
     this.loginPath = 'xtgl/login_slogin.html',
@@ -16,9 +19,11 @@ final class SchoolConnection {
     this.gradeQueryPath = defaultGradeQueryPath,
     this.selectionPagePath = defaultSelectionPagePath,
     this.webLoginUri,
-  }) : name = name.trim(),
+  }) : _schoolId = schoolId?.trim(),
+       name = name.trim(),
        baseUri = normalizeSchoolBaseUri(baseUri) {
     if (this.name.isEmpty) throw const FormatException('请输入学校名称');
+    if (_schoolId?.isEmpty == true) throw const FormatException('学校标识不能为空');
     final webUri = webLoginUri;
     if (webUri != null &&
         (!['https', 'http'].contains(webUri.scheme) ||
@@ -48,7 +53,24 @@ final class SchoolConnection {
     }
   }
 
+  factory SchoolConnection.create({
+    required String name,
+    required Uri baseUri,
+  }) {
+    final random = Random.secure();
+    final id = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    return SchoolConnection(
+      schoolId: 'school-$id',
+      name: name,
+      baseUri: baseUri,
+    );
+  }
+
   factory SchoolConnection.fromInput({
+    String? schoolId,
     required String name,
     required String address,
     String loginPath = 'xtgl/login_slogin.html',
@@ -63,6 +85,7 @@ final class SchoolConnection {
     String selectionPagePath = defaultSelectionPagePath,
     String webLoginAddress = '',
   }) => SchoolConnection(
+    schoolId: schoolId,
     name: name,
     baseUri: recognizeSchoolAddress(address),
     loginPath: loginPath.trim(),
@@ -80,6 +103,7 @@ final class SchoolConnection {
         : Uri.parse(webLoginAddress.trim()),
   );
 
+  final String? _schoolId;
   final String name;
   final Uri baseUri;
   final String loginPath;
@@ -102,7 +126,21 @@ final class SchoolConnection {
   final Uri? webLoginUri;
 
   SchoolIdentity get school =>
-      SchoolIdentity(id: baseUri.toString(), name: name);
+      SchoolIdentity(id: _schoolId ?? baseUri.toString(), name: name);
+
+  bool hasSameConnection(SchoolConnection other) =>
+      baseUri == other.baseUri &&
+      loginPath == other.loginPath &&
+      publicKeyPath == other.publicKeyPath &&
+      captchaPath == other.captchaPath &&
+      accountPath == other.accountPath &&
+      schedulePagePath == other.schedulePagePath &&
+      scheduleQueryPath == other.scheduleQueryPath &&
+      schedulePeriodsPath == other.schedulePeriodsPath &&
+      gradePagePath == other.gradePagePath &&
+      gradeQueryPath == other.gradeQueryPath &&
+      selectionPagePath == other.selectionPagePath &&
+      webLoginUri == other.webLoginUri;
   Uri get loginUri => baseUri.resolve(loginPath);
   Uri get publicKeyUri => baseUri.resolve(publicKeyPath);
   Uri get captchaUri => baseUri.resolve(captchaPath);

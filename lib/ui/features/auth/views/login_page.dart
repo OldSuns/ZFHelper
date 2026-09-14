@@ -14,8 +14,17 @@ enum _LoginMode { password, cookie }
 enum _LoginSetting { school, advanced }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({required this.viewModel, super.key});
+  const LoginPage({
+    required this.viewModel,
+    this.profile,
+    this.usernameHint,
+    this.rememberPassword = false,
+    super.key,
+  });
   final AuthViewModel viewModel;
+  final SchoolConnection? profile;
+  final String? usernameHint;
+  final bool rememberPassword;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -44,9 +53,11 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     final state = widget.viewModel.state;
-    _profile = state.configuredProfile ?? state.profile;
+    _profile = widget.profile ?? state.configuredProfile ?? state.profile;
+    _rememberPassword = widget.rememberPassword;
     _username = TextEditingController(
       text:
+          widget.usernameHint ??
           state.pendingUsername ??
           (state.knownIdentity?.profile.school.id == _profile?.school.id
               ? state.knownIdentity?.account.loginName
@@ -101,7 +112,8 @@ class _LoginPageState extends State<LoginPage> {
   void _applyProfile(SchoolConnection? profile) {
     if (!mounted || profile == null) return;
     _submission = null;
-    if (profile.baseUri != _profile?.baseUri) {
+    if (profile.school.id != _profile?.school.id ||
+        profile.baseUri != _profile?.baseUri) {
       _username.clear();
       _password.clear();
       _cookie.clear();
@@ -456,12 +468,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget _schoolSection(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text('选择学校', style: Theme.of(context).textTheme.labelLarge),
+      Text('登录学校', style: Theme.of(context).textTheme.labelLarge),
       const SizedBox(height: 8),
-      _SchoolSelector(
-        profile: _profile!,
-        onTap: _locked ? null : () => _editSchool(isNewSchool: true),
-      ),
+      _SchoolSelector(profile: _profile!, onTap: _locked ? null : _editSchool),
       if (_profile!.baseUri.scheme == 'http') ...[
         const SizedBox(height: 8),
         Text(
@@ -640,7 +649,7 @@ class _SchoolSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: '添加或更换学校',
+    message: '编辑学校与网址',
     child: OutlinedButton(
       key: const ValueKey('school-selector'),
       onPressed: onTap,
@@ -674,7 +683,7 @@ class _SchoolSelector extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.expand_more_rounded),
+          const Icon(Icons.edit_outlined, size: 20),
         ],
       ),
     ),

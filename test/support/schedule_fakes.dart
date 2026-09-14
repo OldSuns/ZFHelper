@@ -46,9 +46,10 @@ final class TestScheduleStore implements ScheduleStore {
   }
 
   @override
-  Future<void> selectAccount(AccountScope scope) async {
+  Future<void> selectAccount(AccountScope? scope) async {
     _check();
-    if (!library.accounts.any((account) => account.account.scope == scope)) {
+    if (scope != null &&
+        !library.accounts.any((account) => account.account.scope == scope)) {
       throw StateError('Unknown test account.');
     }
     library = ScheduleLibrary(

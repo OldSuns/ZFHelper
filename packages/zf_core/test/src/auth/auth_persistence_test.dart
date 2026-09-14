@@ -196,7 +196,7 @@ void main() {
   );
 
   test(
-    'changing the configured school never changes an existing account scope',
+    'school selection preserves sessions and edits retain stable cache scopes',
     () async {
       final vault = StateTestVault();
       final gateway = StateTestGateway()
@@ -211,16 +211,51 @@ void main() {
       final identity = repository.state.knownIdentity!;
 
       await repository.configureSchool(stateTestOtherProfile);
-      await repository.checkSession();
-
-      expect(repository.isCurrentIdentity(identity), isTrue);
-      expect(repository.state.profile?.baseUri, stateTestProfile.baseUri);
-      expect(
-        repository.state.configuredProfile?.baseUri,
-        stateTestOtherProfile.baseUri,
-      );
+      expect(repository.state.selectedScope, isNull);
+      expect(repository.isAccountIdentityCurrent(identity), isTrue);
       expect(vault.school?.baseUri, stateTestOtherProfile.baseUri);
-      expect(vault.record?.profile.baseUri, stateTestProfile.baseUri);
+      expect(vault.library!.schools, hasLength(2));
+
+      await repository.selectSchool(identity.scope.schoolId);
+      expect(repository.state.selectedScope, identity.scope);
+      expect(repository.state.isSignedIn, isTrue);
+      expect(gateway.importCalls, hasLength(1));
+      final renamed = SchoolConnection(
+        schoolId: identity.scope.schoolId,
+        name: '更新后的学校名称',
+        baseUri: stateTestProfile.baseUri,
+      );
+      await repository.configureSchool(renamed);
+      await repository.checkSession();
+      expect(repository.state.profile?.name, renamed.name);
+      expect(vault.library!.selectedSchool!.profile.name, renamed.name);
+      expect(repository.isCurrentIdentity(identity), isTrue);
+
+      final moved = SchoolConnection(
+        schoolId: identity.scope.schoolId,
+        name: renamed.name,
+        baseUri: Uri.parse('https://new.example/teaching/'),
+      );
+      await repository.configureSchool(moved);
+      expect(repository.state.selectedScope, identity.scope);
+      expect(repository.state.isSignedIn, isFalse);
+      expect(repository.state.needsSignIn, isTrue);
+      expect(repository.isAccountIdentityCurrent(identity), isFalse);
+      expect(vault.library!.selected!.login, isNull);
+      expect(gateway.closed, isTrue);
+      await repository.dispose();
+
+      final restarted = create(vault, []);
+      await restarted.restore();
+      expect(restarted.state.profile!.baseUri, moved.baseUri);
+      expect(restarted.state.selectedAccount!.scope, identity.scope);
+      await restarted.removeSchool(identity.scope.schoolId);
+      expect(vault.library!.schools, hasLength(1));
+      expect(vault.library!.accounts, isEmpty);
+      expect(
+        restarted.state.profile?.school.id,
+        stateTestOtherProfile.school.id,
+      );
     },
   );
 }

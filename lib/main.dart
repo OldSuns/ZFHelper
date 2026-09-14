@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'app/app.dart';
 import 'app/app_configuration.dart';
 
-void main() {
-  runApp(ZfHelperApp(configuration: AppConfiguration.standard()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final configuration = AppConfiguration.standard();
+  await configuration.appearance.initialize();
+  runApp(ZfHelperApp(configuration: configuration));
 }

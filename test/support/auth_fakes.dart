@@ -45,10 +45,17 @@ final class TestLoginVault implements LoginVault {
 
   @override
   Future<StoredLoginLibrary> readAccounts() async =>
-      library ?? StoredLoginLibrary.fromLogin(saved);
+      library ??
+      (saved != null
+          ? StoredLoginLibrary.fromLogin(saved)
+          : StoredLoginLibrary(
+              schools: school == null ? [] : [StoredSchool(profile: school!)],
+              selectedSchoolId: school?.school.id,
+            ));
 
   @override
   Future<void> writeAccounts(StoredLoginLibrary value) async {
+    if (schoolWriteFailure case final failure?) throw failure;
     final selected = value.selected?.login;
     if (selected == null) {
       await clear();
@@ -56,6 +63,7 @@ final class TestLoginVault implements LoginVault {
       await write(selected);
     }
     library = value;
+    school = value.selectedSchool?.profile;
   }
 
   @override

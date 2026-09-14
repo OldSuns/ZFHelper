@@ -269,6 +269,7 @@ void main() {
     expect(repository.state.isSignedIn, isTrue);
     expect(repository.state.phase, AuthPhase.idle);
     expect(repository.state.remembered, isFalse);
+    expect(repository.state.selectedAccount!.hasSavedPassword, isFalse);
     expect(repository.state.failure, isNull);
     expect(repository.state.storageFailure?.code, LoginFailureCode.storage);
   });

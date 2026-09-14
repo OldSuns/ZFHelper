@@ -82,6 +82,7 @@ class _LoginAdvancedSettingsPageState extends State<LoginAdvancedSettingsPage> {
     });
     try {
       final profile = SchoolConnection(
+        schoolId: widget.profile.school.id,
         name: widget.profile.name,
         baseUri: Uri.parse(_baseAddress.text.trim()),
         loginPath: _paths['密码登录路径']!.text.trim(),
@@ -194,6 +195,8 @@ class _LoginAdvancedSettingsPageState extends State<LoginAdvancedSettingsPage> {
       Text(widget.profile.baseUri.toString()),
       const SizedBox(height: 16),
       const Text('常见新正方系统可直接使用默认设置。学校使用不同接口或统一认证时，在这里修改。'),
+      const SizedBox(height: 12),
+      const Text('保存连接变更后，该校账号需要重新登录；离线课表、成绩和课程数据会保留。'),
     ],
   );
 

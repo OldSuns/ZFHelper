@@ -1039,14 +1039,24 @@ class _CoursesPageState extends State<CoursesPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Semantics(
-                liveRegion: true,
-                child: Text(
-                  model.data.failure!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      model.data.failure!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
                   ),
-                ),
+                  if (model.data.accountSyncPending)
+                    TextButton(
+                      onPressed: model.busy ? null : model.retryAccountSync,
+                      child: const Text('重试账号同步'),
+                    ),
+                ],
               ),
             ),
             IconButton(

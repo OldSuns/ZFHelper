@@ -121,23 +121,8 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _calendar() async {
-    final snapshot = model.imported;
-    final target = model.editTarget;
-    if (snapshot == null || target == null) return;
-    final value = await Navigator.of(context).push<ScheduleSettings>(
-      MaterialPageRoute(
-        builder: (context) => ScheduleCalendarPage(
-          snapshot: snapshot,
-          settings: model.settings,
-          today: model.today,
-          onSave: (value) async =>
-              await model.saveSettings(value, target: target)
-              ? null
-              : model.data.failure?.message ?? '保存未完成，请重试',
-        ),
-      ),
-    );
-    if (!mounted || value == null) return;
+    final saved = await showScheduleCalendar(context, model);
+    if (!mounted || !saved) return;
     _message('校历与作息已保存');
   }
 
@@ -429,7 +414,7 @@ class _TimetablePageState extends State<TimetablePage> {
         message: model.canRefresh
             ? '导入整个学期后，可离线查看。仅在你主动更新时重新获取学校课表。'
             : '连接教务账号后，在这里查看每周课程、上课时间与地点。',
-        actionLabel: model.canRefresh ? '导入课表' : '账号与设置',
+        actionLabel: model.canRefresh ? '导入课表' : '设置',
         onAction: model.canRefresh
             ? (model.data.refreshing ? null : _refresh)
             : widget.onOpenSettings,
@@ -468,10 +453,9 @@ class _TimetablePageState extends State<TimetablePage> {
             Expanded(
               child: Semantics(liveRegion: true, child: Text(failure.message)),
             ),
-            if (failure.kind == ScheduleFailureKind.storage &&
-                !model.hasSchedule)
+            if (failure.kind == ScheduleFailureKind.storage)
               TextButton(
-                onPressed: model.retryLocalLoad,
+                onPressed: model.data.loading ? null : model.retryLocalLoad,
                 child: const Text('重试读取'),
               ),
             if (failure.kind == ScheduleFailureKind.termSelection)

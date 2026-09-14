@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:zf_core/zf_core.dart';
 
 import '../storage/schedule_store.dart';
+import 'academic_source.dart';
 import 'schedule_source.dart';
 
 enum ScheduleFailureKind {
@@ -24,6 +25,7 @@ final class ScheduleFailure {
 final class ScheduleRepositoryState {
   ScheduleRepositoryState({
     required this.library,
+    this.initialized = false,
     this.loading = false,
     this.refreshing = false,
     this.failure,
@@ -31,6 +33,7 @@ final class ScheduleRepositoryState {
   });
 
   final ScheduleLibrary library;
+  final bool initialized;
   final bool loading;
   final bool refreshing;
   final ScheduleFailure? failure;
@@ -82,13 +85,14 @@ final class ScheduleRepository {
   bool _closed = false;
   int _readGeneration = 0;
   final _accountEpochs = <AccountScope, int>{};
-  AcademicAccountChange? _initialAccountChange;
+  final _accountChanges = PendingAcademicAccountChanges();
   ScheduleFailure? _failure;
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
 
   ScheduleRepositoryState get state => ScheduleRepositoryState(
     library: _library,
+    initialized: _initialized,
     loading: _loading,
     refreshing: _refreshing,
     failure: _failure,
@@ -103,26 +107,21 @@ final class ScheduleRepository {
     _failure = null;
     _emit();
     try {
+      await _writes;
       final saved = await _store.read();
       if (_closed) return;
       _library = saved;
       final connected = _source.connectedAccount;
-      final appliedChange = _initialAccountChange;
-      if (connected != null) {
-        final account = _withAccount(connected);
-        final select =
-            saved.selectedAccount == null ||
-            (_initialAccountChange?.selectForViewing ?? false);
-        await _store.saveAccount(account, select: select);
-        if (_closed) return;
-        _replace(account, select: select);
+      if (_accountChanges.isEmpty && connected != null) {
+        await _applyAccountChange(
+          AcademicAccountChange(
+            connected,
+            selectForViewing: saved.selectedAccount == null,
+          ),
+        );
       }
-      _initialized = true;
-      final latest = _initialAccountChange;
-      _initialAccountChange = null;
-      if (latest != null && !identical(latest, appliedChange)) {
-        _onAccountChanged(latest);
-      }
+      await _accountChanges.drain(_applyAccountChange);
+      if (!_closed) _initialized = true;
     } on ScheduleStorageException catch (error) {
       _failure = ScheduleFailure(ScheduleFailureKind.storage, error.message);
     } finally {
@@ -132,7 +131,9 @@ final class ScheduleRepository {
   }
 
   Future<void> retryLocalLoad() async {
-    if (_loading) return;
+    if (_loading || _closed) return;
+    _cancelRead();
+    _initialized = false;
     _initializing = null;
     await initialize();
   }
@@ -294,6 +295,7 @@ final class ScheduleRepository {
 
   Future<bool> removeAccount(AccountScope scope) {
     _cancelRead();
+    _accountChanges.remove(scope);
     _accountEpochs.update(scope, (epoch) => epoch + 1, ifAbsent: () => 1);
     return _localChange(() async {
       final wasSelected = _library.selectedAccount == scope;
@@ -345,26 +347,42 @@ final class ScheduleRepository {
 
   void _onAccountChanged(AcademicAccountChange change) {
     if (_closed) return;
+    _accountChanges.add(change);
     if (!_initialized) {
-      _initialAccountChange = change;
       return;
     }
-    _cancelRead();
+    if (change.selectForViewing ||
+        change.account?.scope == _library.selectedAccount) {
+      _cancelRead();
+    }
     _emit();
-    final account = change.account;
-    if (account == null) return;
     // Identity selections share the write queue with imports and removals, so
     // an older transaction cannot leave a different account selected on disk.
-    unawaited(
-      _localChange(() async {
-        if (_source.connectedAccount?.scope != account.scope) return;
-        final next = _withAccount(account);
-        final select =
-            change.selectForViewing || _library.selectedAccount == null;
-        await _store.saveAccount(next, select: select);
-        _replace(next, select: select);
-      }),
-    );
+    unawaited(_localChange(() => _accountChanges.drain(_applyAccountChange)));
+  }
+
+  Future<void> _applyAccountChange(AcademicAccountChange change) async {
+    if (_closed) return;
+    final account = change.account;
+    if (account == null) {
+      if (change.selectForViewing) {
+        await _store.selectAccount(null);
+        _library = ScheduleLibrary(accounts: _library.accounts);
+      }
+      return;
+    }
+    final connected = _source.connectedAccount?.scope == account.scope;
+    if (!change.selectForViewing &&
+        !connected &&
+        _account(account.scope) == null) {
+      return;
+    }
+    final next = _withAccount(account);
+    final select =
+        change.selectForViewing ||
+        (connected && _library.selectedAccount == null);
+    await _store.saveAccount(next, select: select);
+    _replace(next, select: select);
   }
 
   StoredScheduleAccount _withAccount(AcademicAccountRecord account) {

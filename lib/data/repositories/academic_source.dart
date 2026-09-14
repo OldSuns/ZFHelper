@@ -9,6 +9,24 @@ final class AcademicAccountChange {
   final bool selectForViewing;
 }
 
+/// Keeps identity projections retryable until their cache writes succeed.
+final class PendingAcademicAccountChanges {
+  final _changes = <AcademicAccountChange>[];
+
+  bool get isEmpty => _changes.isEmpty;
+  void add(AcademicAccountChange change) => _changes.add(change);
+  void remove(AccountScope scope) =>
+      _changes.removeWhere((change) => change.account?.scope == scope);
+
+  Future<void> drain(Future<void> Function(AcademicAccountChange) apply) async {
+    while (_changes.isNotEmpty) {
+      final change = _changes.first;
+      await apply(change);
+      _changes.remove(change);
+    }
+  }
+}
+
 /// Projects the single authentication owner into cacheable academic identities.
 final class AuthenticatedAcademicSource {
   AuthenticatedAcademicSource({required this._auth});
@@ -19,24 +37,69 @@ final class AuthenticatedAcademicSource {
       _record(_auth.state.knownIdentity);
 
   Stream<AcademicAccountChange> get accountChanges {
-    var previous = _auth.state.knownIdentity;
-    return _auth.changes
-        .where((state) {
-          final next = state.knownIdentity;
-          final changed =
-              previous?.scope != next?.scope ||
-              previous?.generation != next?.generation;
-          previous = next;
-          return changed;
-        })
-        .map(
-          (state) => AcademicAccountChange(
-            _record(state.knownIdentity),
-            // Offline restoration must preserve the account the user was viewing.
-            selectForViewing: state.isSignedIn,
-          ),
-        );
+    return Stream<AcademicAccountChange>.multi((controller) {
+      AuthSnapshot? previous;
+      void publish(AuthSnapshot state) {
+        if (!state.accountsLoaded) return;
+        final before = previous;
+        previous = state;
+        final oldAccounts = {
+          for (final account in before?.accounts ?? <AuthAccountSummary>[])
+            account.scope: account,
+        };
+        for (final account in state.accounts) {
+          if (account.scope == state.selectedScope) continue;
+          if (!_sameLabels(oldAccounts[account.scope], account)) {
+            controller.addSync(
+              AcademicAccountChange(
+                _savedRecord(account),
+                selectForViewing: false,
+              ),
+            );
+          }
+        }
+        final selectionChanged =
+            before == null ||
+            before.selectedScope != state.selectedScope ||
+            before.profile?.school.id != state.profile?.school.id;
+        if (selectionChanged ||
+            before.knownIdentity?.generation !=
+                state.knownIdentity?.generation ||
+            !_sameLabels(before.selectedAccount, state.selectedAccount)) {
+          controller.addSync(
+            AcademicAccountChange(
+              _savedRecord(state.selectedAccount),
+              selectForViewing: selectionChanged,
+            ),
+          );
+        }
+      }
+
+      final subscription = _auth.changes.listen(
+        publish,
+        onError: controller.addErrorSync,
+        onDone: controller.closeSync,
+      );
+      controller.onCancel = subscription.cancel;
+      publish(_auth.state);
+    }, isBroadcast: true);
   }
+
+  static bool _sameLabels(AuthAccountSummary? a, AuthAccountSummary? b) =>
+      a?.scope == b?.scope &&
+      a?.profile.name == b?.profile.name &&
+      a?.account.displayName == b?.account.displayName &&
+      a?.account.loginName == b?.account.loginName;
+
+  static AcademicAccountRecord? _savedRecord(AuthAccountSummary? saved) =>
+      saved == null
+      ? null
+      : AcademicAccountRecord(
+          scope: saved.scope,
+          schoolName: saved.profile.name,
+          accountName: saved.account.displayName,
+          loginName: saved.account.loginName,
+        );
 
   AcademicReadSession open(AccountScope scope) {
     final identity = _auth.state.knownIdentity;

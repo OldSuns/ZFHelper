@@ -4,12 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:zf_core/zf_core.dart';
 
 final class AuthViewModel extends ChangeNotifier {
-  AuthViewModel(this._repository, {this._onRemoveAccountData}) {
+  AuthViewModel(
+    this._repository, {
+    this._onRemoveAccountData,
+    this._onRemoveSchoolData,
+  }) {
     _subscription = _repository.changes.listen((_) => notifyListeners());
   }
 
   final AuthRepository _repository;
   final Future<void> Function(AccountScope scope)? _onRemoveAccountData;
+  final Future<void> Function(String schoolId)? _onRemoveSchoolData;
   late final StreamSubscription<AuthSnapshot> _subscription;
   bool _managingAccounts = false;
   bool _disposed = false;
@@ -18,6 +23,14 @@ final class AuthViewModel extends ChangeNotifier {
   AuthSnapshot get state => _repository.state;
   bool get isManagingAccounts => _managingAccounts;
   String? get accountActionFailure => _accountActionFailure;
+  List<AuthAccountSummary> accountsForSchool(String schoolId) => [
+    if (state.selectedAccount case final selected?)
+      if (selected.scope.schoolId == schoolId) selected,
+    for (final account in state.accounts)
+      if (account.scope.schoolId == schoolId &&
+          account.scope != state.selectedScope)
+        account,
+  ];
   Future<void> configureSchool(SchoolConnection profile) =>
       _repository.configureSchool(profile);
   Future<void> restore() => _repository.restore();
@@ -26,12 +39,19 @@ final class AuthViewModel extends ChangeNotifier {
   Future<bool> retryStorage() => _repository.retryStorage();
   Future<bool> selectAccount(AccountScope scope) =>
       _manageAccount(() => _repository.selectAccount(scope));
+  Future<bool> selectSchool(String schoolId) =>
+      _manageAccount(() => _repository.selectSchool(schoolId));
   Future<bool> signOutAccount(AccountScope scope) =>
       _manageAccount(() => _repository.signOutAccount(scope));
   Future<bool> removeAccount(AccountScope scope) => _manageAccount(() async {
     if (!await _repository.signOutAccount(scope)) return false;
     await _onRemoveAccountData?.call(scope);
     return _repository.removeAccount(scope);
+  });
+  Future<bool> removeSchool(String schoolId) => _manageAccount(() async {
+    if (!await _repository.signOutSchool(schoolId)) return false;
+    await _onRemoveSchoolData?.call(schoolId);
+    return _repository.removeSchool(schoolId);
   });
   void cancelSignIn() => _repository.cancelSignIn();
   Future<void> refreshCaptcha() => _repository.refreshCaptcha();

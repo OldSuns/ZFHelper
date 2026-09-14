@@ -45,13 +45,37 @@ final class StoredAuthAccount {
 
   StoredAuthAccount withoutLogin() =>
       StoredAuthAccount(profile: profile, account: account);
+
+  StoredAuthAccount withProfile(SchoolConnection profile) => StoredAuthAccount(
+    profile: profile,
+    account: account,
+    login: login == null || !this.profile.hasSameConnection(profile)
+        ? null
+        : StoredLogin(
+            profile: profile,
+            session: login!.session,
+            method: login!.method,
+            credentials: login!.credentials,
+          ),
+  );
+}
+
+final class StoredSchool {
+  const StoredSchool({required this.profile, this.lastAccountId});
+
+  final SchoolConnection profile;
+  final String? lastAccountId;
 }
 
 final class StoredLoginLibrary {
   StoredLoginLibrary({
     List<StoredAuthAccount> accounts = const [],
+    List<StoredSchool>? schools,
+    String? selectedSchoolId,
     this.selectedScope,
-  }) : accounts = List.unmodifiable(accounts);
+  }) : accounts = List.unmodifiable(accounts),
+       schools = List.unmodifiable(schools ?? _schoolsFromAccounts(accounts)),
+       selectedSchoolId = selectedSchoolId ?? selectedScope?.schoolId;
 
   factory StoredLoginLibrary.fromLogin(StoredLogin? login) {
     if (login == null) return StoredLoginLibrary();
@@ -63,11 +87,25 @@ final class StoredLoginLibrary {
   }
 
   final List<StoredAuthAccount> accounts;
+  final List<StoredSchool> schools;
+  final String? selectedSchoolId;
   final AccountScope? selectedScope;
+
+  StoredSchool? get selectedSchool => schools
+      .where((school) => school.profile.school.id == selectedSchoolId)
+      .firstOrNull;
 
   StoredAuthAccount? get selected =>
       accounts.where((account) => account.scope == selectedScope).firstOrNull;
 }
+
+List<StoredSchool> _schoolsFromAccounts(List<StoredAuthAccount> accounts) => {
+  for (final account in accounts)
+    account.scope.schoolId: StoredSchool(
+      profile: account.profile,
+      lastAccountId: account.account.id,
+    ),
+}.values.toList();
 
 abstract interface class LoginVault {
   Future<SchoolConnection?> readSchool();
@@ -107,6 +145,7 @@ final class AuthAccountSummary {
     required this.isSignedIn,
     required this.remembered,
     required this.phase,
+    this.hasSavedPassword = false,
     this.failure,
   });
 
@@ -115,6 +154,7 @@ final class AuthAccountSummary {
   final bool isSignedIn;
   final bool remembered;
   final AuthPhase phase;
+  final bool hasSavedPassword;
   final LoginFailure? failure;
 
   AccountScope get scope =>
@@ -134,7 +174,9 @@ final class AuthSnapshot {
     this.storageFailure,
     this.pendingUsername,
     this.accounts = const [],
+    this.schools = const [],
     this.selectedScope,
+    this.accountsLoaded = false,
   });
 
   final SchoolConnection? profile;
@@ -147,8 +189,13 @@ final class AuthSnapshot {
   final LoginFailure? storageFailure;
   final String? pendingUsername;
   final List<AuthAccountSummary> accounts;
+  final List<StoredSchool> schools;
   final AccountScope? selectedScope;
   final bool remembered;
+  final bool accountsLoaded;
+
+  AuthAccountSummary? get selectedAccount =>
+      accounts.where((account) => account.scope == selectedScope).firstOrNull;
 
   bool get isSignedIn => account != null;
   bool get isBusy => phase != AuthPhase.idle && phase != AuthPhase.captcha;
@@ -239,6 +286,7 @@ final class _AccountLogin {
     isSignedIn: active != null,
     remembered: remembered,
     phase: pending?.phase ?? phase,
+    hasSavedPassword: remembered && record.login?.credentials != null,
     failure: failure,
   );
 
@@ -257,12 +305,19 @@ final class AuthRepository {
     SchoolConnection? initialProfile,
     required this._gatewayFactory,
     required this._vault,
-  }) : _profile = initialProfile;
+  }) : _profile = initialProfile {
+    if (initialProfile != null) {
+      _schools[initialProfile.school.id] = StoredSchool(
+        profile: initialProfile,
+      );
+    }
+  }
 
   final LoginGatewayFactory _gatewayFactory;
   final LoginVault _vault;
   final _changes = StreamController<AuthSnapshot>.broadcast(sync: true);
   final _accounts = <AccountScope, _AccountLogin>{};
+  final _schools = <String, StoredSchool>{};
   final _mutationTurns = <AccountScope, Future<void>>{};
   SchoolConnection? _profile;
   AccountScope? _selectedScope;
@@ -304,19 +359,159 @@ final class AuthRepository {
       accounts: List.unmodifiable(
         _accounts.values.map((entry) => entry.summary),
       ),
+      schools: List.unmodifiable(_schools.values),
       selectedScope: _selectedScope,
+      accountsLoaded: _loaded,
     );
   }
 
   Future<void> configureSchool(SchoolConnection profile) async {
     _requireOpen();
     final revision = ++_profileRevision;
-    await _withStorage(() async {
-      await _vault.writeSchool(profile);
-      if (_closed || revision != _profileRevision) return;
-      _profile = profile;
-      _emit();
-    });
+    try {
+      await _withStorage(() async {
+        await _loadAccounts();
+        if (_closed || revision != _profileRevision) return;
+        final id = profile.school.id;
+        final previous = _schools[id];
+        if (_schools.values.any(
+          (school) =>
+              school.profile.school.id != id &&
+              school.profile.hasSameConnection(profile),
+        )) {
+          throw const LoginFailure(
+            LoginFailureCode.protocol,
+            '这个教务系统已经添加，请选择或编辑已有学校',
+          );
+        }
+        final selectedScope = _schoolAccount(id, previous?.lastAccountId);
+        final captured = _accounts.values.map((entry) => entry.record).toList();
+        final updated = [
+          for (final record in captured)
+            record.scope.schoolId == id ? record.withProfile(profile) : record,
+        ];
+        // Publish a school edit only after the complete directory is durable.
+        // A failed save must not expose a school that was never actually added.
+        await _vault.writeAccounts(
+          StoredLoginLibrary(
+            accounts: updated,
+            schools: [
+              for (final school in _schools.values)
+                if (school.profile.school.id != id) school,
+              StoredSchool(
+                profile: profile,
+                lastAccountId: selectedScope?.accountId,
+              ),
+            ],
+            selectedSchoolId: id,
+            selectedScope: selectedScope,
+          ),
+        );
+        if (_closed) return;
+        for (var i = 0; i < captured.length; i++) {
+          _markSaved(captured[i], saved: updated[i]);
+        }
+        if (previous != null && !previous.profile.hasSameConnection(profile)) {
+          if (_manualLogin?.profile.school.id == id) {
+            _closePending(_manualLogin!);
+          }
+          for (final scope
+              in _accounts.keys
+                  .where((scope) => scope.schoolId == id)
+                  .toList()) {
+            _forgetAuthentication(
+              scope,
+              reason: const LoginFailure(
+                LoginFailureCode.expired,
+                '学校连接设置已修改，请重新登录',
+              ),
+            );
+          }
+        }
+        for (final entry in _accounts.values) {
+          if (entry.record.scope.schoolId == id) {
+            entry.record = entry.record.withProfile(profile);
+          }
+        }
+        _schools[id] = StoredSchool(
+          profile: profile,
+          lastAccountId: _schoolAccount(
+            id,
+            _schools[id]?.lastAccountId,
+          )?.accountId,
+        );
+        if (revision == _profileRevision) {
+          if (_manualLogin case final pending?) _closePending(pending);
+          _chooseSchool(id);
+        } else if (_profile?.school.id == id) {
+          _profile = profile;
+        }
+        _failure = null;
+        _storageFailure = null;
+        _emit();
+      });
+    } on LoginFailure catch (failure) {
+      if (failure.code == LoginFailureCode.storage) {
+        _storageFailure = failure;
+        _emit();
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> selectSchool(String schoolId) async {
+    _requireOpen();
+    if (!_schools.containsKey(schoolId)) return false;
+    if (_manualLogin case final pending?) _closePending(pending);
+    _restoreMarker = null;
+    _profileRevision++;
+    _chooseSchool(schoolId);
+    _failure = null;
+    _storageFailure = null;
+    _emit();
+    final entry = _selected;
+    final saved = await _saveLibrary();
+    await _restoreSelection(entry);
+    return saved;
+  }
+
+  void _chooseSchool(String schoolId) {
+    final school = _schools[schoolId]!;
+    _selectedScope = _schoolAccount(schoolId, school.lastAccountId);
+    _profile = school.profile;
+    _rememberSelection();
+  }
+
+  AccountScope? _schoolAccount(String schoolId, String? lastAccountId) {
+    final preferred = lastAccountId == null
+        ? null
+        : AccountScope(schoolId: schoolId, accountId: lastAccountId);
+    return _accounts.containsKey(preferred)
+        ? preferred
+        : _accounts.keys
+              .where((scope) => scope.schoolId == schoolId)
+              .firstOrNull;
+  }
+
+  void _rememberSelection() {
+    final selected = _selected;
+    if (selected == null) return;
+    final profile = selected.record.profile;
+    _schools[profile.school.id] = StoredSchool(
+      profile: profile,
+      lastAccountId: selected.record.account.id,
+    );
+  }
+
+  Future<void> _restoreSelection(_AccountLogin? entry) async {
+    if (!_closed &&
+        entry != null &&
+        identical(_selected, entry) &&
+        entry.record.login != null &&
+        entry.active == null &&
+        entry.pending == null) {
+      await _checkAccount(entry);
+    }
   }
 
   AuthIdentity? identityFor(AccountScope scope) {
@@ -518,28 +713,29 @@ final class AuthRepository {
   Future<void> _loadAccounts() async {
     if (_loaded) return;
     final revision = _profileRevision;
-    var school = await _vault.readSchool();
     final library = await _vault.readAccounts();
     if (_closed) return;
-    if (school == null && library.selected != null) {
-      school = library.selected!.profile;
-      await _vault.writeSchool(school);
+    for (final school in library.schools) {
+      final id = school.profile.school.id;
+      if (revision == 0 || !_schools.containsKey(id)) _schools[id] = school;
     }
-    if (_closed) return;
-    if (revision == 0 && revision == _profileRevision) {
-      _profile = school ?? _profile;
+    if (revision == _profileRevision &&
+        _selectedScope == null &&
+        _manualLogin == null) {
+      _profile = library.selectedSchool?.profile ?? _profile;
+      _selectedScope = library.selectedScope;
     }
     for (final record in library.accounts) {
       _accounts.putIfAbsent(
         record.scope,
         () => _AccountLogin(
-          record,
+          record.withProfile(_schools[record.scope.schoolId]!.profile),
           ++_generation,
           remembered: record.login != null,
         ),
       );
     }
-    _selectedScope ??= library.selectedScope;
+    _rememberSelection();
     _loaded = true;
   }
 
@@ -561,17 +757,12 @@ final class AuthRepository {
     _selectedScope = scope;
     _profile = entry.record.profile;
     _profileRevision++;
+    _rememberSelection();
     _failure = null;
     _storageFailure = null;
     _emit();
     final saved = await _saveLibrary();
-    if (!_closed &&
-        identical(_selected, entry) &&
-        entry.record.login != null &&
-        entry.active == null &&
-        entry.pending == null) {
-      await _checkAccount(entry);
-    }
+    await _restoreSelection(entry);
     return saved;
   }
 
@@ -649,7 +840,7 @@ final class AuthRepository {
       _requireSameAccount(active.session.account, session.account);
       final next = _ActiveLogin(
         identity: AuthIdentity(
-          profile: active.identity.profile,
+          profile: entry.record.profile,
           account: session.account,
           generation: active.identity.generation,
         ),
@@ -707,15 +898,75 @@ final class AuthRepository {
     if (_selectedScope == scope && _manualLogin != null) {
       _closePending(_manualLogin!);
     }
-    entry.close();
-    _accounts[scope] = _AccountLogin(
-      entry.record.withoutLogin(),
-      ++_generation,
-    );
+    _forgetAuthentication(scope);
     _failure = null;
     _storageFailure = null;
     _emit();
     return _saveLibrary();
+  }
+
+  void _forgetAuthentication(AccountScope scope, {LoginFailure? reason}) {
+    final entry = _accounts[scope]!;
+    entry.close();
+    _accounts[scope] = _AccountLogin(entry.record.withoutLogin(), ++_generation)
+      ..failure = reason;
+  }
+
+  Future<bool> signOutSchool(String schoolId) async {
+    _requireOpen();
+    if (!_schools.containsKey(schoolId)) return false;
+    if (_manualLogin?.profile.school.id == schoolId) {
+      _closePending(_manualLogin!);
+    }
+    for (final scope
+        in _accounts.keys
+            .where((scope) => scope.schoolId == schoolId)
+            .toList()) {
+      _forgetAuthentication(scope);
+    }
+    _failure = null;
+    _emit();
+    return _saveLibrary();
+  }
+
+  Future<bool> removeSchool(String schoolId) async {
+    _requireOpen();
+    await _withStorage(_loadAccounts);
+    final school = _schools.remove(schoolId);
+    if (school == null) return false;
+    if (_manualLogin?.profile.school.id == schoolId) {
+      _closePending(_manualLogin!);
+    }
+    final removed = _accounts.entries
+        .where((entry) => entry.key.schoolId == schoolId)
+        .toList();
+    for (final entry in removed) {
+      _accounts.remove(entry.key);
+      entry.value.close();
+    }
+    final wasSelected = _profile?.school.id == schoolId;
+    if (wasSelected) {
+      _selectedScope = null;
+      _profile = null;
+      if (_schools.isNotEmpty) _chooseSchool(_schools.keys.first);
+    }
+    final nextSelected = _selected;
+    _profileRevision++;
+    _emit();
+    final saved = await _saveLibrary();
+    if (!saved && !_closed) {
+      _schools[schoolId] = school;
+      for (final entry in removed) {
+        _accounts.putIfAbsent(
+          entry.key,
+          () => _AccountLogin(entry.value.record.withoutLogin(), ++_generation),
+        );
+      }
+      if (wasSelected && _profile == null) _chooseSchool(schoolId);
+      _emit();
+    }
+    if (saved && wasSelected) await _restoreSelection(nextSelected);
+    return saved;
   }
 
   Future<bool> removeAccount(AccountScope scope) async {
@@ -730,6 +981,12 @@ final class AuthRepository {
       if (_manualLogin case final pending?) _closePending(pending);
       _selectedScope = null;
     }
+    final school = _schools[scope.schoolId];
+    if (school?.lastAccountId == scope.accountId) {
+      _schools[scope.schoolId] = StoredSchool(profile: school!.profile);
+    }
+    if (wasSelected && school != null) _chooseSchool(scope.schoolId);
+    final nextSelected = _selected;
     _failure = null;
     _storageFailure = null;
     _emit();
@@ -740,8 +997,10 @@ final class AuthRepository {
         ++_generation,
       );
       if (wasSelected && _selectedScope == null) _selectedScope = scope;
+      _rememberSelection();
       _emit();
     }
+    if (saved && wasSelected) await _restoreSelection(nextSelected);
     return saved;
   }
 
@@ -763,6 +1022,13 @@ final class AuthRepository {
     bool rememberPassword = false,
   }) {
     _requireOpen();
+    final configured = _schools[profile.school.id]?.profile;
+    if (configured != null && !configured.hasSameConnection(profile)) {
+      throw const LoginFailure(
+        LoginFailureCode.cancelled,
+        '学校连接设置已更改，请重新打开登录页面',
+      );
+    }
     if (_manualLogin case final previous?) _closePending(previous);
     _restoreMarker = null;
     final pending = _PendingLogin(
@@ -819,7 +1085,8 @@ final class AuthRepository {
         _requireSameAccount(owner.record.account, session.account);
       }
       final identity = AuthIdentity(
-        profile: pending.profile,
+        profile:
+            _schools[pending.profile.school.id]?.profile ?? pending.profile,
         account: session.account,
         generation: owner?.generation ?? ++_generation,
       );
@@ -838,6 +1105,8 @@ final class AuthRepository {
         _accounts[identity.scope]?.close();
         _accounts[identity.scope] = entry;
         _selectedScope = identity.scope;
+        _profile = identity.profile;
+        _rememberSelection();
         _manualLogin = null;
         _failure = null;
         _storageFailure = null;
@@ -903,7 +1172,8 @@ final class AuthRepository {
         final cookies = await active.gateway.exportCookies();
         if (!_isActive(active)) return;
         final entry = _requireAccount(active.identity);
-        entry.record = StoredAuthAccount.fromLogin(active.snapshot(cookies));
+        entry.record = StoredAuthAccount.fromLogin(active.snapshot(cookies))
+            .withProfile(_schools[active.identity.scope.schoolId]!.profile);
         await _writeLibrary();
       });
       if (!_isActive(active)) return;
@@ -942,17 +1212,22 @@ final class AuthRepository {
   Future<void> _writeLibrary() async {
     final library = StoredLoginLibrary(
       accounts: _accounts.values.map((entry) => entry.record).toList(),
+      schools: _schools.values.toList(),
+      selectedSchoolId: state.profile?.school.id,
       selectedScope: _selectedScope,
     );
-    if (_profile case final profile?) await _vault.writeSchool(profile);
     await _vault.writeAccounts(library);
     if (_closed) return;
     for (final saved in library.accounts) {
-      final entry = _accounts[saved.scope];
-      if (entry != null && identical(entry.record, saved)) {
-        entry.remembered = saved.login != null;
-        entry.storageFailure = null;
-      }
+      _markSaved(saved);
+    }
+  }
+
+  void _markSaved(StoredAuthAccount captured, {StoredAuthAccount? saved}) {
+    final entry = _accounts[captured.scope];
+    if (entry != null && identical(entry.record, captured)) {
+      entry.remembered = (saved ?? captured).login != null;
+      entry.storageFailure = null;
     }
   }
 

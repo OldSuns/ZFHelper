@@ -10,6 +10,40 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   test(
+    'legacy school edits migrate once and retain only matching sessions',
+    () async {
+      final stored = StoredLogin(
+        profile: testProfile,
+        session: testSession(),
+        method: LoginMethod.web,
+      );
+      for (final path in [testProfile.loginPath, 'updated/login']) {
+        final edited = SchoolConnection(
+          schoolId: testProfile.school.id,
+          name: '修改后的名称',
+          baseUri: testProfile.baseUri,
+          loginPath: path,
+        );
+        FlutterSecureStorage.setMockInitialValues({
+          'zfhelper.active_login.v1': StoredLoginCodec.encode(stored),
+          'zfhelper.selected_school.v1': SchoolConnectionCodec.encode(edited),
+        });
+        final library = await SecureLoginVault().readAccounts();
+        expect(library.selectedSchool!.profile.name, edited.name);
+        expect(library.selected!.profile.loginPath, path);
+        expect(library.selected!.login != null, path == testProfile.loginPath);
+        final storage = const FlutterSecureStorage();
+        expect(await storage.read(key: 'zfhelper.active_login.v1'), isNull);
+        expect(await storage.read(key: 'zfhelper.selected_school.v1'), isNull);
+        expect(
+          (await SecureLoginVault().readAccounts()).selected!.profile.name,
+          edited.name,
+        );
+      }
+    },
+  );
+
+  test(
     'a new vault restores all school endpoints without requiring an account',
     () async {
       final school = SchoolConnection(

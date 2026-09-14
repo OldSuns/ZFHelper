@@ -14,14 +14,14 @@ import '../ui/features/courses/view_models/courses_view_model.dart';
 import '../ui/features/courses/views/courses_page.dart';
 import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
-import '../ui/features/settings/views/account_settings_page.dart';
+import '../ui/features/settings/views/settings_page.dart';
 import 'app_configuration.dart';
 
 enum AppDestination {
   timetable('课表', Icons.calendar_month_outlined, Icons.calendar_month),
   courses('选课', Icons.search_rounded, Icons.search_rounded),
   grades('成绩', Icons.assessment_outlined, Icons.assessment_rounded),
-  settings('账号与设置', Icons.manage_accounts_outlined, Icons.manage_accounts);
+  settings('设置', Icons.settings_outlined, Icons.settings);
 
   const AppDestination(this.label, this.icon, this.selectedIcon);
 
@@ -57,6 +57,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _auth = AuthViewModel(
       widget.configuration.auth,
       onRemoveAccountData: widget.configuration.removeAccountData,
+      onRemoveSchoolData: widget.configuration.removeSchoolData,
     );
     _grades = GradesViewModel(repository: widget.configuration.grades);
     _courses = CoursesViewModel(repository: widget.configuration.courses);
@@ -64,6 +65,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(_grades.initialize());
     unawaited(_courses.initialize());
     unawaited(_auth.restore());
+    unawaited(widget.configuration.appearance.initialize());
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -74,6 +76,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _grades.dispose();
     _courses.dispose();
     _auth.dispose();
+    widget.configuration.appearance.dispose();
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
     unawaited(widget.configuration.courses.dispose());
@@ -139,7 +142,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _configureSchool(SchoolConnection profile) {
     Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (context) => LoginPage(viewModel: _auth)),
+      MaterialPageRoute(
+        builder: (context) =>
+            LoginPage(viewModel: _auth, profile: profile, usernameHint: ''),
+      ),
     );
   }
 
@@ -235,7 +241,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         schoolName: _auth.state.profile?.name ?? '尚未设置学校',
         onOpenSettings: _openSettings,
       ),
-      AppDestination.settings => AccountSettingsPage(viewModel: _auth),
+      AppDestination.settings => SettingsPage(
+        auth: _auth,
+        appearance: widget.configuration.appearance,
+        timetable: _timetable,
+        grades: _grades,
+        courses: _courses,
+      ),
     };
   }
 }

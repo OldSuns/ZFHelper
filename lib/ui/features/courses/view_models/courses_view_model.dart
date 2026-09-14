@@ -45,6 +45,7 @@ final class CoursesViewModel extends ChangeNotifier {
       .length;
 
   bool canQuery(AccountScope scope) => _repository.canQuery(scope);
+  Future<bool> retryAccountSync() => _repository.retryAccountSync();
 
   List<CourseOffering> get visibleCourses {
     final courses = catalog?.courses ?? const <CourseOffering>[];

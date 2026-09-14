@@ -51,6 +51,7 @@ void main() {
     expect(model.submit('   '), isNull);
     expect(model.nameError, isNotNull);
     final next = model.submit('新学校')!;
+    expect(next.school.id, original.school.id);
     expect(next.name, '新学校');
     expect(
       next.loginUri.toString(),
@@ -73,6 +74,7 @@ void main() {
     expect(next.gradePagePath, original.gradePagePath);
     expect(next.gradeQueryPath, original.gradeQueryPath);
     expect(next.baseUri, original.baseUri);
+    expect(next.school.id, original.school.id);
     expect(model.resetsCustomSettings, isFalse);
   });
 

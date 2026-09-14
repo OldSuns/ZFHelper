@@ -16,6 +16,7 @@ import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
 import '../../../support/grade_fakes.dart';
 import '../../../support/course_fakes.dart';
+import '../../../support/settings_fakes.dart';
 
 void main() {
   final captchaPng = base64Decode(
@@ -50,6 +51,7 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
+          appearance: testAppearance(),
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           schedule: testScheduleRepository(),
@@ -59,15 +61,36 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(NavigationDestination, '账号与设置'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('登录 / 更换学校'),
-      200,
-      scrollable: find.byType(Scrollable).first,
+    final rail = find.byType(NavigationRail);
+    await tester.tap(
+      rail.evaluate().isEmpty
+          ? find.widgetWithText(NavigationDestination, '设置')
+          : find.descendant(of: rail, matching: find.text('设置')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('登录 / 更换学校'));
+    await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
+    await tester.pumpAndSettle();
+    final desktopAccounts = find.byKey(
+      const PageStorageKey('settings-accounts'),
+    );
+    final accountList = desktopAccounts.evaluate().isEmpty
+        ? find.byKey(const PageStorageKey('account-settings-mobile'))
+        : desktopAccounts;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('add-account')),
+      200,
+      scrollable: find
+          .descendant(of: accountList, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.pumpAndSettle();
+    if (size.width >= 1000) {
+      expect(
+        tester.getSize(find.widgetWithText(OutlinedButton, '编辑学校')),
+        tester.getSize(find.widgetWithText(OutlinedButton, '接口设置')),
+      );
+    }
+    await tester.tap(find.byKey(const ValueKey('add-account')));
     await tester.pumpAndSettle();
     return auth;
   }
@@ -157,7 +180,9 @@ void main() {
     expect(vault.saved?.session.account.id, '20260001');
     expect(vault.saved?.credentials, isNull);
     expect(find.byType(AccountSettingsPage), findsOneWidget);
-    expect(find.text('另一所大学'), findsOneWidget);
+    expect(find.text('另一所大学'), findsWidgets);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(NavigationDestination, '课表'));
     await tester.pumpAndSettle();
     expect(find.text('已连接教务账号'), findsOneWidget);
@@ -174,8 +199,15 @@ void main() {
       await enterCredentials(tester);
       await submit(tester);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('切换学校或账号'));
+      await tester.tap(find.byKey(const ValueKey('add-account')));
       await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const ValueKey('login-username')))
+            .controller!
+            .text,
+        isEmpty,
+      );
       await tester.tap(find.text('Cookie 导入'));
       await tester.pumpAndSettle();
       final username = tester.widget<TextFormField>(
@@ -337,7 +369,11 @@ void main() {
             TestLoginGateway()..onImport = (_, _) async => testSession(),
         vault: vault,
       );
-      addTearDown(restored.dispose);
+      addTearDown(() async {
+        final closing = restored.dispose();
+        await tester.pump();
+        await closing;
+      });
       await restored.restore();
 
       expect(restored.state.profile?.name, testProfile.name);
@@ -365,7 +401,11 @@ void main() {
           throw StateError('School restore must stay offline.'),
       vault: vault,
     );
-    addTearDown(restored.dispose);
+    addTearDown(() async {
+      final closing = restored.dispose();
+      await tester.pump();
+      await closing;
+    });
 
     await restored.restore();
 
@@ -477,7 +517,7 @@ void main() {
     expect(auth.state.isSignedIn, isTrue);
     expect(auth.state.remembered, isFalse);
     expect(find.text('无法保存到本机'), findsOneWidget);
-    expect(find.text('当前登录仅在本次运行中有效'), findsOneWidget);
+    expect(find.text('登录信息尚未保存，仅本次运行有效。'), findsOneWidget);
   });
 
   testWidgets(
@@ -655,15 +695,19 @@ void main() {
     expect(find.text(testProfile.baseUri.toString()), findsOneWidget);
   });
 
-  for (final size in [const Size(320, 640), const Size(780, 360)]) {
+  for (final size in [
+    const Size(320, 640),
+    const Size(780, 360),
+    const Size(1440, 960),
+  ]) {
     for (final brightness in Brightness.values) {
       testWidgets(
-        'login stays usable at $size with large text and system ${brightness.name}',
+        'login and settings stay usable at $size with system ${brightness.name}',
         (tester) async {
           await openLogin(
             tester,
             size: size,
-            textScale: 2,
+            textScale: size.width >= 1000 ? 1 : 2,
             brightness: brightness,
           );
           expect(

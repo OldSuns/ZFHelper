@@ -32,6 +32,7 @@ final class CourseRepositoryState {
     this.refreshing = false,
     this.failure,
     this.runtime,
+    this.accountSyncPending = false,
   });
   final CourseLibrary library;
   final List<SelectionOperation> operations;
@@ -40,6 +41,7 @@ final class CourseRepositoryState {
   final bool refreshing;
   final String? failure;
   final SelectionRuntimeCapabilities? runtime;
+  final bool accountSyncPending;
   StoredCourseAccount? get account => library.accounts
       .where((item) => item.account.scope == library.selectedAccount)
       .firstOrNull;
@@ -103,7 +105,7 @@ final class CourseRepository {
   );
   CourseLibrary _library = CourseLibrary();
   SelectionRuntimeCapabilities? _capabilities;
-  AcademicAccountChange? _pendingAccountChange;
+  final _accountChanges = PendingAcademicAccountChanges();
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
   bool _initialized = false;
@@ -123,6 +125,7 @@ final class CourseRepository {
     refreshing: _refreshing,
     failure: _failure ?? _coordinator.failure,
     runtime: _capabilities,
+    accountSyncPending: !_accountChanges.isEmpty,
   );
   Stream<CourseRepositoryState> get changes => _changes.stream;
   bool canQuery(AccountScope scope) => _source.canAccess(scope);
@@ -148,22 +151,16 @@ final class CourseRepository {
       _capabilities = await _runtime.capabilities();
       if (_closed) return;
       final connected = _source.connectedAccount;
-      final applied = _pendingAccountChange;
-      if (connected != null) {
-        await _save(
-          _withAccount(connected),
-          select:
-              _library.selectedAccount == null ||
-              (applied?.selectForViewing ?? false),
+      if (_accountChanges.isEmpty && connected != null) {
+        await _applyAccountChange(
+          AcademicAccountChange(
+            connected,
+            selectForViewing: _library.selectedAccount == null,
+          ),
         );
       }
-      if (_closed) return;
-      _initialized = true;
-      final latest = _pendingAccountChange;
-      _pendingAccountChange = null;
-      if (latest != null && !identical(applied, latest)) {
-        _onAccountChanged(latest);
-      }
+      await _accountChanges.drain(_applyAccountChange);
+      if (!_closed) _initialized = true;
     } on Exception catch (error) {
       _failure = _errorMessage(error);
       if (_failure == null) rethrow;
@@ -566,6 +563,7 @@ final class CourseRepository {
 
   Future<bool> removeAccount(AccountScope scope) {
     _cancelRead();
+    _accountChanges.remove(scope);
     return _action(() async {
       await _coordinator.removeAccount(scope);
       await _write(() async {
@@ -617,24 +615,43 @@ final class CourseRepository {
 
   void _onAccountChanged(AcademicAccountChange change) {
     if (_closed) return;
+    _accountChanges.add(change);
     if (!_initialized) {
-      _pendingAccountChange = change;
       return;
     }
-    _cancelRead();
+    if (change.selectForViewing ||
+        change.account?.scope == _library.selectedAccount) {
+      _cancelRead();
+    }
     _emit();
+    unawaited(retryAccountSync());
+  }
+
+  Future<bool> retryAccountSync() =>
+      _action(() => _write(() => _accountChanges.drain(_applyAccountChange)));
+
+  Future<void> _applyAccountChange(AcademicAccountChange change) async {
+    if (_closed) return;
     final account = change.account;
-    if (account == null) return;
-    unawaited(
-      _action(
-        () => _write(() async {
-          if (_source.connectedAccount?.scope != account.scope) return;
-          await _save(
-            _withAccount(account),
-            select: change.selectForViewing || _library.selectedAccount == null,
-          );
-        }),
-      ),
+    if (account == null) {
+      if (change.selectForViewing) {
+        final next = CourseLibrary(accounts: _library.accounts);
+        await _store.write(next);
+        _library = next;
+      }
+      return;
+    }
+    final connected = _source.connectedAccount?.scope == account.scope;
+    if (!change.selectForViewing &&
+        !connected &&
+        _account(account.scope) == null) {
+      return;
+    }
+    await _save(
+      _withAccount(account),
+      select:
+          change.selectForViewing ||
+          (connected && _library.selectedAccount == null),
     );
   }
 

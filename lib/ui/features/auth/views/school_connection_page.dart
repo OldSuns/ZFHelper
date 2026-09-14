@@ -42,7 +42,7 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
       text: widget.isNewSchool ? '' : widget.profile?.name ?? '',
     );
     _viewModel = SchoolAddressViewModel(
-      initialProfile: widget.profile,
+      initialProfile: widget.isNewSchool ? null : widget.profile,
       address: widget.isNewSchool ? '' : null,
     );
   }
@@ -199,6 +199,16 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
     if (_viewModel.recognizedAddress case final address?) ...[
       const SizedBox(height: 16),
       _AddressPreview(address: address),
+    ],
+    if (!widget.isNewSchool &&
+        widget.profile != null &&
+        _viewModel.recognizedAddress != null &&
+        _viewModel.recognizedAddress != widget.profile!.baseUri) ...[
+      const SizedBox(height: 16),
+      const AuthNotice(
+        message: '修改教务地址后，该校账号需要重新登录。已保存的课表、成绩等离线数据会保留。',
+        isError: false,
+      ),
     ],
     if (_viewModel.resetsCustomSettings) ...[
       const SizedBox(height: 16),

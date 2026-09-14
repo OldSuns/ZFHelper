@@ -53,7 +53,7 @@ final class GradeRepository {
   bool _closed = false;
   int _readGeneration = 0;
   GradeFailure? _failure;
-  AcademicAccountChange? _initialAccountChange;
+  final _accountChanges = PendingAcademicAccountChanges();
   Future<void>? _initializing;
   Future<void> _writes = Future.value();
 
@@ -86,23 +86,16 @@ final class GradeRepository {
       _library = await _store.read();
       if (_closed) return;
       final connected = _source.connectedAccount;
-      final applied = _initialAccountChange;
-      if (connected != null) {
-        final next = _withAccount(connected);
-        await _save(
-          next,
-          select:
-              _library.selectedAccount == null ||
-              (applied?.selectForViewing ?? false),
+      if (_accountChanges.isEmpty && connected != null) {
+        await _applyAccountChange(
+          AcademicAccountChange(
+            connected,
+            selectForViewing: _library.selectedAccount == null,
+          ),
         );
       }
-      if (_closed) return;
-      _initialized = true;
-      final latest = _initialAccountChange;
-      _initialAccountChange = null;
-      if (latest != null && !identical(latest, applied)) {
-        _onAccountChanged(latest);
-      }
+      await _accountChanges.drain(_applyAccountChange);
+      if (!_closed) _initialized = true;
     } on GradeStorageException catch (error) {
       _failure = GradeFailure(GradeFailureKind.storage, error.message);
     } finally {
@@ -232,6 +225,7 @@ final class GradeRepository {
 
   Future<bool> removeAccount(AccountScope scope) {
     _cancelRead();
+    _accountChanges.remove(scope);
     return _localChange(() async {
       final remaining = _library.accounts
           .where((item) => item.account.scope != scope)
@@ -274,23 +268,41 @@ final class GradeRepository {
 
   void _onAccountChanged(AcademicAccountChange change) {
     if (_closed) return;
+    _accountChanges.add(change);
     if (!_initialized) {
-      _initialAccountChange = change;
       if (!_loading) unawaited(initialize());
       return;
     }
-    _cancelRead();
+    if (change.selectForViewing ||
+        change.account?.scope == _library.selectedAccount) {
+      _cancelRead();
+    }
     _emit();
+    unawaited(_localChange(() => _accountChanges.drain(_applyAccountChange)));
+  }
+
+  Future<void> _applyAccountChange(AcademicAccountChange change) async {
+    if (_closed) return;
     final account = change.account;
-    if (account == null) return;
-    unawaited(
-      _localChange(() async {
-        if (_source.connectedAccount?.scope != account.scope) return;
-        await _save(
-          _withAccount(account),
-          select: change.selectForViewing || _library.selectedAccount == null,
-        );
-      }),
+    if (account == null) {
+      if (change.selectForViewing) {
+        final next = GradeLibrary(accounts: _library.accounts);
+        await _store.write(next);
+        _library = next;
+      }
+      return;
+    }
+    final connected = _source.connectedAccount?.scope == account.scope;
+    if (!change.selectForViewing &&
+        !connected &&
+        _account(account.scope) == null) {
+      return;
+    }
+    await _save(
+      _withAccount(account),
+      select:
+          change.selectForViewing ||
+          (connected && _library.selectedAccount == null),
     );
   }
 
