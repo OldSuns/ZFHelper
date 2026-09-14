@@ -134,6 +134,15 @@ void main() {
         await tester.pumpAndSettle();
         expect(model.selectedWeek, 21);
         expect(find.text('课程详情'), findsOneWidget);
+        await tester.tap(find.byTooltip('关闭课程详情'));
+        await tester.pumpAndSettle();
+        for (final size in [const Size(1366, 768), const Size(390, 844)]) {
+          tester.view.physicalSize = size;
+          await tester.pumpAndSettle();
+          expect(model.selectedWeek, 21);
+          expect(find.text('学期末实验'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        }
         expect(source.requests, 0);
         expect(tester.takeException(), isNull);
       } finally {

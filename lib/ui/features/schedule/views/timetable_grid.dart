@@ -3,13 +3,21 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import 'course_detail_sheet.dart';
 
 const _minimumGridWidth = 360.0;
 const _maximumGridTextScale = 1.45;
-const _periodAxisWidth = 36.0;
-const _periodRowExtent = 76.0;
+
+class _GridMetrics {
+  const _GridMetrics({required this.wide, required this.textScale});
+
+  final bool wide;
+  final double textScale;
+  double get axisWidth => wide ? 68 : 36;
+  double get rowExtent => wide ? 64 * math.max(1, textScale) : 76;
+}
 
 class TimetableGrid extends StatefulWidget {
   const TimetableGrid({
@@ -101,6 +109,10 @@ class _TimetableGridState extends State<TimetableGrid> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final metrics = _GridMetrics(
+        wide: constraints.maxWidth >= AppLayout.navigationRailMinWidth,
+        textScale: textScale,
+      );
       final useAgenda =
           widget.agenda ||
           constraints.maxWidth < _minimumGridWidth ||
@@ -127,7 +139,12 @@ class _TimetableGridState extends State<TimetableGrid> {
         label: '第 ${widget.week} 周课表',
         child: Column(
           children: [
-            if (!useAgenda) _WeekdayHeader(dates: dates, today: widget.today),
+            if (!useAgenda)
+              _WeekdayHeader(
+                dates: dates,
+                today: widget.today,
+                metrics: metrics,
+              ),
             Expanded(
               child: Scrollbar(
                 controller: _scrollController,
@@ -155,6 +172,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           constraints.maxWidth,
                           placed,
                           dates,
+                          metrics,
                         ),
                       ),
                     if (pending.isNotEmpty) ...[
@@ -240,9 +258,10 @@ class _TimetableGridState extends State<TimetableGrid> {
     double width,
     List<ScheduleEntry> placed,
     CalendarWeek? dates,
+    _GridMetrics metrics,
   ) {
     final colors = Theme.of(context).colorScheme;
-    final dayWidth = (width - _periodAxisWidth) / DateTime.daysPerWeek;
+    final dayWidth = (width - metrics.axisWidth) / DateTime.daysPerWeek;
     final todayIndex =
         dates?.days.indexWhere((day) => _sameDate(day, widget.today)) ?? -1;
     final maxPeriod = widget.snapshot.maxPeriod;
@@ -250,13 +269,14 @@ class _TimetableGridState extends State<TimetableGrid> {
     final currentPeriod = todayIndex < 0 ? null : _currentPeriod();
     return RepaintBoundary(
       child: SizedBox(
-        height: maxPeriod * _periodRowExtent,
+        height: maxPeriod * metrics.rowExtent,
         width: width,
         child: Stack(
           children: [
             Positioned.fill(
               child: CustomPaint(
                 painter: _GridPainter(
+                  metrics: metrics,
                   periods: maxPeriod,
                   todayIndex: todayIndex,
                   lineColor: colors.outlineVariant,
@@ -267,17 +287,17 @@ class _TimetableGridState extends State<TimetableGrid> {
             for (var number = 1; number <= maxPeriod; number++)
               Positioned(
                 left: 0,
-                top: (number - 1) * _periodRowExtent,
-                width: _periodAxisWidth,
-                height: _periodRowExtent,
+                top: (number - 1) * metrics.rowExtent,
+                width: metrics.axisWidth,
+                height: metrics.rowExtent,
                 child: _PeriodLabel(number: number, snapshot: widget.snapshot),
               ),
             for (final group in groups)
               Positioned(
-                left: _periodAxisWidth + (group.weekday - 1) * dayWidth,
-                top: (group.start - 1) * _periodRowExtent,
+                left: metrics.axisWidth + (group.weekday - 1) * dayWidth,
+                top: (group.start - 1) * metrics.rowExtent,
                 width: dayWidth,
-                height: (group.end - group.start + 1) * _periodRowExtent,
+                height: (group.end - group.start + 1) * metrics.rowExtent,
                 child: group.entries.length == 1
                     ? _GridCourseCard(
                         key: ValueKey(
@@ -294,8 +314,8 @@ class _TimetableGridState extends State<TimetableGrid> {
               ),
             if (currentPeriod != null)
               Positioned(
-                left: _periodAxisWidth + todayIndex * dayWidth,
-                top: _timePosition(currentPeriod),
+                left: metrics.axisWidth + todayIndex * dayWidth,
+                top: _timePosition(currentPeriod, metrics.rowExtent),
                 width: dayWidth,
                 height: 6,
                 child: Semantics(
@@ -367,12 +387,12 @@ class _TimetableGridState extends State<TimetableGrid> {
     return matching.length == 1 ? matching.single : null;
   }
 
-  double _timePosition(PeriodTime period) {
+  double _timePosition(PeriodTime period, double rowExtent) {
     final minutes = widget.today.hour * 60 + widget.today.minute;
     final progress =
         (minutes - period.startMinutes) /
         (period.endMinutes - period.startMinutes);
-    return (period.number - 1 + progress) * _periodRowExtent;
+    return (period.number - 1 + progress) * rowExtent;
   }
 
   Future<void> _showConflicts(List<ScheduleEntry> entries) async {
@@ -416,27 +436,25 @@ class _TimetableGridState extends State<TimetableGrid> {
         ],
       ),
     );
-    final selected = size.width >= 600
-        ? await showDialog<ScheduleEntry>(
-            context: context,
-            builder: (context) => Dialog(child: picker(context)),
-          )
-        : await showModalBottomSheet<ScheduleEntry>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            showDragHandle: true,
-            builder: picker,
-          );
+    final selected = await showAdaptiveSheet<ScheduleEntry>(
+      context: context,
+      maxWidth: 640,
+      builder: picker,
+    );
     if (selected != null && mounted) widget.onCourseTap(selected);
   }
 }
 
 class _WeekdayHeader extends StatelessWidget {
-  const _WeekdayHeader({required this.dates, required this.today});
+  const _WeekdayHeader({
+    required this.dates,
+    required this.today,
+    required this.metrics,
+  });
 
   final CalendarWeek? dates;
   final DateTime today;
+  final _GridMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -451,7 +469,7 @@ class _WeekdayHeader extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: _periodAxisWidth,
+            width: metrics.axisWidth,
             child: Text(
               '节次',
               textAlign: TextAlign.center,
@@ -464,6 +482,7 @@ class _WeekdayHeader extends StatelessWidget {
                 weekday: day,
                 date: dates?.days[day - 1],
                 today: today,
+                horizontal: metrics.wide,
               ),
             ),
         ],
@@ -477,11 +496,13 @@ class _DayLabel extends StatelessWidget {
     required this.weekday,
     required this.date,
     required this.today,
+    required this.horizontal,
   });
 
   final int weekday;
   final DateTime? date;
   final DateTime today;
+  final bool horizontal;
 
   @override
   Widget build(BuildContext context) {
@@ -493,9 +514,14 @@ class _DayLabel extends StatelessWidget {
       header: true,
       child: ExcludeSemantics(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-          child: Column(
+          padding: EdgeInsets.symmetric(
+            vertical: horizontal ? 8 : 4,
+            horizontal: 2,
+          ),
+          child: Flex(
+            direction: horizontal ? Axis.horizontal : Axis.vertical,
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 current ? '今天' : scheduleWeekdayText(weekday),
@@ -505,7 +531,7 @@ class _DayLabel extends StatelessWidget {
                 ),
               ),
               if (date != null) ...[
-                const SizedBox(height: 2),
+                SizedBox(height: horizontal ? 0 : 2, width: horizontal ? 8 : 0),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: current
@@ -929,6 +955,7 @@ List<_CourseGroup> _courseGroups(List<ScheduleEntry> entries) {
 
 class _GridPainter extends CustomPainter {
   const _GridPainter({
+    required this.metrics,
     required this.periods,
     required this.todayIndex,
     required this.lineColor,
@@ -936,17 +963,18 @@ class _GridPainter extends CustomPainter {
   });
 
   final int periods;
+  final _GridMetrics metrics;
   final int todayIndex;
   final Color lineColor;
   final Color todayColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dayWidth = (size.width - _periodAxisWidth) / DateTime.daysPerWeek;
+    final dayWidth = (size.width - metrics.axisWidth) / DateTime.daysPerWeek;
     if (todayIndex >= 0) {
       canvas.drawRect(
         Rect.fromLTWH(
-          _periodAxisWidth + todayIndex * dayWidth,
+          metrics.axisWidth + todayIndex * dayWidth,
           0,
           dayWidth,
           size.height,
@@ -958,17 +986,19 @@ class _GridPainter extends CustomPainter {
       ..color = lineColor
       ..strokeWidth = 0.7;
     for (var day = 0; day <= DateTime.daysPerWeek; day++) {
-      final x = _periodAxisWidth + day * dayWidth;
+      final x = metrics.axisWidth + day * dayWidth;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
     }
     for (var period = 0; period <= periods; period++) {
-      final y = period * _periodRowExtent;
+      final y = period * metrics.rowExtent;
       canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
     }
   }
 
   @override
   bool shouldRepaint(_GridPainter oldDelegate) =>
+      metrics.wide != oldDelegate.metrics.wide ||
+      metrics.rowExtent != oldDelegate.metrics.rowExtent ||
       periods != oldDelegate.periods ||
       todayIndex != oldDelegate.todayIndex ||
       lineColor != oldDelegate.lineColor ||

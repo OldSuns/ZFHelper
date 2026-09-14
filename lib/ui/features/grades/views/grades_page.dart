@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../../data/repositories/grade_repository.dart';
+import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/grades_view_model.dart';
 import 'grade_detail_sheet.dart';
+import 'grade_record_table.dart';
 import 'grade_record_tile.dart';
 
 class GradesPage extends StatefulWidget {
@@ -26,8 +28,12 @@ class GradesPage extends StatefulWidget {
 enum _GradeAction { accounts, information, clear }
 
 class _GradesPageState extends State<GradesPage> {
+  static const _workspaceMinHeight = 440.0;
+
   final _scroll = ScrollController();
   late final TextEditingController _search;
+  String? _selectedRecordId;
+  AccountScope? _selectedScope;
 
   GradesViewModel get model => widget.viewModel;
 
@@ -35,19 +41,23 @@ class _GradesPageState extends State<GradesPage> {
   void initState() {
     super.initState();
     _search = TextEditingController(text: model.query);
-    model.addListener(_syncSearch);
+    model.addListener(_syncPageState);
   }
 
   @override
   void didUpdateWidget(covariant GradesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.viewModel == model) return;
-    oldWidget.viewModel.removeListener(_syncSearch);
-    model.addListener(_syncSearch);
-    _syncSearch();
+    oldWidget.viewModel.removeListener(_syncPageState);
+    model.addListener(_syncPageState);
+    _clearSelection();
+    _syncPageState();
   }
 
-  void _syncSearch() {
+  void _syncPageState() {
+    if (_resolveRecord(_selectedScope, _selectedRecordId) == null) {
+      _clearSelection();
+    }
     if (_search.text == model.query) return;
     _search.value = TextEditingValue(
       text: model.query,
@@ -55,9 +65,49 @@ class _GradesPageState extends State<GradesPage> {
     );
   }
 
+  GradeRecord? _resolveRecord(
+    AccountScope? scope,
+    String? id, [
+    List<GradeRecord>? records,
+  ]) {
+    if (scope == null || scope != model.account?.account.scope || id == null) {
+      return null;
+    }
+    for (final record in records ?? model.visibleRecords) {
+      if (record.id == id) return record;
+    }
+    return null;
+  }
+
+  void _clearSelection() {
+    _selectedRecordId = null;
+    _selectedScope = null;
+  }
+
+  Future<void> _openRecord(
+    AccountScope? scope,
+    String id, {
+    bool inline = false,
+  }) async {
+    if (_resolveRecord(scope, id) == null) return;
+    setState(() {
+      _selectedRecordId = id;
+      _selectedScope = scope;
+    });
+    if (inline) return;
+    final viewModel = model;
+    await showGradeDetails(
+      context,
+      listenable: viewModel,
+      resolveRecord: () => mounted && identical(model, viewModel)
+          ? _resolveRecord(_selectedScope, _selectedRecordId)
+          : null,
+    );
+  }
+
   @override
   void dispose() {
-    model.removeListener(_syncSearch);
+    model.removeListener(_syncPageState);
     _search.dispose();
     _scroll.dispose();
     super.dispose();
@@ -72,17 +122,14 @@ class _GradesPageState extends State<GradesPage> {
     final scope = model.account?.account.scope;
     final updated = await model.refresh();
     if (!mounted || model.account?.account.scope != scope || !updated) return;
-    _message('成绩已更新并保存在本机');
+    _message('成绩已更新');
   }
 
   Future<void> _chooseTerm() async {
     final scope = model.account?.account.scope;
     final terms = model.terms;
-    final result = await showModalBottomSheet<({String? key})>(
+    final result = await showAdaptiveSheet<({String? key})>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => _ChoiceSheet(
         title: '选择学期',
         children: [
@@ -119,11 +166,8 @@ class _GradesPageState extends State<GradesPage> {
 
   Future<void> _chooseAccount() async {
     final accounts = model.data.library.accounts;
-    final scope = await showModalBottomSheet<AccountScope>(
+    final scope = await showAdaptiveSheet<AccountScope>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => _ChoiceSheet(
         title: '本机保存的成绩',
         children: [
@@ -240,100 +284,269 @@ class _GradesPageState extends State<GradesPage> {
     listenable: model,
     builder: (context, _) {
       final records = model.visibleRecords;
-      final snapshot = model.snapshot;
-      final content = CustomScrollView(
-        controller: _scroll,
-        key: const PageStorageKey('grades-list'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        slivers: [
-          SliverToBoxAdapter(child: _header()),
-          if (model.data.refreshing)
-            const SliverToBoxAdapter(
-              child: LinearProgressIndicator(
-                minHeight: 2,
-                semanticsLabel: '正在更新成绩',
-              ),
-            ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList.list(
-              children: [
-                if (model.data.failure != null) _failure(),
-                if (snapshot != null) ...[
-                  _termBar(),
-                  if (snapshot.records.isNotEmpty) ...[
-                    _searchBar(),
-                    if (model.filter != GradeFilter.all)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: InputChip(
-                          label: Text(_filterLabel(model.filter)),
-                          onDeleted: () => model.setFilter(GradeFilter.all),
-                          deleteButtonTooltipMessage: '清除成绩筛选',
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    _SummaryStrip(
-                      summary: model.summary,
-                      onTap: _showInformation,
-                    ),
-                    const SizedBox(height: 4),
-                  ],
-                ],
-                if (snapshot == null || records.isEmpty) _emptyState(),
-              ],
-            ),
-          ),
-          if (records.isNotEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverList.separated(
-                itemCount: records.length,
-                itemBuilder: (context, index) {
-                  final record = records[index];
-                  return GradeRecordTile(
-                    key: ValueKey(record.id),
-                    record: record,
-                    showTerm: model.selectedTermKey == null,
-                    onTap: () => showGradeDetails(context, record: record),
-                  );
-                },
-                separatorBuilder: (context, _) => const Divider(height: 1),
-              ),
-            ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 16 + MediaQuery.paddingOf(context).bottom),
-          ),
-        ],
-      );
       return SafeArea(
         bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppLayout.contentMaxWidth,
-            ),
-            child: Scrollbar(
-              controller: _scroll,
-              child: model.canRefresh
-                  ? RefreshIndicator(onRefresh: _refresh, child: content)
-                  : content,
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final textScale = (MediaQuery.textScalerOf(context).scale(14) / 14)
+                .clamp(1.0, double.infinity);
+            final availableWidth = constraints.maxWidth.clamp(
+              0.0,
+              AppLayout.workspaceMaxWidth,
+            );
+            final effectiveWidth = availableWidth / textScale;
+            final useTable =
+                effectiveWidth >= AppLayout.workspaceListMinWidth &&
+                constraints.maxHeight >= _workspaceMinHeight * textScale;
+            return useTable
+                ? _workspace(
+                    records,
+                    showDetails: effectiveWidth >= AppLayout.workspaceMinWidth,
+                  )
+                : _mobileList(records);
+          },
         ),
       );
     },
   );
 
-  Widget _header() {
+  Widget _mobileList(List<GradeRecord> records) {
+    final snapshot = model.snapshot;
+    final scope = model.account?.account.scope;
+    final content = CustomScrollView(
+      controller: _scroll,
+      key: const PageStorageKey('grades-list'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        SliverToBoxAdapter(child: _header()),
+        if (model.data.refreshing)
+          const SliverToBoxAdapter(
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              semanticsLabel: '正在更新成绩',
+            ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.list(
+            children: [
+              if (model.data.failure != null) _failure(),
+              if (snapshot != null) ...[
+                _termBar(),
+                if (snapshot.records.isNotEmpty) ...[
+                  _searchBar(),
+                  if (model.filter != GradeFilter.all)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _filterChip(),
+                    ),
+                  const SizedBox(height: 8),
+                  _SummaryStrip(
+                    summary: model.summary,
+                    onTap: _showInformation,
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ],
+              if (snapshot == null || records.isEmpty) _emptyState(),
+            ],
+          ),
+        ),
+        if (records.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.separated(
+              itemCount: records.length,
+              itemBuilder: (context, index) {
+                final record = records[index];
+                return GradeRecordTile(
+                  key: ValueKey((scope, record.id)),
+                  record: record,
+                  showTerm: model.selectedTermKey == null,
+                  onTap: () => _openRecord(scope, record.id),
+                );
+              },
+              separatorBuilder: (context, _) => const Divider(height: 1),
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: SizedBox(height: 16 + MediaQuery.paddingOf(context).bottom),
+        ),
+      ],
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppLayout.contentMaxWidth),
+        child: Scrollbar(
+          controller: _scroll,
+          child: model.canRefresh
+              ? RefreshIndicator(onRefresh: _refresh, child: content)
+              : content,
+        ),
+      ),
+    );
+  }
+
+  Widget _workspace(List<GradeRecord> records, {required bool showDetails}) {
+    final scope = model.account?.account.scope;
+    final selected = _resolveRecord(_selectedScope, _selectedRecordId, records);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: AppLayout.workspaceMaxWidth,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppLayout.workspacePadding,
+            8,
+            AppLayout.workspacePadding,
+            AppLayout.workspacePadding,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .5,
+                  ),
+                  child: SingleChildScrollView(
+                    primary: false,
+                    child: _workspaceToolbar(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: records.isEmpty
+                      ? _panel(
+                          child: Scrollbar(
+                            controller: _scroll,
+                            child: ListView(
+                              controller: _scroll,
+                              children: [_emptyState()],
+                            ),
+                          ),
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _panel(
+                                child: GradeRecordTable(
+                                  key: ValueKey(scope),
+                                  records: records,
+                                  selectedId: selected?.id,
+                                  showTerm: model.selectedTermKey == null,
+                                  sort: model.sort,
+                                  onSort: model.setSort,
+                                  onSelected: (record) => _openRecord(
+                                    scope,
+                                    record.id,
+                                    inline: showDetails,
+                                  ),
+                                  controller: _scroll,
+                                ),
+                              ),
+                            ),
+                            if (showDetails) ...[
+                              const SizedBox(width: AppLayout.paneGap),
+                              SizedBox(
+                                width: AppLayout.detailPaneWidth,
+                                child: _panel(
+                                  child: GradeDetailsPane(
+                                    key: ValueKey((scope, selected?.id)),
+                                    record: selected,
+                                    onClose: selected == null
+                                        ? null
+                                        : () => setState(_clearSelection),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _workspaceToolbar() {
+    final snapshot = model.snapshot;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _header(workspace: true),
+        if (model.data.refreshing)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              semanticsLabel: '正在更新成绩',
+            ),
+          ),
+        if (model.data.failure != null) _failure(),
+        if (snapshot != null)
+          Row(
+            children: [
+              Flexible(flex: 2, child: _termBar()),
+              if (snapshot.records.isNotEmpty) ...[
+                const SizedBox(width: 16),
+                Expanded(flex: 3, child: _searchBar()),
+              ],
+            ],
+          ),
+        if (snapshot != null && snapshot.records.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _SummaryStrip(
+                  summary: model.summary,
+                  onTap: _showInformation,
+                  compact: true,
+                ),
+                if (model.filter != GradeFilter.all) _filterChip(),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _panel({required Widget child}) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+
+  Widget _filterChip() => InputChip(
+    label: Text(_filterLabel(model.filter)),
+    onDeleted: () => model.setFilter(GradeFilter.all),
+    deleteButtonTooltipMessage: '清除成绩筛选',
+  );
+
+  Widget _header({bool workspace = false}) {
     final account = model.account?.account;
     final label = account == null
         ? widget.schoolName
         : '${account.schoolName} · ${account.accountName}';
     final busy = model.data.loading || model.data.refreshing;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+      padding: workspace
+          ? const EdgeInsets.only(bottom: 8)
+          : const EdgeInsets.fromLTRB(20, 8, 8, 8),
       child: Row(
         children: [
           Expanded(
@@ -355,15 +568,28 @@ class _GradesPageState extends State<GradesPage> {
               ],
             ),
           ),
-          IconButton(
-            tooltip: model.canRefresh ? '更新成绩' : '登录后更新成绩',
-            onPressed: busy
-                ? null
-                : model.canRefresh
-                ? _refresh
-                : widget.onOpenSettings,
-            icon: const Icon(Icons.sync_rounded),
-          ),
+          if (workspace) ...[
+            const SizedBox(width: 16),
+            FilledButton.tonalIcon(
+              onPressed: busy
+                  ? null
+                  : model.canRefresh
+                  ? _refresh
+                  : widget.onOpenSettings,
+              icon: const Icon(Icons.sync_rounded),
+              label: Text(model.canRefresh ? '更新成绩' : '登录后更新'),
+            ),
+            const SizedBox(width: 8),
+          ] else
+            IconButton(
+              tooltip: model.canRefresh ? '更新成绩' : '登录后更新成绩',
+              onPressed: busy
+                  ? null
+                  : model.canRefresh
+                  ? _refresh
+                  : widget.onOpenSettings,
+              icon: const Icon(Icons.sync_rounded),
+            ),
           PopupMenuButton<_GradeAction>(
             tooltip: '成绩菜单',
             onSelected: _action,
@@ -405,7 +631,11 @@ class _GradesPageState extends State<GradesPage> {
           child: TextButton.icon(
             onPressed: _chooseTerm,
             icon: const Icon(Icons.keyboard_arrow_down_rounded),
-            label: Text(model.termLabel),
+            label: Text(
+              model.termLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             iconAlignment: IconAlignment.end,
           ),
         ),
@@ -622,34 +852,68 @@ class _ChoiceSheet extends StatelessWidget {
     constraints: BoxConstraints(
       maxHeight: MediaQuery.sizeOf(context).height * .8,
     ),
-    child: ListView(
-      shrinkWrap: true,
-      padding: EdgeInsets.fromLTRB(
-        8,
-        0,
-        8,
-        16 + MediaQuery.paddingOf(context).bottom,
-      ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          padding: const EdgeInsets.fromLTRB(24, 0, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭$title',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
         ),
-        ...children,
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.fromLTRB(
+              8,
+              0,
+              8,
+              16 + MediaQuery.paddingOf(context).bottom,
+            ),
+            children: children,
+          ),
+        ),
       ],
     ),
   );
 }
 
 class _SummaryStrip extends StatelessWidget {
-  const _SummaryStrip({required this.summary, required this.onTap});
+  const _SummaryStrip({
+    required this.summary,
+    required this.onTap,
+    this.compact = false,
+  });
 
   final GradeSummary summary;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final metrics = [
+      ('成绩记录', '${summary.recordCount} 条'),
+      (
+        '记录学分',
+        summary.recordCount > 0 && summary.creditsCount == 0
+            ? '暂无'
+            : _number(summary.totalCredits),
+      ),
+      ('参考加权绩点', summary.weightedGradePoint?.toStringAsFixed(2) ?? '暂无'),
+    ];
     return Tooltip(
       message: '查看统计范围与计算口径',
       child: Material(
@@ -659,53 +923,70 @@ class _SummaryStrip extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final columns =
-                    constraints.maxWidth >=
-                        MediaQuery.textScalerOf(context).scale(280)
-                    ? 3
-                    : 2;
-                final width =
-                    (constraints.maxWidth - (columns - 1) * 12) / columns;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    for (final metric in [
-                      ('成绩记录', '${summary.recordCount} 条'),
-                      (
-                        '记录学分',
-                        summary.recordCount > 0 && summary.creditsCount == 0
-                            ? '暂无'
-                            : _number(summary.totalCredits),
-                      ),
-                      (
-                        '参考加权绩点',
-                        summary.weightedGradePoint?.toStringAsFixed(2) ?? '暂无',
-                      ),
-                    ])
-                      SizedBox(
-                        width: width,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(metric.$2, style: theme.textTheme.titleLarge),
-                            const SizedBox(height: 2),
-                            Text(
-                              metric.$1,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+            padding: compact
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
+                : const EdgeInsets.all(12),
+            child: compact
+                ? Wrap(
+                    spacing: 24,
+                    runSpacing: 8,
+                    children: [
+                      for (final metric in metrics)
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${metric.$1}  ',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              TextSpan(
+                                text: metric.$2,
+                                style: theme.textTheme.titleSmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns =
+                          constraints.maxWidth >=
+                              MediaQuery.textScalerOf(context).scale(280)
+                          ? 3
+                          : 2;
+                      final width =
+                          (constraints.maxWidth - (columns - 1) * 12) / columns;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          for (final metric in metrics)
+                            SizedBox(
+                              width: width,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    metric.$2,
+                                    style: theme.textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    metric.$1,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ),
       ),

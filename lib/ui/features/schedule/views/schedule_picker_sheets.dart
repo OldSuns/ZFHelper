@@ -3,16 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../../data/storage/schedule_store.dart';
+import '../../../core/adaptive_sheet.dart';
 
 Future<AcademicTerm?> showScheduleTermPicker(
   BuildContext context, {
   required StoredScheduleAccount account,
   bool forImport = false,
-}) => showModalBottomSheet<AcademicTerm>(
+}) => showAdaptiveSheet<AcademicTerm>(
   context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
   builder: (context) => _TermPicker(account: account, forImport: forImport),
 );
 
@@ -75,7 +73,21 @@ class _TermPickerState extends State<_TermPicker> {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           children: [
-            Text('选择学期', style: Theme.of(context).textTheme.titleLarge),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '选择学期',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭学期选择',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(
               widget.forImport
@@ -214,11 +226,8 @@ Future<int?> showScheduleWeekPicker(
   required int selectedWeek,
   required int weekCount,
   required int? currentWeek,
-}) => showModalBottomSheet<int>(
+}) => showAdaptiveSheet<int>(
   context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
   builder: (context) => _WeekPicker(
     snapshot: snapshot,
     selectedWeek: selectedWeek,
@@ -285,7 +294,21 @@ class _WeekPickerState extends State<_WeekPicker> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('选择教学周', style: Theme.of(context).textTheme.titleLarge),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '选择教学周',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭教学周选择',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [

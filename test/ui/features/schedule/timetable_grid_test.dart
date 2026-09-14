@@ -30,6 +30,15 @@ void main() {
     await tester.tap(find.text('高等数学'));
     expect(opened, [monday]);
     expect(tester.takeException(), isNull);
+    await _pumpGrid(
+      tester,
+      _snapshot([
+        _lesson('single', '单节课程', weekday: 1, start: 1, end: 1),
+      ], times: _morningTimes),
+      size: const Size(1000, 650),
+      textScale: 1.4,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

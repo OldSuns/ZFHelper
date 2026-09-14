@@ -9,6 +9,8 @@ import '../../auth/views/login_page.dart';
 class AccountSettingsPage extends StatelessWidget {
   const AccountSettingsPage({required this.viewModel, super.key});
 
+  static const _accountRowMinWidth = 720.0;
+
   final AuthViewModel viewModel;
 
   Future<void> _openLogin(BuildContext context) async {
@@ -61,31 +63,84 @@ class AccountSettingsPage extends StatelessWidget {
     appBar: AppBar(title: const Text('账号与设置')),
     body: SafeArea(
       top: false,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: ListenableBuilder(
-            listenable: viewModel,
-            builder: (context, _) => _content(context, viewModel.state),
-          ),
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= AppLayout.workspaceMinWidth;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: wide ? AppLayout.workspaceMaxWidth : 640,
+              ),
+              child: ListenableBuilder(
+                listenable: viewModel,
+                builder: (context, _) =>
+                    _content(context, viewModel.state, wide: wide),
+              ),
+            ),
+          );
+        },
       ),
     ),
   );
 
-  Widget _content(BuildContext context, AuthSnapshot state) {
+  Widget _content(
+    BuildContext context,
+    AuthSnapshot state, {
+    required bool wide,
+  }) {
+    final others = state.accounts.where(
+      (entry) => entry.scope != state.selectedScope,
+    );
+    final accounts = [
+      Text('教务账号', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 12),
+      _accountCard(context, state, wide: wide),
+      if (others.isNotEmpty) ...[
+        const SizedBox(height: AppLayout.sectionGap),
+        Text('其他账号', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        for (final saved in others)
+          _savedAccount(
+            context,
+            saved,
+            busy: state.isBusy || viewModel.isManagingAccounts,
+          ),
+      ],
+    ];
+    if (!wide) {
+      return ListView(
+        padding: const EdgeInsets.all(AppLayout.pagePadding),
+        children: [
+          _schoolSection(context, state),
+          const SizedBox(height: AppLayout.sectionGap),
+          ...accounts,
+        ],
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(AppLayout.workspacePadding),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: AppLayout.detailPaneWidth,
+            child: ListView(
+              primary: false,
+              children: [_schoolSection(context, state)],
+            ),
+          ),
+          const SizedBox(width: AppLayout.paneGap),
+          Expanded(child: ListView(children: accounts)),
+        ],
+      ),
+    );
+  }
+
+  Widget _schoolSection(BuildContext context, AuthSnapshot state) {
     final theme = Theme.of(context);
-    final account = state.account;
-    final selected = state.accounts
-        .where((entry) => entry.scope == state.selectedScope)
-        .firstOrNull;
-    final knownAccount =
-        account ?? state.knownIdentity?.account ?? selected?.account;
-    final expired = state.needsSignIn;
-    final busy = state.isBusy || viewModel.isManagingAccounts;
-    return ListView(
-      padding: const EdgeInsets.all(AppLayout.pagePadding),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('教务系统', style: theme.textTheme.titleMedium),
         const SizedBox(height: 12),
@@ -108,129 +163,149 @@ class AccountSettingsPage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppLayout.sectionGap),
-        Text('教务账号', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  account != null
-                      ? '已连接'
-                      : busy
-                      ? '正在恢复登录'
-                      : expired && knownAccount != null
-                      ? '登录已失效'
-                      : state.knownIdentity != null
-                      ? '登录待核验'
-                      : selected != null
-                      ? '已退出登录'
-                      : '尚未连接',
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                if (knownAccount != null) ...[
-                  Text(
-                    knownAccount.displayName,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text('账号 ${knownAccount.loginName}'),
-                  const SizedBox(height: 12),
-                  Text(
-                    account != null
-                        ? state.remembered
-                              ? '登录信息已加密保存在本机，重启后自动恢复'
-                              : '当前登录仅在本次运行中有效'
-                        : state.knownIdentity == null
-                        ? '账号名称和离线数据已保留，可重新登录后更新教务数据。'
-                        : expired
-                        ? '教务会话已失效，学校设置和已保存的课表仍然保留。'
-                        : '本机登录信息已保留，请恢复网络后重试核验。',
-                  ),
-                  const SizedBox(height: 12),
-                ] else
-                  const Text('通过密码、学校网页登录或 Cookie 导入连接教务账号。'),
-                if (busy) ...[
-                  const SizedBox(height: 16),
-                  const LinearProgressIndicator(semanticsLabel: '正在验证登录信息'),
-                ],
-                if (state.failure case final failure?) ...[
-                  const SizedBox(height: 16),
-                  AuthNotice(message: failure.message),
-                ],
-                if (state.storageFailure case final failure?) ...[
-                  const SizedBox(height: 16),
-                  AuthNotice(message: failure.message),
-                  TextButton(
-                    onPressed: busy ? null : viewModel.retryStorage,
-                    child: Text(
-                      state.accounts.isEmpty ? '重试读取本机账号' : '重试保存账号信息',
-                    ),
-                  ),
-                ],
-                if (viewModel.accountActionFailure case final failure?) ...[
-                  const SizedBox(height: 16),
-                  AuthNotice(message: failure),
-                ],
-                const SizedBox(height: 20),
-                if (state.canRestoreSession) ...[
-                  FilledButton.tonal(
-                    key: const ValueKey('restore-login'),
-                    onPressed: busy ? null : viewModel.restore,
-                    child: const Text('重试恢复登录'),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                FilledButton(
-                  onPressed: busy ? null : () => _openLogin(context),
-                  child: Text(
-                    state.challenge != null
-                        ? '继续验证码验证'
-                        : account == null
-                        ? '登录 / 更换学校'
-                        : '切换学校或账号',
-                  ),
-                ),
-                if (account != null) ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: busy ? null : viewModel.checkSession,
-                    child: const Text('验证当前会话'),
-                  ),
-                ],
-                if (state.knownIdentity != null)
-                  TextButton(
-                    onPressed: viewModel.isManagingAccounts
-                        ? null
-                        : () => _signOut(context),
-                    child: const Text('退出并清除本机登录'),
-                  ),
-                if (selected != null)
-                  TextButton.icon(
-                    onPressed: busy ? null : () => _remove(context, selected),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('删除账号与本地缓存'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        if (state.accounts.any(
-          (entry) => entry.scope != state.selectedScope,
-        )) ...[
-          const SizedBox(height: AppLayout.sectionGap),
-          Text('其他账号', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          for (final saved in state.accounts)
-            if (saved.scope != state.selectedScope)
-              _savedAccount(context, saved, busy: busy),
-        ],
       ],
     );
+  }
+
+  Widget _accountCard(
+    BuildContext context,
+    AuthSnapshot state, {
+    required bool wide,
+  }) {
+    final theme = Theme.of(context);
+    final account = state.account;
+    final selected = state.accounts
+        .where((entry) => entry.scope == state.selectedScope)
+        .firstOrNull;
+    final knownAccount =
+        account ?? state.knownIdentity?.account ?? selected?.account;
+    final expired = state.needsSignIn;
+    final busy = state.isBusy || viewModel.isManagingAccounts;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              account != null
+                  ? '已连接'
+                  : busy
+                  ? '正在恢复登录'
+                  : expired && knownAccount != null
+                  ? '登录已失效'
+                  : state.knownIdentity != null
+                  ? '登录待核验'
+                  : selected != null
+                  ? '已退出登录'
+                  : '尚未连接',
+              style: theme.textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            if (knownAccount != null) ...[
+              Text(
+                knownAccount.displayName,
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text('账号 ${knownAccount.loginName}'),
+              const SizedBox(height: 12),
+              Text(
+                account != null
+                    ? state.remembered
+                          ? '登录信息已加密保存在本机，重启后自动恢复'
+                          : '当前登录仅在本次运行中有效'
+                    : state.knownIdentity == null
+                    ? '账号名称和离线数据已保留，可重新登录后更新教务数据。'
+                    : expired
+                    ? '教务会话已失效，学校设置和已保存的课表仍然保留。'
+                    : '本机登录信息已保留，请恢复网络后重试核验。',
+              ),
+              const SizedBox(height: 12),
+            ] else
+              const Text('通过密码、学校网页登录或 Cookie 导入连接教务账号。'),
+            if (busy) ...[
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(semanticsLabel: '正在验证登录信息'),
+            ],
+            if (state.failure case final failure?) ...[
+              const SizedBox(height: 16),
+              AuthNotice(message: failure.message),
+            ],
+            if (state.storageFailure case final failure?) ...[
+              const SizedBox(height: 16),
+              AuthNotice(message: failure.message),
+              TextButton(
+                onPressed: busy ? null : viewModel.retryStorage,
+                child: Text(state.accounts.isEmpty ? '重试读取本机账号' : '重试保存账号信息'),
+              ),
+            ],
+            if (viewModel.accountActionFailure case final failure?) ...[
+              const SizedBox(height: 16),
+              AuthNotice(message: failure),
+            ],
+            const SizedBox(height: 20),
+            _accountActions(context, state, selected: selected, wide: wide),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _accountActions(
+    BuildContext context,
+    AuthSnapshot state, {
+    required AuthAccountSummary? selected,
+    required bool wide,
+  }) {
+    final busy = state.isBusy || viewModel.isManagingAccounts;
+    final actions = <Widget>[
+      if (state.canRestoreSession)
+        FilledButton.tonal(
+          key: const ValueKey('restore-login'),
+          onPressed: busy ? null : viewModel.restore,
+          child: const Text('重试恢复登录'),
+        ),
+      FilledButton(
+        onPressed: busy ? null : () => _openLogin(context),
+        child: Text(
+          state.challenge != null
+              ? '继续验证码验证'
+              : state.account == null
+              ? '登录 / 更换学校'
+              : '切换学校或账号',
+        ),
+      ),
+      if (state.account != null)
+        OutlinedButton(
+          onPressed: busy ? null : viewModel.checkSession,
+          child: const Text('验证当前会话'),
+        ),
+      if (state.knownIdentity != null)
+        TextButton(
+          onPressed: viewModel.isManagingAccounts
+              ? null
+              : () => _signOut(context),
+          child: const Text('退出并清除本机登录'),
+        ),
+      if (selected != null)
+        TextButton.icon(
+          onPressed: busy ? null : () => _remove(context, selected),
+          icon: const Icon(Icons.delete_outline),
+          label: const Text('删除账号与本地缓存'),
+        ),
+    ];
+    return wide
+        ? Wrap(spacing: 8, runSpacing: 8, children: actions)
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < actions.length; index++) ...[
+                if (index > 0) const SizedBox(height: 8),
+                actions[index],
+              ],
+            ],
+          );
   }
 
   Widget _savedAccount(
@@ -252,16 +327,23 @@ class AccountSettingsPage extends StatelessWidget {
       key: ValueKey(saved.scope),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(saved.profile.name, style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text('${saved.account.displayName} · ${saved.account.loginName}'),
-            const SizedBox(height: 4),
-            Text(status, style: theme.textTheme.bodySmall),
-            const SizedBox(height: 8),
-            Wrap(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= _accountRowMinWidth;
+            final information = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(saved.profile.name, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  '${saved.account.displayName} · ${saved.account.loginName}',
+                ),
+                const SizedBox(height: 4),
+                Text(status, style: theme.textTheme.bodySmall),
+              ],
+            );
+            final actions = Wrap(
+              alignment: horizontal ? WrapAlignment.end : WrapAlignment.start,
               spacing: 8,
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -285,8 +367,20 @@ class AccountSettingsPage extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
-            ),
-          ],
+            );
+            return horizontal
+                ? Row(
+                    children: [
+                      Expanded(flex: 3, child: information),
+                      const SizedBox(width: AppLayout.paneGap),
+                      Expanded(flex: 2, child: actions),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [information, const SizedBox(height: 8), actions],
+                  );
+          },
         ),
       ),
     );

@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../core/adaptive_sheet.dart';
 import 'course_detail_sheet.dart';
 
 Future<ScheduleEntry?> showScheduleCourseSearch(
   BuildContext context, {
   required ScheduleSnapshot snapshot,
-}) => showModalBottomSheet<ScheduleEntry>(
+}) => showAdaptiveSheet<ScheduleEntry>(
   context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
   builder: (context) => _CourseSearch(snapshot: snapshot),
 );
 
@@ -56,9 +54,20 @@ class _CourseSearchState extends State<_CourseSearch> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '查找本学期课程',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '查找本学期课程',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '关闭课程搜索',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     TextField(

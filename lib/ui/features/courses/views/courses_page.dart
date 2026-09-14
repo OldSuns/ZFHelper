@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../../data/repositories/course_repository.dart';
+import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/courses_view_model.dart';
 import 'course_details_sheet.dart';
@@ -25,10 +27,35 @@ class CoursesPage extends StatefulWidget {
 
 enum _CourseAction { accounts, information, clearCache, clearHistory, settings }
 
+final class _CourseDetailRequest {
+  _CourseDetailRequest({
+    required this.scope,
+    required this.course,
+    required this.future,
+  });
+
+  final AccountScope scope;
+  final CourseOffering course;
+  Future<CourseDetails?> future;
+}
+
+typedef _SelectedCoursePreview = ({
+  AccountScope scope,
+  String? roundKey,
+  String accountLabel,
+  String termLabel,
+  SelectedCourse course,
+});
+
 class _CoursesPageState extends State<CoursesPage> {
   final _scroll = ScrollController();
+  final _previewScroll = ScrollController();
+  final _detailsStorage = PageStorageBucket();
   final _pendingOperations = <String>{};
   late final TextEditingController _search;
+  _CourseDetailRequest? _detailRequest;
+  _SelectedCoursePreview? _selectedPreview;
+  bool _detailsInModal = false;
 
   CoursesViewModel get model => widget.viewModel;
 
@@ -36,31 +63,79 @@ class _CoursesPageState extends State<CoursesPage> {
   void initState() {
     super.initState();
     _search = TextEditingController(text: model.query);
-    model.addListener(_syncSearch);
+    model.addListener(_syncView);
   }
 
   @override
   void didUpdateWidget(covariant CoursesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.viewModel == model) return;
-    oldWidget.viewModel.removeListener(_syncSearch);
-    model.addListener(_syncSearch);
-    _syncSearch();
+    oldWidget.viewModel.removeListener(_syncView);
+    _detailRequest = null;
+    _selectedPreview = null;
+    model.addListener(_syncView);
+    _syncView();
   }
 
-  void _syncSearch() {
-    if (_search.text == model.query) return;
-    _search.value = TextEditingValue(
-      text: model.query,
-      selection: TextSelection.collapsed(offset: model.query.length),
-    );
+  void _syncView() {
+    if (_search.text != model.query) {
+      _search.value = TextEditingValue(
+        text: model.query,
+        selection: TextSelection.collapsed(offset: model.query.length),
+      );
+    }
+    final account = model.account?.account;
+    final scope = account?.scope;
+    final roundKey = model.round?.key;
+    final request = _detailRequest;
+    final preview = _selectedPreview;
+    final clearRequest =
+        request != null &&
+        (request.scope != scope ||
+            request.course.roundKey != roundKey ||
+            model.catalog?.courses.any(
+                  (course) => course.key == request.course.key,
+                ) !=
+                true);
+    final latestSelected = preview == null
+        ? null
+        : model.catalog?.selectedCourses
+              .where((course) => course.key == preview.course.key)
+              .firstOrNull;
+    final clearPreview =
+        preview != null &&
+        (preview.scope != scope ||
+            preview.roundKey != roundKey ||
+            latestSelected == null);
+    final updatePreview =
+        preview != null &&
+        latestSelected != null &&
+        latestSelected != preview.course;
+    if (clearRequest || clearPreview || updatePreview) {
+      setState(() {
+        if (clearRequest) _detailRequest = null;
+        if (clearPreview) {
+          _selectedPreview = null;
+        } else if (updatePreview && account != null) {
+          _selectedPreview = (
+            scope: account.scope,
+            roundKey: roundKey,
+            accountLabel: '${account.schoolName} · ${account.accountName}',
+            termLabel:
+                (latestSelected.term ?? model.round?.term)?.label ?? '学校未标注',
+            course: latestSelected,
+          );
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
-    model.removeListener(_syncSearch);
+    model.removeListener(_syncView);
     _search.dispose();
     _scroll.dispose();
+    _previewScroll.dispose();
     super.dispose();
   }
 
@@ -84,11 +159,8 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _chooseAccount() async {
     final accounts = model.data.library.accounts;
     final selected = model.account?.account.scope;
-    final scope = await showModalBottomSheet<AccountScope>(
+    final scope = await showAdaptiveSheet<AccountScope>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => _ChoiceSheet(
         title: '本机保存的选课账号',
         children: [
@@ -119,11 +191,8 @@ class _CoursesPageState extends State<CoursesPage> {
     final scope = model.account?.account.scope;
     final rounds = model.rounds;
     final selected = model.round?.key;
-    final key = await showModalBottomSheet<String>(
+    final key = await showAdaptiveSheet<String>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => _ChoiceSheet(
         title: '选择学校开放的轮次',
         children: [
@@ -150,50 +219,72 @@ class _CoursesPageState extends State<CoursesPage> {
     }
   }
 
-  Future<void> _openCourse(CourseOffering course) async {
+  Future<void> _openCourse(CourseOffering course, {bool inline = false}) async {
     final scope = model.account?.account.scope;
     if (scope == null) return;
-    final details = model.sections(course);
-    final started = await showModalBottomSheet<bool>(
+    var request = _detailRequest;
+    if (request == null ||
+        request.scope != scope ||
+        request.course.key != course.key) {
+      request = _CourseDetailRequest(
+        scope: scope,
+        course: course,
+        future: model.sections(course),
+      );
+      setState(() => _detailRequest = request);
+    }
+    if (inline) return;
+    final opened = request;
+    setState(() => _detailsInModal = true);
+    final started = await showAdaptiveSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => CourseDetailsSheet(
-        viewModel: model,
-        requestedCourse: course,
-        requestScope: scope,
-        initialFuture: details,
-        onOpenSettings: () {
-          Navigator.of(context).pop();
-          widget.onOpenSettings();
-        },
+      builder: (context) => PageStorage(
+        bucket: _detailsStorage,
+        child: CourseDetailsSheet(
+          key: PageStorageKey((opened.scope, opened.course.key)),
+          viewModel: model,
+          requestedCourse: opened.course,
+          requestScope: opened.scope,
+          initialFuture: opened.future,
+          onReload: () => opened.future = model.sections(opened.course),
+          onOpenSettings: () {
+            Navigator.of(context).pop();
+            widget.onOpenSettings();
+          },
+        ),
       ),
     );
-    if (mounted && started == true) _showTab(CoursePageTab.operations);
+    if (!mounted) return;
+    setState(() => _detailsInModal = false);
+    if (started == true) _showTab(CoursePageTab.operations);
   }
 
-  Future<void> _showSelected(SelectedCourse course) {
+  Future<void> _showSelected(
+    SelectedCourse course, {
+    bool inline = false,
+  }) async {
     final account = model.account?.account;
+    if (account == null) return;
     final term = course.term ?? model.round?.term;
-    return showDialog<void>(
+    final preview = (
+      scope: account.scope,
+      roundKey: model.round?.key,
+      accountLabel: '${account.schoolName} · ${account.accountName}',
+      termLabel: term?.label ?? '学校未标注',
+      course: course,
+    );
+    if (_selectedPreview?.course.key != course.key &&
+        _previewScroll.hasClients) {
+      _previewScroll.jumpTo(0);
+    }
+    setState(() => _selectedPreview = preview);
+    if (inline) return;
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(course.name),
         scrollable: true,
-        content: SelectableText(
-          [
-            if (account != null)
-              '${account.schoolName} · ${account.accountName}',
-            '课程编号：${course.courseId}',
-            '教学班编号：${course.sectionId}',
-            '学期：${term?.label ?? '学校未标注'}',
-            '教师：${course.teacher ?? '学校未提供'}',
-            '时间：${course.time ?? '学校未提供'}',
-            '地点：${course.location ?? '学校未提供'}',
-            '来自最近一次读取的学校已选记录。',
-          ].join('\n\n'),
-        ),
+        content: _selectedInformation(preview),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -344,84 +435,369 @@ class _CoursesPageState extends State<CoursesPage> {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: model,
-    builder: (context, _) {
-      final content = CustomScrollView(
-        key: const PageStorageKey('courses-list'),
-        controller: _scroll,
-        physics: const AlwaysScrollableScrollPhysics(),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        slivers: [
-          SliverToBoxAdapter(child: _header()),
-          if (model.data.refreshing)
-            const SliverToBoxAdapter(
-              child: LinearProgressIndicator(
-                minHeight: 2,
-                semanticsLabel: '正在更新课程与已选记录',
-              ),
-            ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList.list(
-              children: [
-                if (model.data.failure != null) _failure(),
-                _tabs(),
-                if (model.tab != CoursePageTab.operations) ...[
-                  if (model.activeCount > 0 || model.uncertainCount > 0)
-                    _operationNotice(),
-                  if (model.rounds.isNotEmpty) _roundSelector(),
-                  if (model.catalog != null) ...[
-                    const SizedBox(height: 8),
-                    _searchBar(),
-                    _listSummary(),
-                  ],
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      '所有账号的操作记录',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: _records(),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 16 + MediaQuery.paddingOf(context).bottom),
-          ),
-        ],
-      );
-      return SafeArea(
-        bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppLayout.contentMaxWidth,
-            ),
-            child: Scrollbar(
-              controller: _scroll,
-              child: model.canRefresh && model.tab != CoursePageTab.operations
-                  ? RefreshIndicator(onRefresh: _refresh, child: content)
-                  : content,
-            ),
-          ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const minimumPaneHeight = 240.0;
+      final scaler = MediaQuery.textScalerOf(context);
+      final minimumPaneWidth =
+          AppLayout.workspacePadding * 2 +
+          AppLayout.paneGap +
+          AppLayout.detailPaneWidth +
+          scaler.scale(AppLayout.detailPaneWidth);
+      final showDetails =
+          constraints.maxWidth >= AppLayout.workspaceMinWidth &&
+          constraints.maxWidth >= minimumPaneWidth &&
+          constraints.maxHeight >= scaler.scale(minimumPaneHeight);
+      return ListenableBuilder(
+        listenable: model,
+        builder: (context, _) => SafeArea(
+          bottom: false,
+          child: constraints.maxWidth >= AppLayout.workspaceListMinWidth
+              ? _workspace(showDetails: showDetails)
+              : _mobileLayout(),
         ),
       );
     },
   );
 
-  Widget _header() {
+  Widget _mobileLayout() {
+    final content = CustomScrollView(
+      key: const PageStorageKey('courses-list'),
+      controller: _scroll,
+      physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        SliverToBoxAdapter(child: _header()),
+        if (model.data.refreshing)
+          const SliverToBoxAdapter(
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              semanticsLabel: '正在更新课程与已选记录',
+            ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.list(
+            children: [
+              if (model.data.failure != null) _failure(),
+              _tabs(),
+              if (model.tab != CoursePageTab.operations) ...[
+                if (model.activeCount > 0 || model.uncertainCount > 0)
+                  _operationNotice(),
+                if (model.rounds.isNotEmpty) _roundSelector(),
+                if (model.catalog != null) ...[
+                  const SizedBox(height: 8),
+                  _searchBar(),
+                  _listSummary(),
+                ],
+              ] else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    '所有账号的操作记录',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: _records(),
+        ),
+        SliverToBoxAdapter(
+          child: SizedBox(height: 16 + MediaQuery.paddingOf(context).bottom),
+        ),
+      ],
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppLayout.contentMaxWidth),
+        child: Scrollbar(
+          controller: _scroll,
+          child: model.canRefresh && model.tab != CoursePageTab.operations
+              ? RefreshIndicator(onRefresh: _refresh, child: content)
+              : content,
+        ),
+      ),
+    );
+  }
+
+  Widget _workspace({required bool showDetails}) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: AppLayout.workspaceMaxWidth),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppLayout.workspacePadding,
+          8,
+          AppLayout.workspacePadding,
+          AppLayout.workspacePadding,
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight * .5,
+                ),
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: _workspaceToolbar(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: !showDetails || model.tab == CoursePageTab.operations
+                    ? _workspaceList(inlineDetails: false)
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _workspaceList(inlineDetails: true)),
+                          const SizedBox(width: AppLayout.paneGap),
+                          SizedBox(
+                            width: AppLayout.detailPaneWidth,
+                            child: _panel(child: _detailPane()),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _workspaceToolbar() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _header(workspace: true),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _tabs()),
+          if (model.activeCount > 0 || model.uncertainCount > 0)
+            Flexible(
+              child: TextButton.icon(
+                onPressed: () => _showTab(CoursePageTab.operations),
+                icon: Icon(
+                  model.uncertainCount > 0
+                      ? Icons.info_outline_rounded
+                      : Icons.autorenew_rounded,
+                ),
+                label: Text(
+                  [
+                    if (model.activeCount > 0) '${model.activeCount} 项运行中',
+                    if (model.uncertainCount > 0)
+                      '${model.uncertainCount} 项待核实',
+                  ].join(' · '),
+                ),
+              ),
+            ),
+        ],
+      ),
+      if (model.tab != CoursePageTab.operations && model.rounds.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            children: [
+              Flexible(flex: 2, child: _roundSelector(compact: true)),
+              if (model.catalog != null) ...[
+                const SizedBox(width: 16),
+                Expanded(flex: 3, child: _searchBar()),
+              ],
+            ],
+          ),
+        ),
+      if (model.data.refreshing)
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: LinearProgressIndicator(
+            minHeight: 2,
+            semanticsLabel: '正在更新课程与已选记录',
+          ),
+        ),
+      if (model.data.failure != null)
+        Padding(padding: const EdgeInsets.only(top: 8), child: _failure()),
+    ],
+  );
+
+  Widget _workspaceList({required bool inlineDetails}) => _panel(
+    child: Scrollbar(
+      controller: _scroll,
+      thumbVisibility: true,
+      child: CustomScrollView(
+        key: const PageStorageKey('courses-list'),
+        controller: _scroll,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: model.tab == CoursePageTab.operations
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        '所有账号 · ${model.operations.length} 条操作记录',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    )
+                  : model.catalog == null
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        model.tab == CoursePageTab.available ? '可选课程' : '已选课程',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    )
+                  : _listSummary(),
+            ),
+          ),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
+          SliverPadding(
+            padding: const EdgeInsets.all(8),
+            sliver: _records(workspace: true, inlineDetails: inlineDetails),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _panel({required Widget child}) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+
+  Widget _detailPane() {
+    if (model.tab == CoursePageTab.selected) {
+      final preview = _selectedPreview;
+      if (preview == null) {
+        return _detailPlaceholder('选择一门已选课程', '在这里查看课程时间、教师和教学班信息。');
+      }
+      return Scrollbar(
+        controller: _previewScroll,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          key: PageStorageKey((preview.scope, preview.course.key)),
+          controller: _previewScroll,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        preview.course.name,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '收起已选课程详情',
+                      onPressed: () => setState(() => _selectedPreview = null),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: _selectedInformation(preview),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final request = _detailRequest;
+    if (request == null) {
+      return _detailPlaceholder('选择课程，查看教学班', '从左侧选择课程，在这里确认教学班并启动选课或捡漏。');
+    }
+    if (_detailsInModal) {
+      return _detailPlaceholder(request.course.name, '教学班详情已在弹层中打开。');
+    }
+    return PageStorage(
+      bucket: _detailsStorage,
+      child: CourseDetailsSheet(
+        key: PageStorageKey((request.scope, request.course.key)),
+        viewModel: model,
+        requestedCourse: request.course,
+        requestScope: request.scope,
+        initialFuture: request.future,
+        embedded: true,
+        onReload: () => request.future = model.sections(request.course),
+        onClose: () => setState(() => _detailRequest = null),
+        onStarted: () {
+          if (mounted) _showTab(CoursePageTab.operations);
+        },
+        onOpenSettings: widget.onOpenSettings,
+      ),
+    );
+  }
+
+  Widget _detailPlaceholder(String title, String message) => Center(
+    child: SingleChildScrollView(
+      primary: false,
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.touch_app_outlined,
+            size: 32,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _selectedInformation(_SelectedCoursePreview preview) {
+    final course = preview.course;
+    return SelectableText(
+      [
+        preview.accountLabel,
+        '课程编号：${course.courseId}',
+        '教学班编号：${course.sectionId}',
+        '学期：${preview.termLabel}',
+        '教师：${course.teacher ?? '学校未提供'}',
+        '时间：${course.time ?? '学校未提供'}',
+        '地点：${course.location ?? '学校未提供'}',
+        '来自最近一次读取的学校已选记录。',
+      ].join('\n\n'),
+    );
+  }
+
+  Widget _header({bool workspace = false}) {
     final account = model.account?.account;
     final label = account == null
         ? (widget.schoolName.isEmpty ? '请先配置学校并登录' : widget.schoolName)
         : '${account.schoolName} · ${account.accountName}';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+      padding: workspace
+          ? const EdgeInsets.only(bottom: 8)
+          : const EdgeInsets.fromLTRB(20, 8, 8, 8),
       child: Row(
         children: [
           Expanded(
@@ -524,8 +900,8 @@ class _CoursesPageState extends State<CoursesPage> {
     ),
   );
 
-  Widget _roundSelector() => Padding(
-    padding: const EdgeInsets.only(top: 4),
+  Widget _roundSelector({bool compact = false}) => Padding(
+    padding: EdgeInsets.only(top: compact ? 0 : 4),
     child: OutlinedButton(
       onPressed: model.busy ? null : _chooseRound,
       child: Padding(
@@ -537,7 +913,9 @@ class _CoursesPageState extends State<CoursesPage> {
                 [
                   model.round?.label ?? '选择选课轮次',
                   if (model.round?.term case final term?) term.label,
-                ].join('\n'),
+                ].join(compact ? ' · ' : '\n'),
+                maxLines: compact ? 1 : null,
+                overflow: compact ? TextOverflow.ellipsis : null,
                 textAlign: TextAlign.start,
               ),
             ),
@@ -688,7 +1066,7 @@ class _CoursesPageState extends State<CoursesPage> {
     ),
   );
 
-  Widget _records() {
+  Widget _records({bool workspace = false, bool inlineDetails = false}) {
     if (model.tab == CoursePageTab.operations) {
       final operations = model.operations;
       if (operations.isEmpty) return SliverToBoxAdapter(child: _emptyState());
@@ -699,6 +1077,7 @@ class _CoursesPageState extends State<CoursesPage> {
           return SelectionOperationCard(
             key: ValueKey(operation.id),
             operation: operation,
+            compact: workspace,
             busy: _pendingOperations.contains(operation.id),
             canQuery: model.canQuery(operation.target.scope),
             onStop: () =>
@@ -720,6 +1099,11 @@ class _CoursesPageState extends State<CoursesPage> {
           final course = courses[index];
           return ListTile(
             key: ValueKey(course.key),
+            selected: workspace && _selectedPreview?.course.key == course.key,
+            selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 4,
               vertical: 4,
@@ -733,7 +1117,7 @@ class _CoursesPageState extends State<CoursesPage> {
               ].join(' · '),
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _showSelected(course),
+            onTap: () => _showSelected(course, inline: inlineDetails),
           );
         },
         separatorBuilder: (context, _) => const Divider(height: 1),
@@ -749,7 +1133,9 @@ class _CoursesPageState extends State<CoursesPage> {
           key: ValueKey(course.key),
           course: course,
           isSelected: model.isSelected(course),
-          onTap: () => _openCourse(course),
+          isHighlighted: workspace && _detailRequest?.course.key == course.key,
+          compact: workspace,
+          onTap: () => _openCourse(course, inline: inlineDetails),
         );
       },
       separatorBuilder: (context, _) => const Divider(height: 1),
@@ -871,8 +1257,22 @@ class _ChoiceSheet extends StatelessWidget {
       ),
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          padding: const EdgeInsets.fromLTRB(16, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭选择',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
         ),
         ...children,
       ],

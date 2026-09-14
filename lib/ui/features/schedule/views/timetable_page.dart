@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../../data/repositories/schedule_repository.dart';
+import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/empty_state_card.dart';
 import '../../../core/feature_page.dart';
@@ -281,11 +282,8 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Future<void> _accounts() async {
     final accounts = model.data.library.accounts;
-    final action = await showModalBottomSheet<({AccountScope scope, bool remove})>(
+    final action = await showAdaptiveSheet<({AccountScope scope, bool remove})>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
       builder: (context) => ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * .75,
@@ -497,16 +495,23 @@ class _TimetablePageState extends State<TimetablePage> {
     bottom: false,
     child: Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1440),
+        constraints: const BoxConstraints(
+          maxWidth: AppLayout.workspaceMaxWidth,
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 420;
+            final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final wide =
+                constraints.maxWidth / textScale >= AppLayout.workspaceMinWidth;
             final theme = Theme.of(context);
             final snapshot = model.schedule!;
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                  padding: wide
+                      ? const EdgeInsets.fromLTRB(24, 16, 16, 4)
+                      : const EdgeInsets.fromLTRB(16, 8, 8, 0),
                   child: Row(
                     children: [
                       Expanded(
@@ -520,7 +525,9 @@ class _TimetablePageState extends State<TimetablePage> {
                             ),
                             if (!compact)
                               Text(
-                                model.account!.account.schoolName,
+                                wide
+                                    ? '${model.account!.account.schoolName} · ${model.account!.account.accountName}'
+                                    : model.account!.account.schoolName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall,
@@ -528,6 +535,19 @@ class _TimetablePageState extends State<TimetablePage> {
                           ],
                         ),
                       ),
+                      if (wide) ...[
+                        TextButton.icon(
+                          onPressed: _edit,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('添加课程'),
+                        ),
+                        TextButton.icon(
+                          onPressed: _calendar,
+                          icon: const Icon(Icons.tune, size: 18),
+                          label: const Text('校历与作息'),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       IconButton(
                         tooltip: '查找课程',
                         onPressed: _search,
@@ -587,69 +607,61 @@ class _TimetablePageState extends State<TimetablePage> {
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _termButton(),
+                if (wide)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _termButton(),
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: model.isCurrentWeek
-                            ? null
-                            : model.currentPosition.status ==
-                                  TeachingWeekStatus.unknown
-                            ? _calendar
-                            : model.returnToCurrentWeek,
-                        child: Text(
-                          model.currentPosition.status ==
-                                  TeachingWeekStatus.unknown
-                              ? '设置教学周'
-                              : '回到本周',
+                        SizedBox(
+                          width: 260,
+                          child: _weekNavigation(compact: compact),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: '上一周',
-                      onPressed: model.canPreviousWeek
-                          ? model.previousWeek
-                          : null,
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    Expanded(
-                      child: TextButton(
-                        onPressed: _chooseWeek,
-                        child: Column(
-                          children: [
-                            Text(
-                              '第${model.selectedWeek}周',
-                              style: theme.textTheme.titleMedium,
+                        const SizedBox(width: 8),
+                        _currentWeekButton(),
+                        const SizedBox(width: 16),
+                        SegmentedButton<bool>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: false,
+                              icon: Icon(Icons.calendar_view_week_outlined),
+                              label: Text('周课表'),
                             ),
-                            if (!compact)
-                              Text(
-                                model.rangeLabel,
-                                key: const ValueKey('timetable-week-range'),
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodySmall,
-                              ),
+                            ButtonSegment(
+                              value: true,
+                              icon: Icon(Icons.view_agenda_outlined),
+                              label: Text('列表'),
+                            ),
                           ],
+                          selected: {model.agenda},
+                          onSelectionChanged: (_) => model.toggleAgenda(),
                         ),
-                      ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: '下一周',
-                      onPressed: model.canNextWeek ? model.nextWeek : null,
-                      icon: const Icon(Icons.chevron_right),
+                  )
+                else ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _termButton(),
+                          ),
+                        ),
+                        _currentWeekButton(),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  _weekNavigation(compact: compact),
+                ],
                 if (model.data.refreshing)
                   const LinearProgressIndicator(minHeight: 2),
                 if (model.data.failure != null)
@@ -666,15 +678,33 @@ class _TimetablePageState extends State<TimetablePage> {
                     ),
                   ),
                 Expanded(
-                  child: _TeachingWeeks(
-                    key: ValueKey(model.editTarget),
-                    snapshot: snapshot,
-                    selectedWeek: model.selectedWeek,
-                    weekCount: model.weekCount,
-                    today: model.today,
-                    agenda: model.agenda,
-                    onWeek: model.showTeachingWeek,
-                    onCourse: _details,
+                  child: Padding(
+                    padding: wide
+                        ? const EdgeInsets.fromLTRB(24, 0, 24, 24)
+                        : EdgeInsets.zero,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(wide ? 16 : 0),
+                        border: wide
+                            ? Border.all(
+                                color: theme.colorScheme.outlineVariant,
+                              )
+                            : null,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(wide ? 16 : 0),
+                        child: _TeachingWeeks(
+                          key: ValueKey(model.editTarget),
+                          snapshot: snapshot,
+                          selectedWeek: model.selectedWeek,
+                          weekCount: model.weekCount,
+                          today: model.today,
+                          agenda: model.agenda,
+                          onWeek: model.showTeachingWeek,
+                          onCourse: _details,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -683,6 +713,61 @@ class _TimetablePageState extends State<TimetablePage> {
         ),
       ),
     ),
+  );
+
+  Widget _currentWeekButton() => TextButton(
+    onPressed: model.isCurrentWeek
+        ? null
+        : model.currentPosition.status == TeachingWeekStatus.unknown
+        ? _calendar
+        : model.returnToCurrentWeek,
+    child: Text(
+      model.currentPosition.status == TeachingWeekStatus.unknown
+          ? '设置教学周'
+          : '回到本周',
+    ),
+  );
+
+  Widget _weekNavigation({required bool compact}) => Row(
+    children: [
+      IconButton(
+        tooltip: '上一周',
+        onPressed: model.canPreviousWeek ? model.previousWeek : null,
+        icon: const Icon(Icons.chevron_left),
+      ),
+      Expanded(
+        child: TextButton(
+          onPressed: _chooseWeek,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '第${model.selectedWeek}周',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const Icon(Icons.expand_more, size: 18),
+                ],
+              ),
+              if (!compact)
+                Text(
+                  model.rangeLabel,
+                  key: const ValueKey('timetable-week-range'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+        ),
+      ),
+      IconButton(
+        tooltip: '下一周',
+        onPressed: model.canNextWeek ? model.nextWeek : null,
+        icon: const Icon(Icons.chevron_right),
+      ),
+    ],
   );
 
   static String _savedAt(DateTime timestamp) {

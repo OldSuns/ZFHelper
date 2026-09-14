@@ -159,35 +159,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     child: LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= AppLayout.navigationRailMinWidth;
+        final extended = constraints.maxWidth >= AppLayout.extendedRailMinWidth;
         return Scaffold(
           body: Row(
             children: [
               if (isWide) ...[
-                SafeArea(
-                  child: NavigationRail(
-                    scrollable: true,
-                    selectedIndex: _destination.index,
-                    onDestinationSelected: _selectDestination,
-                    labelType: NavigationRailLabelType.all,
-                    leading: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Text(
-                        'ZFHelper',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    destinations: [
-                      for (final destination in AppDestination.values)
-                        NavigationRailDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.selectedIcon),
-                          label: Text(destination.label),
-                        ),
-                    ],
-                  ),
+                _DesktopNavigation(
+                  extended: extended,
+                  destination: _destination,
+                  onSelect: _selectDestination,
+                  onOpenSettings: _openSettings,
                 ),
                 const VerticalDivider(width: 1),
               ],
@@ -260,5 +241,77 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         onOpenSettings: _openSettings,
       ),
     };
+  }
+}
+
+class _DesktopNavigation extends StatelessWidget {
+  const _DesktopNavigation({
+    required this.extended,
+    required this.destination,
+    required this.onSelect,
+    required this.onOpenSettings,
+  });
+
+  final bool extended;
+  final AppDestination destination;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ColoredBox(
+      color: theme.colorScheme.surfaceContainer,
+      child: SafeArea(
+        child: NavigationRail(
+          extended: extended,
+          minWidth: 88,
+          minExtendedWidth: 184,
+          scrollable: true,
+          selectedIndex: destination.index,
+          onDestinationSelected: onSelect,
+          labelType: extended
+              ? NavigationRailLabelType.none
+              : NavigationRailLabelType.all,
+          leading: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: extended ? 20 : 8,
+              vertical: 24,
+            ),
+            child: Text(
+              'ZFHelper',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          trailingAtBottom: true,
+          trailing: Padding(
+            padding: const EdgeInsets.only(bottom: 16, top: 16),
+            child: extended
+                ? TextButton.icon(
+                    onPressed: onOpenSettings,
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('账号与设置'),
+                  )
+                : IconButton(
+                    tooltip: '账号与设置',
+                    onPressed: onOpenSettings,
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                  ),
+          ),
+          destinations: [
+            for (final item in AppDestination.values)
+              NavigationRailDestination(
+                icon: Icon(item.icon),
+                selectedIcon: Icon(item.selectedIcon),
+                label: Text(item.label),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

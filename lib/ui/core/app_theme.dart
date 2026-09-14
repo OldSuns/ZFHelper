@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 abstract final class AppLayout {
+  static const dialogMinWidth = 600.0;
   static const navigationRailMinWidth = 840.0;
+  static const extendedRailMinWidth = 1280.0;
+  static const workspaceListMinWidth = 760.0;
+  static const workspaceMinWidth = 1000.0;
+  static const workspaceMaxWidth = 1600.0;
+  static const workspacePadding = 24.0;
+  static const paneGap = 20.0;
+  static const detailPaneWidth = 360.0;
   static const contentMaxWidth = 1040.0;
   static const pagePadding = 20.0;
   static const sectionGap = 24.0;

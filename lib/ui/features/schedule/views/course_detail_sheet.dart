@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 
 enum _DetailAction { edit, delete }
@@ -24,18 +25,11 @@ Future<void> showScheduleCourseDetails(
       canDelete: onDelete != null,
     ),
   );
-  final action = size.width >= 600
-      ? await showDialog<_DetailAction>(
-          context: context,
-          builder: (context) => Dialog(child: panel(context)),
-        )
-      : await showModalBottomSheet<_DetailAction>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          showDragHandle: true,
-          builder: panel,
-        );
+  final action = await showAdaptiveSheet<_DetailAction>(
+    context: context,
+    maxWidth: 640,
+    builder: panel,
+  );
   if (!context.mounted) return;
   switch (action) {
     case _DetailAction.edit:

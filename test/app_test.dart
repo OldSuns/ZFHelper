@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
+import 'package:zfhelper/ui/features/grades/views/grades_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
@@ -212,7 +213,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(grades);
     await tester.pumpAndSettle();
-    expect(find.text('查看学期成绩'), findsOneWidget);
+    expect(find.byType(GradesPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

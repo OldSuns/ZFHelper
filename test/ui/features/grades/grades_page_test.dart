@@ -5,6 +5,7 @@ import 'package:zfhelper/data/storage/academic_account.dart';
 import 'package:zfhelper/data/storage/grade_store.dart';
 import 'package:zfhelper/ui/core/app_theme.dart';
 import 'package:zfhelper/ui/features/grades/view_models/grades_view_model.dart';
+import 'package:zfhelper/ui/features/grades/views/grade_record_table.dart';
 import 'package:zfhelper/ui/features/grades/views/grades_page.dart';
 
 import '../../../support/grade_fakes.dart';
@@ -73,6 +74,24 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('平时成绩'), findsOneWidget);
         expect(find.text('优秀'), findsOneWidget);
+        await _tap(tester, find.byTooltip('关闭成绩详情'));
+        tester.view.physicalSize = const Size(1366, 768);
+        await tester.pumpAndSettle();
+        expect(find.byType(GradeRecordTable), findsOneWidget);
+        expect(
+          find.descendant(of: details, matching: find.text('PRACTICE-2026')),
+          findsOneWidget,
+        );
+        tester.view.physicalSize = const Size(900, 640);
+        await tester.pumpAndSettle();
+        expect(find.byType(GradeRecordTable), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('grade-details-scroll')),
+          findsNothing,
+        );
+        tester.view.physicalSize = const Size(375, 812);
+        await tester.pumpAndSettle();
+        expect(find.text('临床实践'), findsOneWidget);
         expect(source.requests, 0);
         expect(tester.takeException(), isNull);
       },

@@ -111,103 +111,165 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
     appBar: AppBar(title: Text(widget.isNewSchool ? '添加学校' : '学校与网址')),
     body: SafeArea(
       top: false,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: ListenableBuilder(
-            listenable: _viewModel,
-            builder: (context, _) => ListView(
-              padding: const EdgeInsets.all(AppLayout.pagePadding),
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome_outlined,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '智能识别网址',
-                        style: Theme.of(context).textTheme.titleLarge,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= AppLayout.workspaceMinWidth;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: wide
+                    ? AppLayout.detailPaneWidth + AppLayout.paneGap + 560
+                    : 560,
+              ),
+              child: ListenableBuilder(
+                listenable: _viewModel,
+                builder: (context, _) => wide
+                    ? SingleChildScrollView(
+                        padding: const EdgeInsets.all(
+                          AppLayout.workspacePadding,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: AppLayout.detailPaneWidth,
+                              child: _information(context, showPreview: true),
+                            ),
+                            const SizedBox(width: AppLayout.paneGap),
+                            Expanded(
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(
+                                    AppLayout.workspacePadding,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: _fields(wide: true),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.all(AppLayout.pagePadding),
+                        children: [
+                          _information(context, showPreview: false),
+                          const SizedBox(height: 24),
+                          ..._fields(wide: false),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('粘贴登录、课表或成绩页的网址，自动提取网站地址和教务目录。'),
-                const SizedBox(height: 24),
-                TextField(
-                  key: const ValueKey('school-address'),
-                  controller: _address,
-                  enabled: !_saving,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.next,
-                  onChanged: _changeAddress,
-                  decoration: InputDecoration(
-                    labelText: '教务系统网址',
-                    hintText: 'jw.example.edu.cn/jwglxt/…',
-                    border: const OutlineInputBorder(),
-                    errorText: _viewModel.addressError,
-                    errorMaxLines: 4,
-                    suffixIcon: IconButton(
-                      tooltip: '粘贴网址',
-                      onPressed: _saving ? null : _pasteAddress,
-                      icon: const Icon(Icons.content_paste_rounded),
-                    ),
-                  ),
-                ),
-                if (_viewModel.recognizedAddress case final address?) ...[
-                  const SizedBox(height: 16),
-                  _AddressPreview(address: address),
-                ],
-                if (_viewModel.resetsCustomSettings) ...[
-                  const SizedBox(height: 16),
-                  const AuthNotice(
-                    message: '更换教务系统后将使用标准接口。如需自定义，可从登录页齿轮进入高级设置。',
-                    isError: false,
-                  ),
-                ],
-                const SizedBox(height: 24),
-                TextField(
-                  key: const ValueKey('school-name'),
-                  controller: _name,
-                  enabled: !_saving,
-                  textInputAction: TextInputAction.done,
-                  onChanged: _viewModel.changeName,
-                  onSubmitted: (_) => _save(),
-                  decoration: InputDecoration(
-                    labelText: '学校名称',
-                    errorText: _viewModel.nameError,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                if (_saveFailure case final message?) ...[
-                  AuthNotice(message: message),
-                  const SizedBox(height: 16),
-                ],
-                FilledButton(
-                  key: const ValueKey('school-save'),
-                  onPressed: _saving ? null : _save,
-                  child: Text(
-                    _saving
-                        ? '正在保存…'
-                        : widget.isNewSchool
-                        ? '使用这所学校'
-                        : '保存学校设置',
-                  ),
-                ),
-              ],
+              ),
             ),
+          );
+        },
+      ),
+    ),
+  );
+
+  Widget _information(BuildContext context, {required bool showPreview}) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '智能识别网址',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('粘贴登录、课表或成绩页的网址，自动提取网站地址和教务目录。'),
+          if (showPreview) ..._addressDetails(),
+        ],
+      );
+
+  List<Widget> _addressDetails() => [
+    if (_viewModel.recognizedAddress case final address?) ...[
+      const SizedBox(height: 16),
+      _AddressPreview(address: address),
+    ],
+    if (_viewModel.resetsCustomSettings) ...[
+      const SizedBox(height: 16),
+      const AuthNotice(
+        message: '更换教务系统后将使用标准接口。如需自定义，可从登录页齿轮进入高级设置。',
+        isError: false,
+      ),
+    ],
+  ];
+
+  List<Widget> _fields({required bool wide}) => [
+    TextField(
+      key: const ValueKey('school-address'),
+      controller: _address,
+      enabled: !_saving,
+      keyboardType: TextInputType.url,
+      autocorrect: false,
+      enableSuggestions: false,
+      textInputAction: TextInputAction.next,
+      onChanged: _changeAddress,
+      decoration: InputDecoration(
+        labelText: '教务系统网址',
+        hintText: 'jw.example.edu.cn/jwglxt/…',
+        border: const OutlineInputBorder(),
+        errorText: _viewModel.addressError,
+        errorMaxLines: 4,
+        suffixIcon: IconButton(
+          tooltip: '粘贴网址',
+          onPressed: _saving ? null : _pasteAddress,
+          icon: const Icon(Icons.content_paste_rounded),
+        ),
+      ),
+    ),
+    if (!wide) ..._addressDetails(),
+    const SizedBox(height: 24),
+    TextField(
+      key: const ValueKey('school-name'),
+      controller: _name,
+      enabled: !_saving,
+      textInputAction: TextInputAction.done,
+      onChanged: _viewModel.changeName,
+      onSubmitted: (_) => _save(),
+      decoration: InputDecoration(
+        labelText: '学校名称',
+        errorText: _viewModel.nameError,
+        border: const OutlineInputBorder(),
+      ),
+    ),
+    const SizedBox(height: 28),
+    if (_saveFailure case final message?) ...[
+      AuthNotice(message: message),
+      const SizedBox(height: 16),
+    ],
+    Align(
+      alignment: wide ? Alignment.centerLeft : Alignment.center,
+      child: SizedBox(
+        width: wide ? null : double.infinity,
+        child: FilledButton(
+          key: const ValueKey('school-save'),
+          onPressed: _saving ? null : _save,
+          child: Text(
+            _saving
+                ? '正在保存…'
+                : widget.isNewSchool
+                ? '使用这所学校'
+                : '保存学校设置',
           ),
         ),
       ),
     ),
-  );
+  ];
 }
 
 class _AddressPreview extends StatelessWidget {

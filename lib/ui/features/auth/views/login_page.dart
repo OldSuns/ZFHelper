@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../core/app_theme.dart';
 import '../view_models/auth_view_model.dart';
 import 'auth_notice.dart';
 import 'login_advanced_settings_page.dart';
@@ -216,39 +217,73 @@ class _LoginPageState extends State<LoginPage> {
             body: SafeArea(
               top: false,
               child: LayoutBuilder(
-                builder: (context, constraints) => SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: (constraints.maxHeight - 36).clamp(
-                        0,
-                        double.infinity,
+                builder: (context, constraints) {
+                  final wide =
+                      constraints.maxWidth >= AppLayout.workspaceMinWidth;
+                  final padding = wide
+                      ? const EdgeInsets.all(AppLayout.workspacePadding)
+                      : const EdgeInsets.fromLTRB(20, 12, 20, 24);
+                  return SingleChildScrollView(
+                    padding: padding,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: (constraints.maxHeight - padding.vertical)
+                            .clamp(0, double.infinity),
                       ),
-                    ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: ListenableBuilder(
-                          listenable: widget.viewModel,
-                          builder: (context, _) => Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _LoginBrand(),
-                              const SizedBox(height: 24),
-                              _loginCard(context),
-                            ],
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: wide
+                                ? AppLayout.detailPaneWidth +
+                                      AppLayout.paneGap +
+                                      520
+                                : 520,
+                          ),
+                          child: ListenableBuilder(
+                            listenable: widget.viewModel,
+                            builder: (context, _) => wide
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        width: AppLayout.detailPaneWidth,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            const _LoginBrand(alignLeft: true),
+                                            const SizedBox(height: 32),
+                                            _schoolSection(context),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppLayout.paneGap),
+                                      Expanded(
+                                        child: _loginCard(context, wide: true),
+                                      ),
+                                    ],
+                                  )
+                                : Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const _LoginBrand(),
+                                      const SizedBox(height: 24),
+                                      _loginCard(context, wide: false),
+                                    ],
+                                  ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ),
         );
 
-  Widget _loginCard(BuildContext context) {
+  Widget _loginCard(BuildContext context, {required bool wide}) {
     final theme = Theme.of(context);
     final state = widget.viewModel.state;
     final challenge = state.challenge;
@@ -302,20 +337,10 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text('选择学校', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
-                _SchoolSelector(
-                  profile: _profile!,
-                  onTap: _locked ? null : () => _editSchool(isNewSchool: true),
-                ),
-                if (_profile!.baseUri.scheme == 'http') ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'HTTP 连接（未使用 HTTPS 加密）',
-                    style: theme.textTheme.bodySmall,
-                  ),
+                if (!wide) ...[
+                  _schoolSection(context),
+                  const SizedBox(height: 20),
                 ],
-                const SizedBox(height: 20),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -366,37 +391,7 @@ class _LoginPageState extends State<LoginPage> {
                   const LinearProgressIndicator(semanticsLabel: '正在连接教务系统'),
                   const SizedBox(height: 12),
                 ],
-                FilledButton(
-                  key: const ValueKey('login-submit'),
-                  onPressed: state.isBusy || _webOpen ? null : _submit,
-                  child: Text(_submitLabel(state)),
-                ),
-                if (state.isBusy || challenge != null)
-                  TextButton(
-                    onPressed: () {
-                      _submission = null;
-                      widget.viewModel.cancelSignIn();
-                      setState(() => _formFailure = null);
-                    },
-                    child: const Text('取消并重新填写'),
-                  )
-                else ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    key: const ValueKey('web-login-open'),
-                    onPressed: _webOpen ? null : _openWebLogin,
-                    icon: const Icon(Icons.open_in_browser_rounded, size: 20),
-                    label: const Text('网页登录'),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '统一身份认证可使用网页登录',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                _loginActions(context, state, wide: wide),
               ],
             ),
           ),
@@ -404,6 +399,78 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+
+  Widget _loginActions(
+    BuildContext context,
+    AuthSnapshot state, {
+    required bool wide,
+  }) {
+    final canCancel = state.isBusy || state.challenge != null;
+    final actions = [
+      FilledButton(
+        key: const ValueKey('login-submit'),
+        onPressed: state.isBusy || _webOpen ? null : _submit,
+        child: Text(_submitLabel(state)),
+      ),
+      if (canCancel)
+        TextButton(
+          onPressed: () {
+            _submission = null;
+            widget.viewModel.cancelSignIn();
+            setState(() => _formFailure = null);
+          },
+          child: const Text('取消并重新填写'),
+        )
+      else
+        OutlinedButton.icon(
+          key: const ValueKey('web-login-open'),
+          onPressed: _webOpen ? null : _openWebLogin,
+          icon: const Icon(Icons.open_in_browser_rounded, size: 20),
+          label: const Text('网页登录'),
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (wide)
+          Wrap(spacing: 12, runSpacing: 8, children: actions)
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [actions.first, const SizedBox(height: 12), actions.last],
+          ),
+        if (!canCancel) ...[
+          const SizedBox(height: 10),
+          Text(
+            '统一身份认证可使用网页登录',
+            textAlign: wide ? TextAlign.start : TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _schoolSection(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text('选择学校', style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: 8),
+      _SchoolSelector(
+        profile: _profile!,
+        onTap: _locked ? null : () => _editSchool(isNewSchool: true),
+      ),
+      if (_profile!.baseUri.scheme == 'http') ...[
+        const SizedBox(height: 8),
+        Text(
+          'HTTP 连接（未使用 HTTPS 加密）',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ],
+  );
 
   List<Widget> _credentialFields() => [
     TextFormField(
@@ -520,12 +587,17 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class _LoginBrand extends StatelessWidget {
-  const _LoginBrand();
+  const _LoginBrand({this.alignLeft = false});
+
+  final bool alignLeft;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
+      crossAxisAlignment: alignLeft
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
       children: [
         ExcludeSemantics(
           child: Container(

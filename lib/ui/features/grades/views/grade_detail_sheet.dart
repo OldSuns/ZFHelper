@@ -1,36 +1,129 @@
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../core/adaptive_sheet.dart';
+
 Future<void> showGradeDetails(
   BuildContext context, {
-  required GradeRecord record,
-}) {
-  final size = MediaQuery.sizeOf(context);
-  Widget panel(BuildContext context) => ConstrainedBox(
-    constraints: BoxConstraints(maxWidth: 640, maxHeight: size.height * .85),
-    child: _GradeDetails(record: record),
-  );
-  return size.width >= 600
-      ? showDialog<void>(
-          context: context,
-          builder: (context) => Dialog(child: panel(context)),
-        )
-      : showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          showDragHandle: true,
-          builder: panel,
+  required Listenable listenable,
+  required GradeRecord? Function() resolveRecord,
+}) => showAdaptiveSheet<void>(
+  context: context,
+  maxWidth: 640,
+  builder: (context) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * .85,
+    ),
+    child: ListenableBuilder(
+      listenable: listenable,
+      builder: (context, _) {
+        final record = resolveRecord();
+        return GradeDetailsPane(
+          key: ValueKey(record?.id),
+          record: record,
+          emptyMessage: '这条成绩已不在当前账号或筛选结果中，请关闭后重新选择。',
+          onClose: () => Navigator.of(context).pop(),
         );
+      },
+    ),
+  ),
+);
+
+class GradeDetailsPane extends StatefulWidget {
+  const GradeDetailsPane({
+    required this.record,
+    this.onClose,
+    this.emptyMessage = '在左侧选择一条成绩，查看学校公布的分项与课程信息。',
+    super.key,
+  });
+
+  final GradeRecord? record;
+  final VoidCallback? onClose;
+  final String emptyMessage;
+
+  @override
+  State<GradeDetailsPane> createState() => _GradeDetailsPaneState();
 }
 
-class _GradeDetails extends StatelessWidget {
-  const _GradeDetails({required this.record});
+class _GradeDetailsPaneState extends State<GradeDetailsPane> {
+  final _scroll = ScrollController();
 
-  final GradeRecord record;
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final record = widget.record;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('成绩详情', style: theme.textTheme.titleMedium),
+                ),
+              ),
+              if (widget.onClose != null)
+                IconButton(
+                  tooltip: '关闭成绩详情',
+                  onPressed: widget.onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Flexible(
+          child: Scrollbar(
+            controller: _scroll,
+            child: SingleChildScrollView(
+              key: const ValueKey('grade-details-scroll'),
+              controller: _scroll,
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                20 + MediaQuery.paddingOf(context).bottom,
+              ),
+              child: record == null
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.article_outlined,
+                            size: 32,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.emptyMessage,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _content(record),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _content(GradeRecord record) {
     final theme = Theme.of(context);
     final fields = <(String, String?)>[
       ('学期', record.term?.label),
@@ -50,66 +143,37 @@ class _GradeDetails extends StatelessWidget {
       if (record.passed != null) ('学校通过状态', record.passed! ? '通过' : '未通过'),
     ].where((field) => field.$2 != null && field.$2!.isNotEmpty);
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
-          child: Row(
-            children: [
-              Expanded(child: Text('成绩详情', style: theme.textTheme.titleMedium)),
-              IconButton(
-                tooltip: '关闭成绩详情',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
+        Semantics(
+          header: true,
+          child: SelectableText(
+            record.name,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        Flexible(
-          child: SingleChildScrollView(
-            key: const ValueKey('grade-details-scroll'),
-            padding: EdgeInsets.fromLTRB(
-              20,
-              0,
-              20,
-              20 + MediaQuery.paddingOf(context).bottom,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Semantics(
-                  header: true,
-                  child: SelectableText(
-                    record.name,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final field in fields)
-                  _DetailField(label: field.$1, value: field.$2!),
-                if (record.term == null)
-                  const _DetailField(label: '学期', value: '学校未标注'),
-                if (record.details.isNotEmpty) ...[
-                  const Divider(height: 24),
-                  Semantics(
-                    header: true,
-                    child: Text('分项与附加信息', style: theme.textTheme.titleSmall),
-                  ),
-                  const SizedBox(height: 8),
-                  for (final detail in record.details.entries)
-                    _DetailField(label: detail.key, value: detail.value),
-                ],
-                const SizedBox(height: 12),
-                Text(
-                  '以上内容来自学校本次公布的成绩记录。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
+        const SizedBox(height: 12),
+        for (final field in fields)
+          _DetailField(label: field.$1, value: field.$2!),
+        if (record.term == null)
+          const _DetailField(label: '学期', value: '学校未标注'),
+        if (record.details.isNotEmpty) ...[
+          const Divider(height: 24),
+          Semantics(
+            header: true,
+            child: Text('分项与附加信息', style: theme.textTheme.titleSmall),
+          ),
+          const SizedBox(height: 8),
+          for (final detail in record.details.entries)
+            _DetailField(label: detail.key, value: detail.value),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          '以上内容来自学校本次公布的成绩记录。',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ],
