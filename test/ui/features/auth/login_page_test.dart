@@ -59,7 +59,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('账号与设置'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '账号与设置'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('登录 / 更换学校'),
@@ -158,7 +158,7 @@ void main() {
     expect(vault.saved?.credentials, isNull);
     expect(find.byType(AccountSettingsPage), findsOneWidget);
     expect(find.text('另一所大学'), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.widgetWithText(NavigationDestination, '课表'));
     await tester.pumpAndSettle();
     expect(find.text('已连接教务账号'), findsOneWidget);
     expect(find.text('另一所大学'), findsOneWidget);

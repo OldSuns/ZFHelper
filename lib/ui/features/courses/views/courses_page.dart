@@ -7,6 +7,7 @@ import '../../../core/app_theme.dart';
 import '../view_models/courses_view_model.dart';
 import 'course_details_sheet.dart';
 import 'course_list_tile.dart';
+import 'course_schedule_label.dart';
 import 'selection_operation_card.dart';
 
 class CoursesPage extends StatefulWidget {
@@ -25,7 +26,7 @@ class CoursesPage extends StatefulWidget {
   State<CoursesPage> createState() => _CoursesPageState();
 }
 
-enum _CourseAction { accounts, information, clearCache, clearHistory, settings }
+enum _CourseAction { accounts, information, clearCache, clearHistory }
 
 final class _CourseDetailRequest {
   _CourseDetailRequest({
@@ -153,7 +154,7 @@ class _CoursesPageState extends State<CoursesPage> {
     final scope = model.account?.account.scope;
     final refreshed = await model.refresh();
     if (!mounted || !refreshed || model.account?.account.scope != scope) return;
-    _message(model.rounds.isEmpty ? '学校当前没有开放的选课轮次' : '课程与已选记录已更新并保存在本机');
+    _message(model.rounds.isEmpty ? '学校当前没有开放的选课轮次' : '课程与已选记录已更新');
   }
 
   Future<void> _chooseAccount() async {
@@ -429,8 +430,6 @@ class _CoursesPageState extends State<CoursesPage> {
         await _clearCache();
       case _CourseAction.clearHistory:
         await _clearHistory();
-      case _CourseAction.settings:
-        widget.onOpenSettings();
     }
   }
 
@@ -782,8 +781,7 @@ class _CoursesPageState extends State<CoursesPage> {
         '教学班编号：${course.sectionId}',
         '学期：${preview.termLabel}',
         '教师：${course.teacher ?? '学校未提供'}',
-        '时间：${course.time ?? '学校未提供'}',
-        '地点：${course.location ?? '学校未提供'}',
+        courseScheduleLabel(course.schedule),
         '来自最近一次读取的学校已选记录。',
       ].join('\n\n'),
     );
@@ -852,10 +850,6 @@ class _CoursesPageState extends State<CoursesPage> {
                 value: _CourseAction.clearHistory,
                 enabled: model.data.operations.isNotEmpty,
                 child: const Text('清除已结束的操作记录'),
-              ),
-              const PopupMenuItem(
-                value: _CourseAction.settings,
-                child: Text('学校与登录设置'),
               ),
             ],
           ),

@@ -112,8 +112,8 @@ final class ZhengfangSelectionParser {
         name: _required(row, const ['kcmc', 'kc_mc'], '课程名称'),
         sectionId: _text(row, const ['jxb_id']),
         teacher: _teacher(row),
-        time: _text(row, const ['sksj', 'sksjmc']),
-        location: _text(row, const ['jxdd', 'skdd']),
+        time: _text(row, const ['sksj', 'sksjmc'], preserveLines: true),
+        location: _text(row, const ['jxdd', 'skdd'], preserveLines: true),
         credit: _text(row, const ['xf', 'jxbxf']),
         capacity: _number(row, const ['jxbrl', 'jxbrs', 'capacity']),
         selected: _number(row, const ['yxzrs', 'yxrs', 'selected']),
@@ -146,8 +146,8 @@ final class ZhengfangSelectionParser {
         sectionId: sectionId,
         name: _text(row, const ['jxbmc']) ?? course.name,
         teacher: _teacher(row) ?? course.teacher,
-        time: _text(row, const ['sksj', 'sksjmc']) ?? course.time,
-        location: _text(row, const ['jxdd', 'skdd']) ?? course.location,
+        time: _text(row, const ['sksj', 'sksjmc'], preserveLines: true),
+        location: _text(row, const ['jxdd', 'skdd'], preserveLines: true),
         capacity: _number(row, const ['jxbrl', 'jxbrs', 'capacity']),
         selected: _number(row, const ['yxzrs', 'yxrs', 'selected']),
         isSelected: _selected(row),
@@ -175,8 +175,8 @@ final class ZhengfangSelectionParser {
         name: _required(row, const ['kcmc', 'kc_mc'], '已选课程名称'),
         term: recordTerm ?? term,
         teacher: _teacher(row),
-        time: _text(row, const ['sksj', 'sksjmc']),
-        location: _text(row, const ['jxdd', 'skdd']),
+        time: _text(row, const ['sksj', 'sksjmc'], preserveLines: true),
+        location: _text(row, const ['jxdd', 'skdd'], preserveLines: true),
       );
     }),
   );
@@ -446,25 +446,35 @@ Map<String, String> _scalarFields(Map<String, Object?> row) => {
       entry.key: entry.value.toString(),
 };
 
-String? _text(Map<String, Object?> row, List<String> keys) {
+String? _text(
+  Map<String, Object?> row,
+  List<String> keys, {
+  bool preserveLines = false,
+}) {
   for (final key in keys) {
     final value = row[key];
     if (value == null) continue;
     if (value is! String && value is! num && value is! bool) {
       _protocol('学校选课字段 $key 的格式无法识别');
     }
-    final text = _display(value.toString());
-    if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+    final text = _display(value.toString(), preserveLines: preserveLines);
+    if (text.trim().isNotEmpty && text.trim().toLowerCase() != 'null') {
+      return text;
+    }
   }
   return null;
 }
 
-String _display(String value) => html
-    .parseFragment(
-      value.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
-    )
-    .text!
-    .trim();
+String _display(String value, {bool preserveLines = false}) {
+  final text = html
+      .parseFragment(
+        value.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n'),
+      )
+      .text!;
+  return preserveLines
+      ? text.split(RegExp(r'\r\n?|\n')).map((line) => line.trim()).join('\n')
+      : text.trim();
+}
 
 String _required(Map<String, Object?> row, List<String> keys, String label) =>
     _text(row, keys) ??

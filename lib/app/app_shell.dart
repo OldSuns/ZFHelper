@@ -20,7 +20,8 @@ import 'app_configuration.dart';
 enum AppDestination {
   timetable('课表', Icons.calendar_month_outlined, Icons.calendar_month),
   courses('选课', Icons.search_rounded, Icons.search_rounded),
-  grades('成绩', Icons.assessment_outlined, Icons.assessment_rounded);
+  grades('成绩', Icons.assessment_outlined, Icons.assessment_rounded),
+  settings('账号与设置', Icons.manage_accounts_outlined, Icons.manage_accounts);
 
   const AppDestination(this.label, this.icon, this.selectedIcon);
 
@@ -134,13 +135,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() => _destination = AppDestination.values[index]);
   }
 
-  void _openSettings() {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (context) => AccountSettingsPage(viewModel: _auth),
-      ),
-    );
-  }
+  void _openSettings() => _selectDestination(AppDestination.settings.index);
 
   void _configureSchool(SchoolConnection profile) {
     Navigator.of(context).push<bool>(
@@ -168,7 +163,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   extended: extended,
                   destination: _destination,
                   onSelect: _selectDestination,
-                  onOpenSettings: _openSettings,
                 ),
                 const VerticalDivider(width: 1),
               ],
@@ -205,7 +199,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   );
 
   Widget _buildPage() {
-    if (_auth.state.profile == null &&
+    if (_destination != AppDestination.settings &&
+        _auth.state.profile == null &&
         !_auth.state.isBusy &&
         _auth.state.storageFailure == null &&
         !_timetable.data.loading &&
@@ -240,6 +235,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         schoolName: _auth.state.profile?.name ?? '尚未设置学校',
         onOpenSettings: _openSettings,
       ),
+      AppDestination.settings => AccountSettingsPage(viewModel: _auth),
     };
   }
 }
@@ -249,13 +245,13 @@ class _DesktopNavigation extends StatelessWidget {
     required this.extended,
     required this.destination,
     required this.onSelect,
-    required this.onOpenSettings,
   });
+
+  static const _compactWidth = 88.0;
 
   final bool extended;
   final AppDestination destination;
   final ValueChanged<int> onSelect;
-  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -265,7 +261,7 @@ class _DesktopNavigation extends StatelessWidget {
       child: SafeArea(
         child: NavigationRail(
           extended: extended,
-          minWidth: 88,
+          minWidth: _compactWidth,
           minExtendedWidth: 184,
           scrollable: true,
           selectedIndex: destination.index,
@@ -278,35 +274,33 @@ class _DesktopNavigation extends StatelessWidget {
               horizontal: extended ? 20 : 8,
               vertical: 24,
             ),
-            child: Text(
-              'ZFHelper',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w700,
+            child: SizedBox(
+              width: extended ? null : _compactWidth - AppLayout.pagePadding,
+              child: Text(
+                'ZFHelper',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-          trailingAtBottom: true,
-          trailing: Padding(
-            padding: const EdgeInsets.only(bottom: 16, top: 16),
-            child: extended
-                ? TextButton.icon(
-                    onPressed: onOpenSettings,
-                    icon: const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('账号与设置'),
-                  )
-                : IconButton(
-                    tooltip: '账号与设置',
-                    onPressed: onOpenSettings,
-                    icon: const Icon(Icons.manage_accounts_outlined),
-                  ),
           ),
           destinations: [
             for (final item in AppDestination.values)
               NavigationRailDestination(
                 icon: Icon(item.icon),
                 selectedIcon: Icon(item.selectedIcon),
-                label: Text(item.label),
+                label: SizedBox(
+                  width: extended
+                      ? null
+                      : _compactWidth - AppLayout.pagePadding,
+                  child: Text(
+                    item.label,
+                    textAlign: extended ? TextAlign.start : TextAlign.center,
+                  ),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 6),
               ),
           ],

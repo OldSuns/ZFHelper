@@ -397,7 +397,6 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget _unimported() => FeaturePage(
     title: '课表',
     schoolName: model.account?.account.schoolName ?? widget.schoolName,
-    onOpenSettings: widget.onOpenSettings,
     children: [
       if (model.data.loading || model.data.refreshing)
         const LinearProgressIndicator(),
@@ -598,11 +597,6 @@ class _TimetablePageState extends State<TimetablePage> {
                             child: Text('导入信息'),
                           ),
                         ],
-                      ),
-                      IconButton(
-                        tooltip: '账号与设置',
-                        onPressed: widget.onOpenSettings,
-                        icon: const Icon(Icons.person_outline),
                       ),
                     ],
                   ),

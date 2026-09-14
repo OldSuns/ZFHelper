@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
-import 'package:zfhelper/ui/features/grades/views/grades_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 
@@ -107,7 +106,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await tester.tap(find.byTooltip('账号与设置'));
+    await tester.tap(navigationLabel('账号与设置'));
     await tester.pumpAndSettle();
 
     expect(find.byType(AccountSettingsPage), findsOneWidget);
@@ -118,19 +117,23 @@ void main() {
       isNotNull,
     );
 
-    await tester.tap(find.byType(BackButton));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.byType(TimetablePage), findsOneWidget);
   });
 
   testWidgets(
-    'three destinations include courses and Android back returns home',
+    'four destinations include courses and Android back returns home',
     (tester) async {
       await pumpApp(tester);
       expect(navigationLabel('任务'), findsNothing);
       expect(
-        tester.widget<NavigationBar>(find.byType(NavigationBar)).destinations,
-        hasLength(3),
+        tester
+            .widget<NavigationBar>(find.byType(NavigationBar))
+            .destinations
+            .cast<NavigationDestination>()
+            .map((destination) => destination.label),
+        ['课表', '选课', '成绩', '账号与设置'],
       );
       await tester.tap(navigationLabel('选课'));
       await tester.pumpAndSettle();
@@ -205,15 +208,15 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, size: const Size(900, 360), textScale: 2);
-    final grades = find.descendant(
+    final settings = find.descendant(
       of: find.byType(NavigationRail),
-      matching: find.text('成绩'),
+      matching: find.text('账号与设置'),
     );
-    await tester.ensureVisible(grades);
+    await tester.ensureVisible(settings);
     await tester.pumpAndSettle();
-    await tester.tap(grades);
+    await tester.tap(settings);
     await tester.pumpAndSettle();
-    expect(find.byType(GradesPage), findsOneWidget);
+    expect(find.byType(AccountSettingsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -255,12 +258,12 @@ void main() {
   ) async {
     var now = DateTime(2026, 9, 13, 23, 59);
     await pumpApp(tester, clock: () => now);
-    await tester.tap(find.byTooltip('账号与设置'));
+    await tester.tap(navigationLabel('账号与设置'));
     await tester.pumpAndSettle();
 
     now = DateTime(2026, 9, 14);
     await tester.pump(const Duration(minutes: 1));
-    await tester.tap(find.byType(BackButton));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
     expect(find.text('9月14日 — 9月20日'), findsOneWidget);

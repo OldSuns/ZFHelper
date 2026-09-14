@@ -613,11 +613,6 @@ class _GradesPageState extends State<GradesPage> {
               ),
             ],
           ),
-          IconButton(
-            tooltip: '账号与设置',
-            onPressed: widget.onOpenSettings,
-            icon: const Icon(Icons.person_outline_rounded),
-          ),
         ],
       ),
     );

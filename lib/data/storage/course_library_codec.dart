@@ -187,11 +187,21 @@ Map<String, Object?> _writeOffering(CourseOffering course) => {
   'credit': course.credit,
   'capacity': course.capacity,
   'selected': course.selected,
+  'sectionCount': course.sectionCount,
+  'sectionAvailability': course.sectionAvailability,
+  'availabilityFetchedAt': _writeDate(course.availabilityFetchedAt),
   'isSelected': course.isSelected,
 };
 
 CourseOffering _readOffering(Object? value) {
   final data = _map(value);
+  final sectionCount = _nullableCount(data['sectionCount']);
+  final available = _nullableCount(data['sectionAvailability']);
+  final fetchedAt = _nullableDate(data['availabilityFetchedAt']);
+  if ((sectionCount != null && fetchedAt == null) ||
+      (sectionCount == null && available != null)) {
+    throw const FormatException('Invalid course availability summary.');
+  }
   return CourseOffering(
     roundKey: _string(data['roundKey']),
     courseId: _string(data['courseId']),
@@ -203,6 +213,9 @@ CourseOffering _readOffering(Object? value) {
     credit: _nullableText(data['credit']),
     capacity: _nullableCount(data['capacity']),
     selected: _nullableCount(data['selected']),
+    sectionCount: sectionCount,
+    sectionAvailability: available,
+    availabilityFetchedAt: fetchedAt,
     isSelected: data['isSelected'] == null
         ? null
         : _boolean(data['isSelected']),

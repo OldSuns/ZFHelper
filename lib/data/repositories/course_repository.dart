@@ -48,6 +48,8 @@ final class CourseRepositoryState {
 
 /// Owns cached course data and the single executor shared by every page/account.
 final class CourseRepository {
+  static const _availabilityConcurrency = 3;
+
   CourseRepository({
     required this._store,
     required CourseSource source,
@@ -200,8 +202,15 @@ final class CourseRepository {
       round ??= context.rounds.firstOrNull;
       CourseRoundCache? catalog;
       if (round != null) {
-        final courses = await session.readCourses(context, round);
+        final listedCourses = await session.readCourses(context, round);
         if (!_validRead(generation, scope, session)) return false;
+        final courses = await _readAvailability(
+          listedCourses,
+          session,
+          context,
+          () => _validRead(generation, scope, session),
+        );
+        if (courses == null) return false;
         final selected = await session.readSelected(context, round: round);
         if (!_validRead(generation, scope, session)) return false;
         final now = _clock();
@@ -216,6 +225,24 @@ final class CourseRepository {
       await _write(() async {
         if (!_validRead(generation, scope, session)) return;
         final current = _account(scope)!;
+        final refreshed = catalog;
+        if (refreshed != null) {
+          final previous = {
+            for (final cache in current.catalogs)
+              if (cache.roundKey == refreshed.roundKey)
+                for (final course in cache.courses) course.key: course,
+          };
+          catalog = CourseRoundCache(
+            roundKey: refreshed.roundKey,
+            courses: [
+              for (final course in refreshed.courses)
+                _latestAvailability(course, previous[course.key]),
+            ],
+            selectedCourses: refreshed.selectedCourses,
+            fetchedAt: refreshed.fetchedAt,
+            selectedFetchedAt: refreshed.selectedFetchedAt,
+          );
+        }
         final roundKeys = context.rounds.map((item) => item.key).toSet();
         await _save(
           StoredCourseAccount(
@@ -244,6 +271,93 @@ final class CourseRepository {
       if (generation == _readGeneration) _refreshing = false;
       _emit();
     }
+  }
+
+  Future<List<CourseOffering>?> _readAvailability(
+    List<CourseOffering> courses,
+    SelectionAccessSession session,
+    SelectionContext context,
+    bool Function() current,
+  ) async {
+    // PartDisplay often omits counts. One detail request returns every class
+    // of a course; keep this enrichment out of the selection polling path.
+    final listedAt = _clock();
+    final missing = <(String, String), CourseOffering>{};
+    for (final course in courses) {
+      if (course.available == null) {
+        missing.putIfAbsent((course.roundKey, course.courseId), () => course);
+      }
+    }
+    final pending = missing.values.toList();
+    final summaries =
+        <
+          (String, String),
+          ({List<CourseSection> sections, DateTime fetchedAt})
+        >{};
+    for (
+      var start = 0;
+      start < pending.length;
+      start += _availabilityConcurrency
+    ) {
+      if (!current()) return null;
+      final batch = await Future.wait(
+        pending
+            .skip(start)
+            .take(_availabilityConcurrency)
+            .map(
+              (course) async => (
+                key: (course.roundKey, course.courseId),
+                sections: await session.readSections(context, course),
+                fetchedAt: _clock(),
+              ),
+            ),
+      );
+      if (!current()) return null;
+      for (final result in batch) {
+        summaries[result.key] = (
+          sections: result.sections,
+          fetchedAt: result.fetchedAt,
+        );
+      }
+    }
+    return [
+      for (final course in courses)
+        if (summaries[(course.roundKey, course.courseId)] case final summary?
+            when course.available == null)
+          course.withSectionAvailability(
+            summary.sections,
+            fetchedAt: summary.fetchedAt,
+          )
+        else
+          course.withAvailability(
+            capacity: course.capacity,
+            selected: course.selected,
+            sectionCount: course.sectionCount,
+            sectionAvailability: course.sectionAvailability,
+            fetchedAt: listedAt,
+          ),
+    ];
+  }
+
+  CourseOffering _latestAvailability(
+    CourseOffering course,
+    CourseOffering? previous,
+  ) {
+    final previousAt = previous?.availabilityFetchedAt;
+    final fetchedAt = course.availabilityFetchedAt;
+    if (previous == null ||
+        previousAt == null ||
+        fetchedAt == null ||
+        !previousAt.isAfter(fetchedAt)) {
+      return course;
+    }
+    return course.withAvailability(
+      capacity: previous.capacity,
+      selected: previous.selected,
+      sectionCount: previous.sectionCount,
+      sectionAvailability: previous.sectionAvailability,
+      fetchedAt: previousAt,
+    );
   }
 
   Future<bool> selectRound(String key) async {
@@ -327,13 +441,16 @@ final class CourseRepository {
       final course = candidates.single;
       final sections = await session.readSections(context, course);
       if (!current()) return null;
-      return CourseDetails(
+      final fetchedAt = _clock();
+      final details = CourseDetails(
         account: account,
         round: round,
-        course: course,
+        course: course.withSectionAvailability(sections, fetchedAt: fetchedAt),
         sections: sections,
-        fetchedAt: _clock(),
+        fetchedAt: fetchedAt,
       );
+      await _storeAvailability(details, current);
+      return current() ? details : null;
     } on Exception catch (error) {
       final message = _errorMessage(error);
       if (message == null) rethrow;
@@ -343,6 +460,51 @@ final class CourseRepository {
       _emit();
     }
   }
+
+  Future<void> _storeAvailability(
+    CourseDetails details,
+    bool Function() current,
+  ) => _write(() async {
+    if (!current()) return;
+    final stored = _account(details.account.scope);
+    if (stored == null ||
+        !stored.catalogs.any((cache) => cache.roundKey == details.round.key)) {
+      return;
+    }
+    await _save(
+      StoredCourseAccount(
+        account: stored.account,
+        rounds: stored.rounds,
+        selectedRoundKey: stored.selectedRoundKey,
+        roundsFetchedAt: stored.roundsFetchedAt,
+        catalogs: [
+          for (final cache in stored.catalogs)
+            if (cache.roundKey != details.round.key)
+              cache
+            else
+              CourseRoundCache(
+                roundKey: cache.roundKey,
+                courses: [
+                  for (final course in cache.courses)
+                    if (course.courseId == details.course.courseId)
+                      _latestAvailability(
+                        course.withSectionAvailability(
+                          details.sections,
+                          fetchedAt: details.fetchedAt,
+                        ),
+                        course,
+                      )
+                    else
+                      course,
+                ],
+                selectedCourses: cache.selectedCourses,
+                fetchedAt: cache.fetchedAt,
+                selectedFetchedAt: cache.selectedFetchedAt,
+              ),
+        ],
+      ),
+    );
+  });
 
   Future<bool> start(
     SelectionTarget target, {

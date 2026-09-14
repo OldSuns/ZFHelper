@@ -359,33 +359,10 @@ class _CourseDetailsSheetState extends State<CourseDetailsSheet> {
                           itemCount: details.sections.length,
                           itemBuilder: (context, index) {
                             final section = details.sections[index];
-                            return RadioListTile<String>(
-                              value: section.key,
+                            return CourseSectionTile(
+                              section: section,
                               enabled: !_starting && section.isSelected != true,
                               selected: section.key == _selectedKey,
-                              title: Text(section.name),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 4,
-                                  bottom: 4,
-                                ),
-                                child: Text(
-                                  [
-                                    section.teacher ?? '教师未提供',
-                                    section.time ?? '上课时间未提供',
-                                    section.location ?? '地点未提供',
-                                    section.isSelected == true
-                                        ? '学校已标记选中'
-                                        : courseCapacityLabel(
-                                            section.capacity,
-                                            section.selected,
-                                          ),
-                                  ].join('\n'),
-                                ),
-                              ),
                             );
                           },
                           separatorBuilder: (context, _) =>

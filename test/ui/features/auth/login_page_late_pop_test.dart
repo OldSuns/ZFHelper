@@ -48,7 +48,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('账号与设置'));
+    await tester.tap(find.widgetWithText(NavigationDestination, '账号与设置'));
     await tester.pumpAndSettle();
     final openLogin = find.text('登录 / 更换学校');
     await tester.scrollUntilVisible(
@@ -88,7 +88,7 @@ void main() {
 
     expect(find.byType(LoginPage), findsNothing);
     expect(find.byType(AccountSettingsPage), findsOneWidget);
-    expect(find.text('账号与设置'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, '账号与设置'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

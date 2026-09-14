@@ -6,14 +6,17 @@ import 'package:zfhelper/data/storage/academic_account.dart';
 import 'package:zfhelper/data/storage/course_store.dart';
 import 'package:zfhelper/platform/selection_runtime.dart';
 
-CourseRepository testCourseRepository() {
+CourseRepository testCourseRepository({
+  CourseSource? source,
+  DateTime Function()? clock,
+}) {
   final store = _Store();
   return CourseRepository(
     store: store,
     operationStore: store,
-    source: _Source(),
+    source: source ?? _Source(),
     runtime: _Runtime(),
-    clock: DateTime.now,
+    clock: clock ?? DateTime.now,
   );
 }
 
