@@ -6,14 +6,15 @@
     android:background="@drawable/schedule_widget_background"
     android:clipToOutline="true"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="@dimen/schedule_widget_padding">
 
     <LinearLayout
         android:id="@+id/schedule_widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -26,19 +27,22 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
-                android:maxLines="2"
+                android:includeFontPadding="false"
+                android:maxLines="1"
                 android:text="@string/schedule_widget_name"
-                android:textSize="13sp"
+                android:textSize="@dimen/schedule_widget_body_text"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/schedule_widget_account"
+                android:id="@+id/schedule_widget_context"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:layout_marginTop="2dp"
                 android:maxLines="1"
-                android:text="ZFHelper"
-                android:textSize="11sp" />
+                android:text="@string/schedule_widget_today"
+                android:textSize="@dimen/schedule_widget_caption_text" />
         </LinearLayout>
 
         <ImageButton
@@ -54,82 +58,62 @@
     <LinearLayout
         android:id="@+id/schedule_widget_focus"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingBottom="6dp">
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/schedule_widget_focus_label"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
+            android:includeFontPadding="false"
             android:maxLines="1"
             android:text="@string/schedule_widget_focus"
-            android:textSize="11sp" />
+            android:textSize="@dimen/schedule_widget_caption_text" />
 
         <TextView
             android:id="@+id/schedule_widget_focus_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
+            android:includeFontPadding="false"
             android:maxLines="2"
             android:text="@string/schedule_widget_start"
-            android:textSize="16sp"
+            android:textSize="@dimen/schedule_widget_title_text"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/schedule_widget_focus_meta"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
-            android:maxLines="2"
-            android:textSize="11sp" />
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textSize="@dimen/schedule_widget_body_text" />
 
         <TextView
             android:id="@+id/schedule_widget_focus_location"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textSize="11sp"
+            android:ellipsize="middle"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textSize="@dimen/schedule_widget_body_text"
             android:visibility="gone" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/schedule_widget_day_summary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:paddingBottom="5dp"
-        android:paddingTop="5dp"
-        android:text="@string/schedule_widget_today"
-        android:textSize="11sp" />
-
-    <FrameLayout
-        android:id="@+id/schedule_widget_list_container"
+    <ListView
+        android:id="@+id/schedule_widget_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <ListView
-            android:id="@+id/schedule_widget_list"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:cacheColorHint="@android:color/transparent"
-            android:divider="@null"
-            android:scrollbars="vertical" />
-
-        <TextView
-            android:id="@+id/schedule_widget_empty"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:padding="12dp"
-            android:textSize="13sp"
-            android:visibility="gone" />
-    </FrameLayout>
+        android:layout_weight="1"
+        android:cacheColorHint="@android:color/transparent"
+        android:divider="@null"
+        android:scrollbars="vertical"
+        android:visibility="gone" />
 </LinearLayout>

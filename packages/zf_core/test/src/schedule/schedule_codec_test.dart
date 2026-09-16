@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:test/test.dart';
 import 'package:zf_core/src/schedule/academic_term.dart';
+import 'package:zf_core/src/schedule/period_time_plan.dart';
 import 'package:zf_core/src/schedule/schedule_codec.dart';
 import 'package:zf_core/src/schedule/schedule_entry.dart';
 import 'package:zf_core/src/schedule/schedule_settings.dart';
@@ -111,6 +112,13 @@ void main() {
       periodTimes: [
         PeriodTime(number: 5, startMinutes: 13 * 60, endMinutes: 13 * 60 + 45),
       ],
+      periodSections: [
+        PeriodTimeSection(
+          session: PeriodSession.afternoon,
+          firstPeriod: 5,
+          lastPeriod: 5,
+        ),
+      ],
       localEntries: [
         lesson(id: 'local-course', origin: ScheduleEntryOrigin.local),
       ],
@@ -127,6 +135,11 @@ void main() {
     expect(effective.calendar.source, TeachingCalendarSource.user);
     expect(effective.calendar.positionOn(DateTime(2026, 9, 7)).week, 2);
     expect(effective.periodTimes.single.startMinutes, 780);
+    expect(restored.periodSections, settings.periodSections);
+    expect(
+      restored.reconcileImport(school, snapshot()).periodSections,
+      restored.periodSections,
+    );
     expect(school.entries.first.id, 'school-1');
     expect(school.calendar.positionOn(DateTime(2026, 9, 7)).week, 1);
     expect(effective.fetchedAt, school.fetchedAt);
@@ -191,6 +204,53 @@ void main() {
       () => ScheduleSettingsCodec.decode(jsonEncode(data)),
       throwsA(isA<FormatException>()),
     );
+  });
+
+  test('period section metadata is optional in old records and strict when present', () {
+    final data = jsonDecode(
+      ScheduleSettingsCodec.encode(
+        ScheduleSettings(
+          periodTimes: [
+            PeriodTime(number: 5, startMinutes: 780, endMinutes: 825),
+          ],
+        ),
+      ),
+    ) as Map<String, Object?>;
+    data.remove('periodSections');
+    expect(
+      ScheduleSettingsCodec.decode(jsonEncode(data)).periodSections,
+      isEmpty,
+    );
+    const section = {'session': 'afternoon', 'firstPeriod': 5, 'lastPeriod': 5};
+    for (final invalid in <Object?>[
+      null,
+      {},
+      [
+        {...section, 'session': 'night'},
+      ],
+      [
+        {...section, 'firstPeriod': 0},
+      ],
+      [
+        {...section, 'firstPeriod': '5'},
+      ],
+      [
+        {...section, 'lastPeriod': 4},
+      ],
+      [
+        {...section, 'campus': 7},
+      ],
+      [
+        {...section, 'firstPeriod': 6, 'lastPeriod': 6},
+      ],
+    ]) {
+      expect(
+        () => ScheduleSettingsCodec.decode(
+          jsonEncode({...data, 'periodSections': invalid}),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    }
   });
 
   test(

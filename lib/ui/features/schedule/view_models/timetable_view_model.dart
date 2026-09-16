@@ -248,16 +248,83 @@ final class TimetableViewModel extends ChangeNotifier {
   Future<bool> saveSettings(
     ScheduleSettings value, {
     required ScheduleTarget target,
+    required ScheduleSettings original,
+    required ScheduleSnapshot originalImport,
   }) async {
-    final previous = schedule?.calendar;
+    String settingsSignature(ScheduleSettings settings) {
+      final plan = PeriodTimePlan(
+        periods: settings.periodTimes,
+        sections: settings.periodSections,
+      );
+      return ScheduleSettingsCodec.encode(
+        settings.copyWith(
+          periodTimes: plan.periods,
+          periodSections: plan.sections,
+          localEntries: const [],
+          hiddenEntryIds: const [],
+          preferAgenda: false,
+        ),
+      );
+    }
+
+    String timesSignature(List<PeriodTime> times) =>
+        ScheduleSettingsCodec.encode(
+          ScheduleSettings(
+            periodTimes: PeriodTimePlan(periods: times).periods,
+            useCustomPeriodTimes: true,
+          ),
+        );
+    final originalSignature = settingsSignature(original);
+    final inheritsCalendar =
+        original.calendarOverride == null && value.calendarOverride != null;
+    final inheritsTimes =
+        !original.useCustomPeriodTimes && value.useCustomPeriodTimes;
+    TeachingCalendar? previous;
     final saved = await _repository.updateSettings(
       target: target,
-      update: (current, _) => current.copyWith(
-        calendarOverride: value.calendarOverride,
-        clearCalendarOverride: value.calendarOverride == null,
-        periodTimes: value.periodTimes,
-        useCustomPeriodTimes: value.useCustomPeriodTimes,
-      ),
+      update: (current, imported) {
+        if (value.useCustomPeriodTimes) {
+          try {
+            PeriodTimePlan(
+              periods: value.periodTimes,
+              sections: value.periodSections,
+            ).validate();
+          } on PeriodTimeException catch (error) {
+            throw ScheduleStorageException(
+              operation: '保存课节作息',
+              message: error.message,
+            );
+          }
+        }
+        if (settingsSignature(current) != originalSignature ||
+            (inheritsCalendar &&
+                (
+                      originalImport.calendar.firstWeekMonday,
+                      originalImport.calendar.totalWeeks,
+                    ) !=
+                    (
+                      imported.calendar.firstWeekMonday,
+                      imported.calendar.totalWeeks,
+                    )) ||
+            (inheritsTimes &&
+                timesSignature(originalImport.periodTimes) !=
+                    timesSignature(imported.periodTimes))) {
+          throw const ScheduleStorageException(
+            operation: '保存校历与作息',
+            message: '校历或作息已更新，本次未覆盖新设置，请重新打开后修改',
+          );
+        }
+        previous = current.applyTo(imported).calendar;
+        return current.copyWith(
+          calendarOverride: value.calendarOverride,
+          clearCalendarOverride: value.calendarOverride == null,
+          periodTimes: value.periodTimes,
+          periodSections: value.useCustomPeriodTimes
+              ? value.periodSections
+              : const [],
+          useCustomPeriodTimes: value.useCustomPeriodTimes,
+        );
+      },
     );
     if (saved &&
         editTarget == target &&

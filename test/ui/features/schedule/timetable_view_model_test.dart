@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zf_core/zf_core.dart';
+import 'package:zfhelper/data/storage/schedule_store.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
 
 import '../../../support/schedule_fakes.dart';
@@ -8,15 +9,62 @@ void main() {
   group('TimetableViewModel', () {
     late DateTime now;
     late TimetableViewModel viewModel;
+    late TestScheduleStore store;
 
     setUp(() {
       now = DateTime(2026, 9, 12, 13);
-      final repository = testScheduleRepository();
+      store = TestScheduleStore();
+      final repository = testScheduleRepository(store: store);
       addTearDown(repository.dispose);
       viewModel = TimetableViewModel(repository: repository, clock: () => now);
     });
 
     tearDown(() => viewModel.dispose());
+
+    test('saves section times and rejects a stale calendar editor', () async {
+      store.library = ScheduleLibrary(
+        accounts: [scheduleTestSaved()],
+        selectedAccount: scheduleTestAccount.scope,
+      );
+      await viewModel.initialize();
+      final original = viewModel.settings;
+      final imported = viewModel.imported!;
+      final target = viewModel.editTarget!;
+      final plan = PeriodTimePlan(periods: imported.periodTimes)
+          .withSections(
+            sections: [
+              PeriodTimeSection(
+                session: PeriodSession.morning,
+                firstPeriod: 1,
+                lastPeriod: 2,
+              ),
+            ],
+          )
+          .edit(number: 1, startMinutes: 490);
+      final edited = original.copyWith(
+        periodTimes: plan.periods,
+        periodSections: plan.sections,
+        useCustomPeriodTimes: true,
+      );
+      Future<bool> save(ScheduleSettings value) => viewModel.saveSettings(
+        value,
+        target: target,
+        original: original,
+        originalImport: imported,
+      );
+      expect(await save(edited), isTrue);
+      expect(
+        store.library.accounts.single.settings.values.single.periodSections,
+        plan.sections,
+      );
+      expect(
+        viewModel.dayOn(DateTime(2026, 9, 14)).lessons.single.startMinutes,
+        490,
+      );
+      expect(await save(original), isFalse);
+      expect(viewModel.settings.periodTimes.first.startMinutes, 490);
+      expect(viewModel.data.failure!.message, contains('已更新'));
+    });
 
     test(
       'opens the current calendar week without assuming a teaching week',

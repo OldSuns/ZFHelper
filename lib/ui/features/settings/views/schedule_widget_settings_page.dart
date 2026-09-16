@@ -72,7 +72,7 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '小尺寸显示当前或下一节课程，拉大后可滚动查看当天全部课程。点击课程可打开对应日期的日程。',
+                        '默认约占 3×2 格，可缩至约 2×1 格，实际占格由桌面决定。低矮时显示课程与时间摘要，增高后补充地点或切换为可滚动课表；窄布局自动纵向排列。点击课程可打开对应日期的日程。',
                       ),
                       const SizedBox(height: 12),
                       const Text(
@@ -138,7 +138,7 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
             ],
             const SizedBox(height: AppLayout.sectionGap),
             Text(
-              '也可长按桌面添加小组件，长按已添加的小组件调整大小。显示按系统周期和课程边界刷新；系统省电时可能延迟，可点小组件上的刷新按钮。',
+              '也可长按桌面添加小组件，长按已添加的小组件调整大小。显示按系统周期和课程边界刷新；系统省电时可能延迟，宽列表提供刷新按钮，也可在此重新同步。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

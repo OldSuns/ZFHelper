@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'academic_term.dart';
+import 'period_time_plan.dart';
 import 'schedule_entry.dart';
 import 'schedule_settings.dart';
 import 'schedule_snapshot.dart';
@@ -49,6 +50,7 @@ abstract final class ScheduleSettingsCodec {
         ? null
         : _writeCalendar(settings.calendarOverride!),
     'periodTimes': settings.periodTimes.map(_writePeriod).toList(),
+    'periodSections': settings.periodSections.map(_writePeriodSection).toList(),
     'useCustomPeriodTimes': settings.useCustomPeriodTimes,
     'localEntries': settings.localEntries.map(_writeEntry).toList(),
     'hiddenEntryIds': settings.hiddenEntryIds.toList()..sort(),
@@ -62,6 +64,9 @@ abstract final class ScheduleSettingsCodec {
           ? null
           : _readCalendar(data['calendarOverride']),
       periodTimes: _list(data, 'periodTimes').map(_readPeriod).toList(),
+      periodSections: data.containsKey('periodSections')
+          ? _list(data, 'periodSections').map(_readPeriodSection).toList()
+          : const [],
       useCustomPeriodTimes: _boolean(data, 'useCustomPeriodTimes'),
       // Older version-1 settings predate the saved view preference.
       preferAgenda: data.containsKey('preferAgenda')
@@ -214,6 +219,23 @@ PeriodTime _readPeriod(Object? value) {
   );
 }
 
+Map<String, Object?> _writePeriodSection(PeriodTimeSection section) => {
+  'session': section.session.name,
+  'firstPeriod': section.firstPeriod,
+  'lastPeriod': section.lastPeriod,
+  'campus': section.campus,
+};
+
+PeriodTimeSection _readPeriodSection(Object? value) {
+  final data = _map(value);
+  return PeriodTimeSection(
+    session: _enum(data, 'session', PeriodSession.values),
+    firstPeriod: _integer(data, 'firstPeriod'),
+    lastPeriod: _integer(data, 'lastPeriod'),
+    campus: _optionalString(data, 'campus'),
+  );
+}
+
 T _decode<T>(String source, T Function(Map<String, Object?> data) read) {
   try {
     final data = _map(jsonDecode(source));
@@ -227,6 +249,8 @@ T _decode<T>(String source, T Function(Map<String, Object?> data) read) {
       throw const FormatException('Invalid saved schedule JSON.');
     }
     rethrow;
+  } on PeriodTimeException {
+    throw const FormatException('Invalid saved schedule period sections.');
   } on ArgumentError {
     throw const FormatException(
       'Saved schedule data violates its model rules.',

@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../../../core/app_theme.dart';
+import '../view_models/period_times_view_model.dart';
 import '../view_models/timetable_view_model.dart';
+import 'period_times_editor.dart';
 
 Future<bool> showScheduleCalendar(
   BuildContext context,
@@ -21,7 +23,12 @@ Future<bool> showScheduleCalendar(
         settings: settings,
         today: today,
         onSave: (value) async =>
-            await viewModel.saveSettings(value, target: target)
+            await viewModel.saveSettings(
+              value,
+              target: target,
+              original: settings,
+              originalImport: snapshot,
+            )
             ? null
             : viewModel.data.failure?.message ?? '保存未完成，请重试',
       ),
@@ -52,20 +59,18 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
   final _formKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
   final _errorFocus = FocusNode(debugLabel: 'calendar-form-error');
-  final _ownedDrafts = <_PeriodDraft>[];
   late final TextEditingController _firstMonday;
   late final TextEditingController _totalWeeks;
-  late List<_PeriodDraft> _periods;
+  late final PeriodTimesViewModel _times;
   late bool _customCalendar;
-  late bool _customTimes;
   String? _error;
   bool _saving = false;
+  bool _confirmingClose = false;
 
   @override
   void initState() {
     super.initState();
     _customCalendar = widget.settings.calendarOverride != null;
-    _customTimes = widget.settings.useCustomPeriodTimes;
     final calendar =
         widget.settings.calendarOverride ?? widget.snapshot.calendar;
     _firstMonday = TextEditingController(
@@ -74,10 +79,10 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     _totalWeeks = TextEditingController(
       text: calendar.totalWeeks?.toString() ?? '',
     );
-    final times = _customTimes
-        ? widget.settings.periodTimes
-        : widget.snapshot.periodTimes;
-    _periods = times.map(_newDraft).toList();
+    _times = PeriodTimesViewModel(
+      schoolTimes: widget.snapshot.periodTimes,
+      settings: widget.settings,
+    )..addListener(_timesChanged);
   }
 
   @override
@@ -86,27 +91,61 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     _totalWeeks.dispose();
     _scrollController.dispose();
     _errorFocus.dispose();
-    for (final draft in _ownedDrafts) {
-      draft.dispose();
-    }
+    _times.dispose();
     super.dispose();
   }
 
-  _PeriodDraft _newDraft([PeriodTime? period]) {
-    final draft = _PeriodDraft(_ownedDrafts.length, period);
-    _ownedDrafts.add(draft);
-    return draft;
+  void _timesChanged() => setState(() => _error = null);
+
+  bool get _hasChanges {
+    final original =
+        widget.settings.calendarOverride ?? widget.snapshot.calendar;
+    return _times.hasChanges ||
+        _customCalendar != (widget.settings.calendarOverride != null) ||
+        _firstMonday.text != _dateText(original.firstWeekMonday) ||
+        _totalWeeks.text != (original.totalWeeks?.toString() ?? '');
+  }
+
+  Future<void> _cancel() async {
+    if (_saving || _confirmingClose) return;
+    if (!_hasChanges) {
+      Navigator.pop(context);
+      return;
+    }
+    _confirmingClose = true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('放弃未保存的修改？'),
+        content: const Text('校历和作息预览尚未保存。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('继续编辑'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('放弃修改'),
+          ),
+        ],
+      ),
+    );
+    _confirmingClose = false;
+    if (mounted && discard == true) Navigator.pop(context);
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_saving,
+  Widget build(BuildContext context) => PopScope<ScheduleSettings>(
+    canPop: !_saving && !_hasChanges,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _cancel();
+    },
     child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           tooltip: '取消设置',
           icon: const Icon(Icons.close),
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          onPressed: _saving ? null : _cancel,
         ),
         title: const Text('校历与作息'),
       ),
@@ -118,7 +157,9 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
             top: false,
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: const BoxConstraints(
+                  maxWidth: AppLayout.contentMaxWidth,
+                ),
                 child: Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -133,12 +174,8 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _header(),
-                        for (var index = 0; index < _periods.length; index++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _periodCard(_periods[index], index + 1),
-                          ),
-                        _periodFooter(),
+                        PeriodTimesEditor(viewModel: _times),
+                        const SizedBox(height: AppLayout.sectionGap),
                       ],
                     ),
                   ),
@@ -150,17 +187,28 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            8,
-            20,
-            12 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: FilledButton(
-            key: const ValueKey('calendar-save'),
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? '正在保存…' : '保存设置'),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppLayout.contentMaxWidth,
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                12 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: const ValueKey('calendar-save'),
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? '正在保存…' : '保存设置'),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -272,168 +320,12 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
         const SizedBox(height: AppLayout.sectionGap),
         const Divider(),
         const SizedBox(height: AppLayout.sectionGap),
-        Text('课节作息', style: theme.textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(
-          _customTimes ? '当前使用本地作息' : '当前使用学校作息',
-          key: const ValueKey('period-source'),
-        ),
-        const SizedBox(height: 8),
-        Text('学校提供 ${widget.snapshot.periodTimes.length} 项时间。下面的编辑只保存为本地设置。'),
-        const SizedBox(height: 8),
-        const Text('使用 24 小时制；同一校区的节次不能重复，时间按节次递增且不能重叠。'),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            key: const ValueKey('period-restore'),
-            onPressed: _customTimes ? _restoreTimes : null,
-            icon: const Icon(Icons.restore),
-            label: const Text('恢复学校作息'),
-          ),
-        ),
-        const SizedBox(height: 16),
       ],
     );
   }
-
-  Widget _periodCard(_PeriodDraft draft, int index) => Card(
-    key: ValueKey('period-${draft.id}'),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '作息 $index',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                key: ValueKey('period-${draft.id}-remove'),
-                tooltip: '删除作息 $index',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => setState(() {
-                  _customTimes = true;
-                  _error = null;
-                  _periods.remove(draft);
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            key: ValueKey('period-${draft.id}-number'),
-            controller: draft.number,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: '节次',
-              suffixText: '节',
-              errorMaxLines: 3,
-            ),
-            validator: _periodNumberError,
-            onChanged: (_) => _changeTimes(),
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            key: ValueKey('period-${draft.id}-campus'),
-            controller: draft.campus,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(labelText: '校区（选填）'),
-            onChanged: (_) => _changeTimes(),
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final start = _timeField(draft, isEnd: false);
-              final end = _timeField(draft, isEnd: true);
-              if (constraints.maxWidth <
-                  500 * MediaQuery.textScalerOf(context).scale(1)) {
-                return Column(
-                  children: [start, const SizedBox(height: 16), end],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: start),
-                  const SizedBox(width: 16),
-                  Expanded(child: end),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _timeField(_PeriodDraft draft, {required bool isEnd}) {
-    final controller = isEnd ? draft.end : draft.start;
-    final label = isEnd ? '结束时间' : '开始时间';
-    return TextFormField(
-      key: ValueKey('period-${draft.id}-${isEnd ? 'end' : 'start'}'),
-      controller: controller,
-      keyboardType: TextInputType.datetime,
-      textInputAction: TextInputAction.next,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: 'HH:mm',
-        errorMaxLines: 3,
-        suffixIcon: IconButton(
-          tooltip: '选择$label',
-          icon: const Icon(Icons.schedule),
-          onPressed: () => _pickTime(controller, isEnd: isEnd),
-        ),
-      ),
-      validator: (value) {
-        final error = _timeError(value, isEnd: isEnd);
-        if (error != null) return error;
-        if (isEnd) {
-          final start = _minutes(draft.start.text);
-          if (start != null && _minutes(value!)! <= start) {
-            return '结束时间必须晚于开始时间';
-          }
-        }
-        return null;
-      },
-      onChanged: (_) => _changeTimes(),
-    );
-  }
-
-  Widget _periodFooter() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (_periods.isEmpty) ...[
-        Text(_customTimes ? '本地作息已清空；保存后仅显示课节序号。' : '学校未提供作息，课表仍可按课节序号显示。'),
-        const SizedBox(height: 16),
-      ],
-      OutlinedButton.icon(
-        key: const ValueKey('period-add'),
-        onPressed: () => setState(() {
-          _customTimes = true;
-          _error = null;
-          _periods.add(_newDraft());
-        }),
-        icon: const Icon(Icons.add),
-        label: const Text('添加课节时间'),
-      ),
-      const SizedBox(height: AppLayout.sectionGap),
-    ],
-  );
 
   void _changeCalendar() => setState(() {
     _customCalendar = true;
-    _error = null;
-  });
-
-  void _changeTimes() => setState(() {
-    _customTimes = true;
     _error = null;
   });
 
@@ -442,12 +334,6 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     _error = null;
     _firstMonday.text = _dateText(widget.snapshot.calendar.firstWeekMonday);
     _totalWeeks.text = widget.snapshot.calendar.totalWeeks?.toString() ?? '';
-  });
-
-  void _restoreTimes() => setState(() {
-    _customTimes = false;
-    _error = null;
-    _periods = widget.snapshot.periodTimes.map(_newDraft).toList();
   });
 
   Future<void> _pickMonday() async {
@@ -537,32 +423,6 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     _changeCalendar();
   }
 
-  Future<void> _pickTime(
-    TextEditingController controller, {
-    required bool isEnd,
-  }) async {
-    final existing = _minutes(controller.text);
-    final initial = existing == null || existing == PeriodTime.minutesPerDay
-        ? TimeOfDay(hour: widget.today.hour, minute: widget.today.minute)
-        : TimeOfDay(hour: existing ~/ 60, minute: existing % 60);
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      initialEntryMode: TimePickerEntryMode.input,
-      emptyInitialInput: existing == null,
-      helpText: isEnd ? '选择结束时间' : '选择开始时间',
-      cancelText: '取消',
-      confirmText: '选定',
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-        child: child!,
-      ),
-    );
-    if (!mounted || picked == null) return;
-    controller.text = _timeText(picked.hour * 60 + picked.minute);
-    _changeTimes();
-  }
-
   TeachingCalendar _draftCalendar() => TeachingCalendar(
     firstWeekMonday: _civilDate(_firstMonday.text),
     totalWeeks: _totalWeeks.text.trim().isEmpty
@@ -597,18 +457,17 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
       _showError(calendarError);
       return;
     }
-    final times = _customTimes
-        ? _readPeriods()
-        : (values: <PeriodTime>[], error: null);
-    if (times.error != null) {
-      _showError(times.error!);
+    final timeError = _times.useCustomTimes ? _times.validationError : null;
+    if (timeError != null) {
+      _showError('作息预览存在冲突，修正后才能保存：$timeError');
       return;
     }
     final settings = widget.settings.copyWith(
       calendarOverride: _customCalendar ? _draftCalendar() : null,
       clearCalendarOverride: !_customCalendar,
-      periodTimes: times.values,
-      useCustomPeriodTimes: _customTimes,
+      periodTimes: _times.useCustomTimes ? _times.plan.periods : const [],
+      periodSections: _times.useCustomTimes ? _times.plan.sections : const [],
+      useCustomPeriodTimes: _times.useCustomTimes,
     );
     final save = widget.onSave;
     if (save != null) {
@@ -625,90 +484,12 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     if (mounted) Navigator.of(context).pop(settings);
   }
 
-  ({List<PeriodTime> values, String? error}) _readPeriods() {
-    final values = <PeriodTime>[];
-    final identities = <(String?, int)>{};
-    for (var index = 0; index < _periods.length; index++) {
-      final draft = _periods[index];
-      final error =
-          _periodNumberError(draft.number.text) ??
-          _timeError(draft.start.text, isEnd: false) ??
-          _timeError(draft.end.text, isEnd: true);
-      if (error != null) return (values: [], error: '作息 ${index + 1}：$error');
-      final number = int.parse(draft.number.text);
-      final start = _minutes(draft.start.text)!;
-      final end = _minutes(draft.end.text)!;
-      if (start >= end) {
-        return (values: [], error: '作息 ${index + 1}：结束时间必须晚于开始时间');
-      }
-      final campus = draft.campus.text.trim().isEmpty
-          ? null
-          : draft.campus.text.trim();
-      if (!identities.add((campus, number))) {
-        return (
-          values: [],
-          error: '${campus ?? '未指定校区'}的第 $number 节重复，请合并或修改节次',
-        );
-      }
-      values.add(
-        PeriodTime(
-          number: number,
-          startMinutes: start,
-          endMinutes: end,
-          campus: campus,
-        ),
-      );
-    }
-    values.sort((left, right) {
-      final campus = (left.campus ?? '').compareTo(right.campus ?? '');
-      return campus == 0 ? left.number.compareTo(right.number) : campus;
-    });
-    for (var index = 1; index < values.length; index++) {
-      final previous = values[index - 1];
-      final current = values[index];
-      if (previous.campus == current.campus &&
-          previous.endMinutes > current.startMinutes) {
-        return (
-          values: [],
-          error:
-              '${current.campus ?? '未指定校区'}的第 ${current.number} 节早于或重叠第 ${previous.number} 节，请核对时间',
-        );
-      }
-    }
-    return (values: values, error: null);
-  }
-
   void _showError(String error) {
     setState(() => _error = error);
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _errorFocus.requestFocus();
     });
-  }
-}
-
-final class _PeriodDraft {
-  _PeriodDraft(this.id, PeriodTime? value)
-    : number = TextEditingController(text: value?.number.toString() ?? ''),
-      campus = TextEditingController(text: value?.campus ?? ''),
-      start = TextEditingController(
-        text: value == null ? '' : _timeText(value.startMinutes),
-      ),
-      end = TextEditingController(
-        text: value == null ? '' : _timeText(value.endMinutes),
-      );
-
-  final int id;
-  final TextEditingController number;
-  final TextEditingController campus;
-  final TextEditingController start;
-  final TextEditingController end;
-
-  void dispose() {
-    number.dispose();
-    campus.dispose();
-    start.dispose();
-    end.dispose();
   }
 }
 
@@ -741,29 +522,3 @@ String? _totalWeeksError(String? value) {
   final weeks = int.tryParse(value.trim());
   return weeks == null || weeks < 1 ? '总教学周数必须是大于 0 的整数，或留空' : null;
 }
-
-String? _periodNumberError(String? value) {
-  final number = int.tryParse(value?.trim() ?? '');
-  return number == null || number < 1 ? '请填写大于 0 的节次' : null;
-}
-
-int? _minutes(String value) {
-  final match = RegExp(r'^(\d{1,2}):(\d{2})$').firstMatch(value.trim());
-  if (match == null) return null;
-  final hour = int.parse(match[1]!);
-  final minute = int.parse(match[2]!);
-  if (minute > 59 || hour > 24 || (hour == 24 && minute != 0)) return null;
-  return hour * 60 + minute;
-}
-
-String? _timeError(String? value, {required bool isEnd}) {
-  final minutes = _minutes(value ?? '');
-  if (minutes == null || (!isEnd && minutes >= PeriodTime.minutesPerDay)) {
-    return '请填写有效的 24 小时制时间，如 08:30';
-  }
-  return null;
-}
-
-String _timeText(int minutes) =>
-    '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
-    '${(minutes % 60).toString().padLeft(2, '0')}';
