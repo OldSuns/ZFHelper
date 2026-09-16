@@ -54,7 +54,7 @@ void main() {
     expect(library.accounts, isEmpty);
     expect(library.selectedAccount, isNull);
     expect(await File(databasePath).exists(), isTrue);
-    inspectDatabase((database) => expect(database.userVersion, 1));
+    inspectDatabase((database) => expect(database.userVersion, 2));
   });
 
   test(
@@ -65,6 +65,17 @@ void main() {
       final first = _snapshot(autumn);
       final second = _snapshot(spring, name: '大学物理');
       final settings = _settings();
+      final event = ScheduleEvent(
+        id: 'homework',
+        title: '提交课程作业',
+        date: DateTime(2026, 9, 15, 23),
+        category: ScheduleEventCategory.homework,
+        startMinutes: 0,
+        endMinutes: 1440,
+        location: '图书馆',
+        note: '记得附上引用',
+        completed: true,
+      );
       final account = _account(
         catalog: TermCatalog(
           terms: [autumn, spring],
@@ -77,6 +88,7 @@ void main() {
         ),
         schedules: {autumn.key: first, spring.key: second},
         settings: {autumn.key: settings},
+        events: [event],
         selectedTermKey: spring.key,
       );
       await store.saveAccount(account, select: true);
@@ -90,6 +102,8 @@ void main() {
       expect(restored.account.accountName, '测试同学');
       expect(restored.account.loginName, '20260001');
       expect(restored.selectedTermKey, spring.key);
+      expect(restored.events, [event]);
+      expect(restored.events.single.date, DateTime(2026, 9, 15));
       expect(restored.catalog!.selectedTerm, autumn);
       expect(restored.catalog!.terms, [autumn, spring]);
       expect(restored.catalog!.yearOptions.single.code, '2026');
@@ -124,6 +138,56 @@ void main() {
   );
 
   test(
+    'migrates version-one accounts and rejects damaged event fields',
+    () async {
+      final term = _term();
+      await store.saveAccount(
+        _account(
+          schedules: {term.key: _snapshot(term)},
+          selectedTermKey: term.key,
+        ),
+        select: true,
+      );
+      inspectDatabase((database) {
+        database.execute(
+          'ALTER TABLE schedule_accounts DROP COLUMN events_payload',
+        );
+        database.userVersion = 1;
+      });
+      final migrated = await openStore().read();
+      final saved = migrated.accounts.single;
+      expect(saved.selectedTermKey, term.key);
+      expect(saved.schedules[term.key]!.entries.single.name, '高等数学');
+      expect(saved.events, isEmpty);
+      expect(migrated.selectedAccount, saved.account.scope);
+      inspectDatabase((database) => expect(database.userVersion, 2));
+
+      final event = ScheduleEvent(
+        id: 'event',
+        title: '复习',
+        date: DateTime(2028, 2, 29),
+        category: ScheduleEventCategory.todo,
+      );
+      await store.saveAccount(saved.copyWith(events: [event]));
+      expect((await openStore().read()).accounts.single.events, [event]);
+      final encoded =
+          jsonDecode(ScheduleEventCodec.encode(event)) as Map<String, dynamic>;
+      for (final change in [
+        {'date': '2026-02-29'},
+        {'startMinutes': 9},
+        {'startMinutes': -1, 'endMinutes': 60},
+        {'category': 'exam', 'completed': true},
+        {'version': 1.0},
+      ]) {
+        expect(
+          () => ScheduleEventCodec.decode(jsonEncode({...encoded, ...change})),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test(
     'isolates identical account IDs at different schools and classmates',
     () async {
       final term = _term();
@@ -143,7 +207,18 @@ void main() {
         ),
       ];
       for (final record in records) {
-        await store.saveAccount(record);
+        await store.saveAccount(
+          record.copyWith(
+            events: [
+              ScheduleEvent(
+                id: 'same-local-id',
+                title: record.schedules[term.key]!.entries.single.name,
+                date: DateTime(2026, 9, 15),
+                category: ScheduleEventCategory.other,
+              ),
+            ],
+          ),
+        );
       }
       await store.selectAccount(records.first.account.scope);
 
@@ -156,6 +231,10 @@ void main() {
         );
         expect(
           restored.schedules[term.key]!.entries.single.name,
+          record.schedules[term.key]!.entries.single.name,
+        );
+        expect(
+          restored.events.single.title,
           record.schedules[term.key]!.entries.single.name,
         );
       }
@@ -708,6 +787,7 @@ StoredScheduleAccount _account({
   TermCatalog? catalog,
   Map<String, ScheduleSnapshot> schedules = const {},
   Map<String, ScheduleSettings> settings = const {},
+  List<ScheduleEvent> events = const [],
   String? selectedTermKey,
 }) => StoredScheduleAccount(
   account: AcademicAccountRecord(
@@ -719,6 +799,7 @@ StoredScheduleAccount _account({
   catalog: catalog,
   schedules: schedules,
   settings: settings,
+  events: events,
   selectedTermKey: selectedTermKey,
 );
 

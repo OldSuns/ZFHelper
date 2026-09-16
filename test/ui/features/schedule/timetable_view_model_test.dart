@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zf_core/zf_core.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
+
 import '../../../support/schedule_fakes.dart';
 
 void main() {
@@ -91,5 +93,113 @@ void main() {
       expect(viewModel.rangeLabel, '2026年12月28日 — 2027年1月3日');
       expect(viewModel.yearLabel, '2026–2027年');
     });
+
+    test('daily courses keep actual weeks, breaks and unknown clock data', () {
+      final snapshot = scheduleTestSnapshot();
+      final date = DateTime(2026, 9, 14);
+      final day = ScheduleDay.fromSnapshot(snapshot, date);
+      final lesson = day.lessons.single;
+      expect(day.week, 2);
+      expect(
+        ScheduleDay.fromSnapshot(snapshot, DateTime(2026, 9, 13)).lessons,
+        isEmpty,
+      );
+      expect(
+        lesson.phaseAt(DateTime(2026, 9, 14, 8, 30)),
+        ScheduleLessonPhase.ongoing,
+      );
+      expect(
+        lesson.phaseAt(DateTime(2026, 9, 14, 8, 50)),
+        ScheduleLessonPhase.breakTime,
+      );
+      final shortened = snapshot.copyWith(
+        calendar: TeachingCalendar(
+          firstWeekMonday: DateTime(2026, 9, 7),
+          totalWeeks: 1,
+          source: TeachingCalendarSource.user,
+        ),
+      );
+      expect(ScheduleDay.fromSnapshot(shortened, date).lessons, hasLength(1));
+      final unknown = snapshot.copyWith(
+        calendar: const TeachingCalendar.unknown(),
+      );
+      expect(ScheduleDay.fromSnapshot(unknown, date).lessons, isEmpty);
+      final partial = ScheduleDay.fromSnapshot(
+        snapshot.copyWith(periodTimes: [snapshot.periodTimes.first]),
+        date,
+      ).lessons.single;
+      expect(partial.startMinutes, isNull);
+      expect(
+        partial.phaseAt(DateTime(2026, 9, 14, 9)),
+        ScheduleLessonPhase.unknown,
+      );
+    });
+
+    test(
+      'daily conflicts use campus clock times and events keep their phase',
+      () {
+        final date = DateTime(2026, 9, 7);
+        final snapshot =
+            scheduleTestSnapshot(
+              entries: [
+                ScheduleEntry(
+                  id: 'a',
+                  name: 'A',
+                  campus: 'A',
+                  weekday: 1,
+                  startPeriod: 1,
+                  endPeriod: 1,
+                  weeks: [1],
+                ),
+                ScheduleEntry(
+                  id: 'b',
+                  name: 'B',
+                  campus: 'B',
+                  weekday: 1,
+                  startPeriod: 2,
+                  endPeriod: 2,
+                  weeks: [1],
+                ),
+              ],
+            ).copyWith(
+              periodTimes: [
+                PeriodTime(
+                  number: 1,
+                  campus: 'A',
+                  startMinutes: 480,
+                  endMinutes: 525,
+                ),
+                PeriodTime(
+                  number: 2,
+                  campus: 'B',
+                  startMinutes: 510,
+                  endMinutes: 555,
+                ),
+              ],
+            );
+        final day = ScheduleDay.fromSnapshot(snapshot, date);
+        expect(day.hasConflict(day.lessons.first), isTrue);
+        final event = ScheduleEvent(
+          id: 'task',
+          title: '小组讨论',
+          date: date,
+          category: ScheduleEventCategory.todo,
+          startMinutes: 600,
+          endMinutes: 660,
+        );
+        expect(
+          event.phaseAt(DateTime(2026, 9, 7, 10, 30)),
+          ScheduleEventPhase.ongoing,
+        );
+        expect(event.completed, isFalse);
+        viewModel.selectAgendaDate(DateTime(2026, 1, 31));
+        viewModel.shiftAgendaMonth(1);
+        expect(viewModel.agendaDate, DateTime(2026, 2, 28));
+        viewModel.returnToToday();
+        now = DateTime(2026, 9, 13);
+        viewModel.refreshToday();
+        expect(viewModel.agendaDate, DateTime(2026, 9, 13));
+      },
+    );
   });
 }

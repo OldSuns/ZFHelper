@@ -10,9 +10,14 @@ import '../../schedule/views/schedule_picker_sheets.dart';
 import '../widgets/settings_section.dart';
 
 class ScheduleSettingsSection extends StatelessWidget {
-  const ScheduleSettingsSection({required this.viewModel, super.key});
+  const ScheduleSettingsSection({
+    required this.viewModel,
+    this.title = '课表',
+    super.key,
+  });
 
   final TimetableViewModel viewModel;
+  final String? title;
 
   void _message(BuildContext context, String message) =>
       ScaffoldMessenger.of(context)
@@ -175,13 +180,13 @@ class ScheduleSettingsSection extends StatelessWidget {
           context,
           title: '清除此账号的本机课表？',
           message:
-              '${record.account.schoolName} · ${record.account.accountName} 的所有已保存学期、本地课程和校历校正将被清除。学校数据不受影响。',
+              '${record.account.schoolName} · ${record.account.accountName} 的所有已保存学期、本地课程和校历校正将被清除，个人日程保留。学校数据不受影响。',
           action: '清除课表',
         ) ||
         !context.mounted) {
       return;
     }
-    if (await viewModel.removeSavedAccount(action.scope) && context.mounted) {
+    if (await viewModel.clearSavedSchedules(action.scope) && context.mounted) {
       _message(context, '此账号的本机课表已清除');
     }
   }
@@ -198,7 +203,7 @@ class ScheduleSettingsSection extends StatelessWidget {
       final failure = viewModel.data.failure;
       final warnings = viewModel.imported?.importWarnings ?? const <String>[];
       return SettingsSection(
-        title: '课表',
+        title: title,
         children: [
           if (busy) const LinearProgressIndicator(minHeight: 2),
           if (failure != null)
@@ -286,7 +291,7 @@ class ScheduleSettingsSection extends StatelessWidget {
               horizontal: 20,
               vertical: 8,
             ),
-            title: const Text('课表日程视图'),
+            title: const Text('周课表使用列表'),
             subtitle: Text(viewModel.agenda ? '当前学期按天显示课程列表' : '当前学期显示每周课程网格'),
             value: viewModel.agenda,
             onChanged: canEdit && !busy ? (_) => _toggleAgenda(context) : null,

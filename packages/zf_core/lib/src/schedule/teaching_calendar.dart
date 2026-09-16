@@ -77,23 +77,30 @@ final class TeachingCalendar {
 
   /// Classifies [date] by civil days, independently of local DST transitions.
   TeachingWeekPosition positionOn(DateTime date) {
-    final first = firstWeekMonday;
-    if (first == null) {
+    if (firstWeekMonday == null) {
       return const TeachingWeekPosition(status: TeachingWeekStatus.unknown);
     }
+    final week = weekNumberOn(date);
+    if (week == null) {
+      return const TeachingWeekPosition(status: TeachingWeekStatus.beforeTerm);
+    }
+    if (totalWeeks != null && week > totalWeeks!) {
+      return const TeachingWeekPosition(status: TeachingWeekStatus.afterTerm);
+    }
+    return TeachingWeekPosition(status: TeachingWeekStatus.inTerm, week: week);
+  }
+
+  /// Maps a date to a teaching week without discarding explicit arrangements
+  /// beyond the configured term length. Unknown and pre-term dates return null.
+  int? weekNumberOn(DateTime date) {
+    final first = firstWeekMonday;
+    if (first == null) return null;
     final difference = DateTime.utc(
       date.year,
       date.month,
       date.day,
     ).difference(DateTime.utc(first.year, first.month, first.day)).inDays;
-    if (difference < 0) {
-      return const TeachingWeekPosition(status: TeachingWeekStatus.beforeTerm);
-    }
-    final week = difference ~/ DateTime.daysPerWeek + 1;
-    if (totalWeeks != null && week > totalWeeks!) {
-      return const TeachingWeekPosition(status: TeachingWeekStatus.afterTerm);
-    }
-    return TeachingWeekPosition(status: TeachingWeekStatus.inTerm, week: week);
+    return difference < 0 ? null : difference ~/ DateTime.daysPerWeek + 1;
   }
 
   /// Returns the dates for [week], or `null` when the first Monday is unknown.

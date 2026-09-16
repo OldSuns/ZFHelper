@@ -1,7 +1,9 @@
 package dev.zfhelper.app
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebViewClient
 import androidx.webkit.CookieManagerCompat
@@ -18,6 +20,19 @@ class MainActivity : FlutterActivity() {
     private var loginCookieChannel: MethodChannel? = null
     private val selectionRuntime: SelectionRuntimeHost
         get() = (application as ZfHelperApplication).selectionRuntime
+    private val scheduleWidgets: ScheduleWidgetHost
+        get() = (application as ZfHelperApplication).scheduleWidgets
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        scheduleWidgets.receiveLaunch(intent)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        scheduleWidgets.receiveLaunch(intent)
+    }
 
     override fun provideFlutterEngine(context: Context): FlutterEngine =
         (application as ZfHelperApplication).sharedFlutterEngine
@@ -27,15 +42,18 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         selectionRuntime.activityResumed(this)
+        scheduleWidgets.activityResumed(this)
     }
 
     override fun onPause() {
         selectionRuntime.activityPaused(this)
+        scheduleWidgets.activityPaused(this)
         super.onPause()
     }
 
     override fun onDestroy() {
         selectionRuntime.activityDestroyed(this)
+        scheduleWidgets.activityDestroyed(this)
         super.onDestroy()
     }
 

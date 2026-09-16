@@ -33,6 +33,8 @@ export 'src/selection/selection_access.dart';
 export 'src/schedule/academic_term.dart';
 export 'src/schedule/teaching_calendar.dart';
 export 'src/schedule/schedule_entry.dart';
+export 'src/schedule/schedule_day.dart';
+export 'src/schedule/schedule_event.dart';
 export 'src/schedule/schedule_snapshot.dart';
 export 'src/schedule/schedule_settings.dart';
 export 'src/schedule/schedule_notation_parser.dart';

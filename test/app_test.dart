@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/data/storage/appearance_store.dart';
 import 'package:zfhelper/platform/secure_appearance_store.dart';
+import 'package:zfhelper/platform/schedule_widget_platform.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
+import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/app_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/display_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/settings_page.dart';
 
 import 'support/auth_fakes.dart';
@@ -24,6 +29,7 @@ void main() {
     Brightness brightness = Brightness.light,
     AppClock? clock,
     AppearanceStore? appearanceStore,
+    ScheduleWidgetPlatform? scheduleWidgetPlatform,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -38,6 +44,7 @@ void main() {
       ZfHelperApp(
         configuration: AppConfiguration(
           appearance: testAppearance(store: appearanceStore),
+          scheduleWidgetPlatform: scheduleWidgetPlatform,
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           auth: testAuth(),
@@ -54,6 +61,50 @@ void main() {
     matching: find.text(label),
   );
 
+  testWidgets('widget launches open their date and dismiss nested settings', (
+    tester,
+  ) async {
+    const channel = MethodChannel('zfhelper/schedule_widget');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      channel,
+      (call) async => switch (call.method) {
+        'consumeLaunch' => '2027-01-18',
+        'capabilities' => {'supported': true, 'canPin': true, 'count': 1},
+        'publish' => null,
+        _ => throw StateError('Unexpected widget method: ${call.method}'),
+      },
+    );
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    await pumpApp(
+      tester,
+      scheduleWidgetPlatform: AndroidScheduleWidgetPlatform(),
+    );
+    final model = tester
+        .widget<TimetablePage>(find.byType(TimetablePage))
+        .viewModel;
+    expect(model.section, ScheduleSection.agenda);
+    expect(model.agendaDate, DateTime(2027, 1, 18));
+
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '显示'));
+    await tester.pumpAndSettle();
+    await messenger.handlePlatformMessage(
+      channel.name,
+      channel.codec.encodeMethodCall(
+        const MethodCall('openSchedule', '2026-10-12'),
+      ),
+      null,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DisplaySettingsPage), findsNothing);
+    expect(find.byType(TimetablePage), findsOneWidget);
+    expect(model.section, ScheduleSection.agenda);
+    expect(model.agendaDate, DateTime(2026, 10, 12));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('appearance choices apply globally and survive app recreation', (
     tester,
   ) async {
@@ -63,22 +114,19 @@ void main() {
     await tester.pumpAndSettle();
 
     Future<void> choose(String label) async {
-      final entry = find.widgetWithText(ListTile, '外观');
-      await tester.scrollUntilVisible(entry, 150);
-      await tester.tap(entry);
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(SimpleDialog),
-          matching: find.text(label),
-        ),
-      );
+      if (find.byType(DisplaySettingsPage).evaluate().isEmpty) {
+        await tester.tap(find.widgetWithText(ListTile, '显示'));
+        await tester.pumpAndSettle();
+      }
+      final choice = find.text(label);
+      await tester.scrollUntilVisible(choice, 150);
+      await tester.tap(choice);
       await tester.pumpAndSettle();
     }
 
     await choose('深色');
     expect(
-      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
       Brightness.dark,
     );
     expect(await SecureAppearanceStore().read(), AppAppearance.dark);
@@ -95,19 +143,19 @@ void main() {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await tester.pumpAndSettle();
     expect(
-      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
       Brightness.light,
     );
 
     await choose('跟随系统');
     expect(
-      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
       Brightness.dark,
     );
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
     await tester.pumpAndSettle();
     expect(
-      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
       Brightness.light,
     );
     expect(await SecureAppearanceStore().read(), AppAppearance.system);
@@ -176,6 +224,7 @@ void main() {
       await tester.tap(navigationLabel('设置'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.byType(ListTile), findsNWidgets(4));
       await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
       await tester.pumpAndSettle();
       expect(find.byType(AccountSettingsPage), findsOneWidget);
@@ -260,11 +309,19 @@ void main() {
         await tester.tap(action);
         await tester.pumpAndSettle();
         expect(find.byType(SettingsPage), findsOneWidget);
-        await tester.scrollUntilVisible(
-          find.widgetWithText(ListTile, '关于应用'),
-          200,
-        );
+        final appSettings = find.widgetWithText(ListTile, '数据与应用');
+        await tester.scrollUntilVisible(appSettings, 200);
         await tester.pumpAndSettle();
+        await tester.tap(appSettings);
+        await tester.pumpAndSettle();
+        expect(find.byType(AppSettingsPage), findsOneWidget);
+        final about = find.widgetWithText(ListTile, '关于应用');
+        await tester.scrollUntilVisible(about, 200);
+        await tester.pumpAndSettle();
+        await tester.tap(about);
+        await tester.pumpAndSettle();
+        expect(find.text('Github'), findsOneWidget);
+        expect(find.text('查看许可'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );

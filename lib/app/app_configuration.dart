@@ -14,6 +14,7 @@ import '../data/storage/sqlite_selection_store.dart';
 import '../platform/secure_login_vault.dart';
 import '../platform/secure_appearance_store.dart';
 import '../platform/selection_runtime.dart';
+import '../platform/schedule_widget_platform.dart';
 import '../ui/features/settings/view_models/appearance_view_model.dart';
 
 typedef AppClock = DateTime Function();
@@ -26,6 +27,7 @@ final class AppConfiguration {
     required this.grades,
     required this.courses,
     required this.appearance,
+    this.scheduleWidgetPlatform,
   });
 
   factory AppConfiguration.standard() {
@@ -46,6 +48,7 @@ final class AppConfiguration {
       },
     );
     return AppConfiguration(
+      scheduleWidgetPlatform: createScheduleWidgetPlatform(),
       appearance: AppearanceViewModel(store: SecureAppearanceStore()),
       auth: auth,
       clock: DateTime.now,
@@ -89,6 +92,7 @@ final class AppConfiguration {
   final GradeRepository grades;
   final CourseRepository courses;
   final AppearanceViewModel appearance;
+  final ScheduleWidgetPlatform? scheduleWidgetPlatform;
 
   Future<void> removeSchoolData(String schoolId) async {
     await Future.wait([

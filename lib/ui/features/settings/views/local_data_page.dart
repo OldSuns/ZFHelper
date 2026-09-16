@@ -39,7 +39,7 @@ class LocalDataPage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppLayout.sectionGap),
                 _CacheSection(
-                  title: '课表',
+                  title: '课表与日程',
                   loading: timetable.data.loading,
                   failure:
                       timetable.data.failure?.kind ==
@@ -51,7 +51,8 @@ class LocalDataPage extends StatelessWidget {
                     for (final saved in timetable.data.library.accounts)
                       _CacheAccount(
                         account: saved.account,
-                        summary: '${saved.schedules.length} 个学期的课表',
+                        summary:
+                            '${saved.schedules.length} 个学期的课表 · ${saved.events.length} 项个人日程',
                         updates: saved.schedules.values.map(
                           (item) => item.fetchedAt,
                         ),

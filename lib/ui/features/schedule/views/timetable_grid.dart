@@ -6,6 +6,7 @@ import 'package:zf_core/zf_core.dart';
 import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import 'course_detail_sheet.dart';
+import '../view_models/schedule_labels.dart';
 
 const _minimumDayWidth = 48.0;
 const _maximumGridTextScale = 1.45;
@@ -367,24 +368,13 @@ class _TimetableGridState extends State<TimetableGrid> {
         entry.weekday != widget.today.weekday) {
       return false;
     }
-    final minutes = widget.today.hour * 60 + widget.today.minute;
-    for (
-      var number = entry.startPeriod!;
-      number <= entry.endPeriod!;
-      number++
-    ) {
-      final time = schedulePeriodTime(
-        widget.snapshot,
-        number,
-        campus: entry.campus,
-      );
-      if (time != null &&
-          minutes >= time.startMinutes &&
-          minutes < time.endMinutes) {
-        return true;
-      }
-    }
-    return false;
+    return ScheduleLesson(
+          entry: entry,
+          date: widget.today,
+          week: widget.week,
+          snapshot: widget.snapshot,
+        ).activePeriodAt(widget.today) !=
+        null;
   }
 
   PeriodTime? _currentPeriod() {

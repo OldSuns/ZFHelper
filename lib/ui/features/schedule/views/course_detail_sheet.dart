@@ -3,6 +3,7 @@ import 'package:zf_core/zf_core.dart';
 
 import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
+import '../view_models/schedule_labels.dart';
 
 enum _DetailAction { edit, delete }
 
@@ -66,13 +67,27 @@ class _CourseDetails extends StatelessWidget {
             .where((candidate) => candidate.groupKey == entry.groupKey)
             .toList()
           ..sort(compareScheduleEntries);
+    final dates = snapshot.calendar.weekDates(week);
+    final day = dates == null || entry.weekday == null
+        ? null
+        : ScheduleDay.fromSnapshot(snapshot, dates.days[entry.weekday! - 1]);
+    final lesson = day?.lessons
+        .where((item) => item.entry.id == entry.id)
+        .firstOrNull;
     final conflicts =
-        snapshot.entries
-            .where(
-              (candidate) =>
-                  candidate.id != entry.id &&
-                  entry.conflictsWith(candidate, week: week),
-            )
+        (lesson == null
+                ? snapshot.entries.where(
+                    (candidate) =>
+                        candidate.id != entry.id &&
+                        entry.conflictsWith(candidate, week: week),
+                  )
+                : day!.lessons
+                      .where(
+                        (other) =>
+                            other.entry.id != entry.id &&
+                            lesson.conflictsWith(other),
+                      )
+                      .map((item) => item.entry))
             .toList()
           ..sort(compareScheduleEntries);
     return Column(
@@ -364,79 +379,6 @@ class _ArrangementCard extends StatelessWidget {
       ),
     );
   }
-}
-
-extension ScheduleEntryViewText on ScheduleEntry {
-  String get scheduleWeeksText {
-    if (rawWeeks?.trim().isNotEmpty ?? false) return rawWeeks!;
-    if (weeks.isEmpty) return '周次待安排';
-    final sorted = weeks.toList()..sort();
-    final ranges = <String>[];
-    var first = sorted.first;
-    var last = first;
-    for (final week in sorted.skip(1)) {
-      if (week == last + 1) {
-        last = week;
-        continue;
-      }
-      ranges.add(first == last ? '$first' : '$first–$last');
-      first = last = week;
-    }
-    ranges.add(first == last ? '$first' : '$first–$last');
-    return '第 ${ranges.join('、')} 周';
-  }
-
-  String get schedulePeriodsText => startPeriod == null
-      ? '节次待安排'
-      : startPeriod == endPeriod
-      ? '第 $startPeriod 节'
-      : '第 $startPeriod–$endPeriod 节';
-
-  String get schedulePlaceText {
-    final place = [
-      if (campus?.trim().isNotEmpty ?? false) campus!,
-      if (location?.trim().isNotEmpty ?? false) location!,
-    ].join(' · ');
-    return place.isEmpty ? '地点待安排' : place;
-  }
-}
-
-String scheduleWeekdayText(int? weekday) => weekday == null
-    ? '星期待安排'
-    : const ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][weekday - 1];
-
-String scheduleClockText(int minutes) =>
-    '${(minutes ~/ 60).toString().padLeft(2, '0')}:'
-    '${(minutes % 60).toString().padLeft(2, '0')}';
-
-PeriodTime? schedulePeriodTime(
-  ScheduleSnapshot snapshot,
-  int number, {
-  String? campus,
-}) {
-  final periods = snapshot.periodTimes
-      .where((period) => period.number == number)
-      .toList();
-  var candidates = periods;
-  if (campus?.trim().isNotEmpty ?? false) {
-    final matching = periods
-        .where((period) => period.campus?.trim() == campus!.trim())
-        .toList();
-    candidates = matching.isNotEmpty
-        ? matching
-        : periods
-              .where((period) => period.campus?.trim().isEmpty ?? true)
-              .toList();
-  }
-  if (candidates.isEmpty) return null;
-  final first = candidates.first;
-  return candidates.every(
-        (period) =>
-            period.startMinutes == first.startMinutes &&
-            period.endMinutes == first.endMinutes,
-      )
-      ? first
-      : null;
 }
 
 String scheduleClockRange(ScheduleEntry entry, ScheduleSnapshot snapshot) {

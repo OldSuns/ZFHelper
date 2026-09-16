@@ -15,6 +15,7 @@ import '../ui/features/courses/views/courses_page.dart';
 import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/settings_page.dart';
+import '../ui/features/settings/view_models/schedule_widget_view_model.dart';
 import 'app_configuration.dart';
 
 enum AppDestination {
@@ -45,6 +46,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final AuthViewModel _auth;
   late final GradesViewModel _grades;
   late final CoursesViewModel _courses;
+  ScheduleWidgetViewModel? _scheduleWidget;
+  StreamSubscription<DateTime>? _widgetLaunches;
   bool _checkingExit = false;
 
   @override
@@ -56,11 +59,28 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
     _auth = AuthViewModel(
       widget.configuration.auth,
-      onRemoveAccountData: widget.configuration.removeAccountData,
-      onRemoveSchoolData: widget.configuration.removeSchoolData,
+      onRemoveAccountData: (scope) async {
+        await widget.configuration.removeAccountData(scope);
+        await _synchronizeWidgetAfterRemoval();
+      },
+      onRemoveSchoolData: (schoolId) async {
+        await widget.configuration.removeSchoolData(schoolId);
+        await _synchronizeWidgetAfterRemoval();
+      },
     );
     _grades = GradesViewModel(repository: widget.configuration.grades);
     _courses = CoursesViewModel(repository: widget.configuration.courses);
+    final widgetPlatform = widget.configuration.scheduleWidgetPlatform;
+    if (widgetPlatform != null) {
+      _scheduleWidget = ScheduleWidgetViewModel(
+        repository: widget.configuration.schedule,
+        appearance: widget.configuration.appearance,
+        platform: widgetPlatform,
+        clock: widget.configuration.clock,
+      );
+      _widgetLaunches = _scheduleWidget!.launches.listen(_openWidgetDate);
+      unawaited(_initializeWidget());
+    }
     unawaited(_timetable.initialize());
     unawaited(_grades.initialize());
     unawaited(_courses.initialize());
@@ -76,6 +96,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _grades.dispose();
     _courses.dispose();
     _auth.dispose();
+    unawaited(_widgetLaunches?.cancel());
+    _scheduleWidget?.dispose();
     widget.configuration.appearance.dispose();
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
@@ -88,6 +110,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _timetable.refreshToday();
+      unawaited(_scheduleWidget?.refreshStatus());
       if (_auth.state.canRestoreSession && !_auth.state.isBusy) {
         unawaited(_auth.restore());
       }
@@ -139,6 +162,37 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _openSettings() => _selectDestination(AppDestination.settings.index);
+
+  Future<void> _synchronizeWidgetAfterRemoval() async {
+    final model = _scheduleWidget;
+    if (model == null) return;
+    await widget.configuration.appearance.initialize();
+    if (!await model.synchronize()) {
+      throw LoginFailure(
+        LoginFailureCode.storage,
+        model.failure ?? model.sourceNotice ?? '桌面小组件数据未能清理，请重试移除操作',
+      );
+    }
+  }
+
+  Future<void> _initializeWidget() async {
+    await _timetable.initialize();
+    if (!mounted) return;
+    final date = await _scheduleWidget!.consumeLaunch();
+    if (date != null) _openWidgetDate(date);
+    await _scheduleWidget?.refreshStatus();
+  }
+
+  void _openWidgetDate(DateTime date) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      _timetable.selectAgendaDate(date);
+      _timetable.showSection(ScheduleSection.agenda);
+      _selectDestination(AppDestination.timetable.index);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
 
   void _configureSchool(SchoolConnection profile) {
     Navigator.of(context).push<bool>(
@@ -247,6 +301,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         timetable: _timetable,
         grades: _grades,
         courses: _courses,
+        scheduleWidget: _scheduleWidget,
       ),
     };
   }

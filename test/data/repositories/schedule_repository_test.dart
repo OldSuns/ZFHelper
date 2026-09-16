@@ -10,6 +10,131 @@ import 'package:zfhelper/data/storage/sqlite_schedule_store.dart';
 import '../../support/schedule_fakes.dart';
 
 void main() {
+  test(
+    'events work without an import and reject stale or failed edits',
+    () async {
+      final store = TestScheduleStore();
+      final source = TestScheduleSource(account: scheduleTestAccount);
+      final repository = testScheduleRepository(store: store, source: source);
+      addTearDown(source.dispose);
+      addTearDown(repository.dispose);
+      await repository.initialize();
+      expect(repository.state.target, isNull);
+      final target = repository.state.eventTarget!;
+      final event = ScheduleEvent(
+        id: 'homework',
+        title: '复习课程',
+        date: DateTime(2026, 9, 15),
+        category: ScheduleEventCategory.homework,
+      );
+      expect(await repository.saveEvent(event, target: target), isTrue);
+      expect(source.requests, 0);
+      expect(
+        await repository.setEventCompleted(event, true, target: target),
+        isTrue,
+      );
+      final completed = event.copyWith(completed: true);
+      expect(repository.state.account!.events, [completed]);
+      expect(await repository.removeEvent(event, target: target), isFalse);
+      store.failure = const ScheduleStorageException(
+        operation: 'saveAccount',
+        message: '测试写入失败',
+      );
+      expect(
+        await repository.saveEvent(
+          completed.copyWith(title: '不应覆盖'),
+          target: target,
+          replacing: completed,
+        ),
+        isFalse,
+      );
+      expect(repository.state.account!.events, [completed]);
+      store.failure = null;
+      expect(await repository.removeEvent(completed, target: target), isTrue);
+      expect(
+        await repository.saveEvent(event, target: target, replacing: completed),
+        isFalse,
+      );
+      expect(repository.state.account!.events, isEmpty);
+    },
+  );
+
+  test(
+    'imports and timetable clears preserve events but account removal does not',
+    () async {
+      final source = TestScheduleSource(account: scheduleTestAccount)
+        ..onRead = (_) async => _import();
+      final repository = testScheduleRepository(
+        source: source,
+        store: TestScheduleStore(
+          library: ScheduleLibrary(
+            accounts: [scheduleTestSaved()],
+            selectedAccount: scheduleTestAccount.scope,
+          ),
+        ),
+      );
+      addTearDown(source.dispose);
+      addTearDown(repository.dispose);
+      await repository.initialize();
+      final eventTarget = repository.state.eventTarget!;
+      final scheduleTarget = repository.state.target!;
+      final event = ScheduleEvent(
+        id: 'activity',
+        title: '社团活动',
+        date: DateTime(2026, 9, 15),
+        category: ScheduleEventCategory.activity,
+      );
+      expect(await repository.saveEvent(event, target: eventTarget), isTrue);
+      expect(
+        await repository.selectTerm(
+          AcademicTerm.zhengfang(
+            startYear: '2026',
+            semester: ZhengfangSemester.second,
+          ),
+        ),
+        isTrue,
+      );
+      expect(await repository.refresh(), isTrue);
+      expect(
+        await repository.updateSettings(
+          target: repository.state.target!,
+          update: (settings, _) => settings.copyWith(preferAgenda: true),
+        ),
+        isTrue,
+      );
+      expect(repository.state.account!.events, [event]);
+      expect(
+        await repository.clearSchedules(scheduleTestAccount.scope),
+        isTrue,
+      );
+      expect(repository.state.account!.schedules, isEmpty);
+      expect(repository.state.account!.settings, isEmpty);
+      expect(repository.state.account!.events, [event]);
+      expect(repository.state.eventTarget, eventTarget);
+      final edited = event.copyWith(note: '地点稍后通知');
+      expect(
+        await repository.saveEvent(
+          edited,
+          target: eventTarget,
+          replacing: event,
+        ),
+        isTrue,
+      );
+      expect(await repository.refresh(), isTrue);
+      expect(
+        await repository.updateSettings(
+          target: scheduleTarget,
+          update: (settings, _) => settings.copyWith(preferAgenda: true),
+        ),
+        isFalse,
+      );
+      expect(repository.state.account!.events, [edited]);
+      expect(await repository.removeAccount(scheduleTestAccount.scope), isTrue);
+      expect(repository.state.account!.events, isEmpty);
+      expect(await repository.saveEvent(event, target: eventTarget), isFalse);
+    },
+  );
+
   test('manual term selection recovers from catalog failure and retains saved metadata', () async {
     final snapshot = scheduleTestSnapshot();
     final catalog = TermCatalog(

@@ -5,8 +5,10 @@ import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/data/storage/schedule_store.dart';
 import 'package:zfhelper/ui/core/app_theme.dart';
+import 'package:zfhelper/ui/features/schedule/view_models/schedule_agenda.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
 import 'package:zfhelper/ui/features/schedule/views/course_editor_page.dart';
+import 'package:zfhelper/ui/features/schedule/views/schedule_day_widgets.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/settings/views/schedule_settings_section.dart';
 
@@ -17,6 +19,73 @@ import '../../../support/course_fakes.dart';
 import '../../../support/settings_fakes.dart';
 
 void main() {
+  testWidgets(
+    'agenda preserves period order and full ranges without clock times',
+    (tester) async {
+      final date = DateTime(2026, 9, 7);
+      final entries = [
+        for (final (name, start, end) in [
+          ('A', 6, 7),
+          ('Z', 1, 2),
+          ('B', 10, 11),
+        ])
+          ScheduleEntry(
+            id: name,
+            name: name,
+            weekday: 1,
+            startPeriod: start,
+            endPeriod: end,
+            weeks: [1],
+          ),
+      ];
+      for (final times in [
+        <PeriodTime>[],
+        [
+          PeriodTime(number: 10, startMinutes: 1140, endMinutes: 1185),
+          PeriodTime(number: 11, startMinutes: 1195, endMinutes: 1240),
+        ],
+      ]) {
+        final day = ScheduleDay.fromSnapshot(
+          scheduleTestSnapshot(entries: entries).copyWith(periodTimes: times),
+          date,
+        );
+        final agenda = scheduleAgendaItems(day, const []);
+        expect(day.lessons.map((lesson) => lesson.entry.startPeriod), [
+          1,
+          6,
+          10,
+        ]);
+        expect(agenda.map((item) => item.lesson!.entry.startPeriod), [
+          1,
+          6,
+          10,
+        ]);
+        expect(
+          agenda.any((item) => item.group == AgendaTimeGroup.unspecified),
+          isFalse,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ScheduleLessonTile(
+                lesson: day.lessons[1],
+                now: date,
+                onTap: () {},
+              ),
+            ),
+          ),
+        );
+        final label = find.text('第 6–7 节');
+        expect(label, findsOneWidget);
+        expect(
+          tester.getTopLeft(label).dx,
+          lessThan(tester.getTopLeft(find.text('A')).dx),
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
   testWidgets(
     'first use asks for school and address without any prefilled institution',
     (tester) async {
@@ -73,6 +142,7 @@ void main() {
       final snapshot = scheduleTestSnapshot(
         entries: [
           ...scheduleTestSnapshot().entries,
+          ScheduleEntry(id: 'undated', name: '待公布课程', weeks: [1]),
           ScheduleEntry(
             id: 'late-course',
             name: '学期末实验',
@@ -138,6 +208,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(model.selectedWeek, 21);
         expect(find.text('课程详情'), findsOneWidget);
+        final edit = find.widgetWithText(FilledButton, '本地调整');
+        final hide = find.widgetWithText(OutlinedButton, '隐藏此安排');
+        await tester.ensureVisible(hide);
+        expect(tester.getSize(edit).height, tester.getSize(hide).height);
         await tester.tap(find.byTooltip('关闭课程详情'));
         await tester.pumpAndSettle();
         for (final size in [const Size(1366, 768), const Size(390, 844)]) {
@@ -149,6 +223,55 @@ void main() {
         }
         expect(source.requests, 0);
         expect(tester.takeException(), isNull);
+
+        expect(
+          find.byKey(const ValueKey('schedule-section-today')),
+          findsNothing,
+        );
+        await tester.tap(find.byKey(const ValueKey('schedule-section-agenda')));
+        await tester.pumpAndSettle();
+        expect(model.dayOn(model.agendaDate).week, 1);
+        expect(model.selectedWeek, 21);
+        expect(find.text('高等数学'), findsOneWidget);
+        expect(find.text('待排安排'), findsNothing);
+        expect(find.text('待公布课程'), findsNothing);
+        expect(find.text('新建日程'), findsNothing);
+        final addEvent = find.byKey(const ValueKey('schedule-add-event'));
+        expect(tester.getCenter(addEvent).dx, greaterThan(320));
+        await tester.tap(addEvent);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('schedule-event-title')),
+          '小组讨论',
+        );
+        await tester.runAsync(
+          () => tester.tap(find.byKey(const ValueKey('schedule-event-save'))),
+        );
+        await tester.pumpAndSettle();
+        expect(model.events.single.title, '小组讨论');
+        final checkbox = find.byType(Checkbox);
+        await tester.ensureVisible(checkbox);
+        await tester.runAsync(() => tester.tap(checkbox));
+        await tester.pumpAndSettle();
+        expect(model.events.single.completed, isTrue);
+        for (final size in [const Size(1366, 768), const Size(320, 640)]) {
+          tester.view.physicalSize = size;
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+        }
+        tester.view.physicalSize = const Size(390, 844);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('小组讨论'));
+        await tester.tap(find.text('小组讨论'));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() => tester.tap(find.byTooltip('删除日程')));
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => tester.tap(find.widgetWithText(FilledButton, '删除')),
+        );
+        await tester.pumpAndSettle();
+        expect(model.events, isEmpty);
+        expect(source.requests, 0);
 
         source.onRead = (_) async => ScheduleImportResult(snapshot: snapshot);
         await tester.pumpWidget(

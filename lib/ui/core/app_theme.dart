@@ -18,6 +18,12 @@ abstract final class AppLayout {
 }
 
 abstract final class AppTheme {
+  static const _buttonMinimumSize = Size(48, 48);
+  static const _buttonPadding = EdgeInsets.symmetric(
+    horizontal: 20,
+    vertical: 12,
+  );
+
   static Color courseAccent(Brightness brightness, String groupKey) {
     var hash = 0;
     for (final code in groupKey.codeUnits) {
@@ -181,12 +187,31 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(48, 48),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          minimumSize: _buttonMinimumSize,
+          padding: _buttonPadding,
+          iconSize: 20,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: _buttonMinimumSize,
+          padding: _buttonPadding,
+          iconSize: 20,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: _buttonMinimumSize,
+          padding: _buttonPadding,
+          iconSize: 20,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+        style: TextButton.styleFrom(
+          minimumSize: _buttonMinimumSize,
+          padding: _buttonPadding,
+          iconSize: 20,
+        ),
       ),
     );
   }

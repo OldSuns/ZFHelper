@@ -94,7 +94,7 @@ final class SqliteScheduleStore implements ScheduleStore {
   }
 }
 
-const _schemaVersion = 1;
+const _schemaVersion = 2;
 const _busyTimeoutMilliseconds = 5000;
 
 sealed class _StoreCommand {
@@ -212,12 +212,20 @@ T _transaction<T>(Database database, T Function() action, {bool write = true}) {
 void _initializeSchema(Database database) {
   final version = database.userVersion;
   if (version == _schemaVersion) return;
-  if (version != 0) _unsupportedVersion();
+  if (version != 0 && version != 1) _unsupportedVersion();
 
   _transaction(database, () {
     // Another store can create the file between open and BEGIN IMMEDIATE.
     final lockedVersion = database.userVersion;
     if (lockedVersion == _schemaVersion) return;
+    if (lockedVersion == 1) {
+      database.execute(
+        "ALTER TABLE schedule_accounts ADD COLUMN "
+        "events_payload TEXT NOT NULL DEFAULT '[]'",
+      );
+      database.userVersion = _schemaVersion;
+      return;
+    }
     if (lockedVersion != 0) _unsupportedVersion();
     final tables = database.select(
       "SELECT name FROM sqlite_master WHERE type = 'table' "
@@ -239,6 +247,7 @@ void _initializeSchema(Database database) {
         catalog_payload TEXT,
         schedules_payload TEXT NOT NULL,
         settings_payload TEXT NOT NULL,
+        events_payload TEXT NOT NULL DEFAULT '[]',
         selected_term_key TEXT,
         access_order INTEGER NOT NULL CHECK(access_order > 0),
         PRIMARY KEY (school_id, account_id)
@@ -301,6 +310,7 @@ StoredScheduleAccount _decodeAccount(Row row) {
       _string(row['settings_payload']),
       ScheduleSettingsCodec.decode,
     ),
+    events: _decodeEvents(_string(row['events_payload'])),
     selectedTermKey: _optionalString(row['selected_term_key']),
   );
   _validateAccount(account);
@@ -326,9 +336,9 @@ void _saveAccount(
     '''
     INSERT INTO schedule_accounts (
       school_id, account_id, school_name, account_name, login_name,
-      catalog_payload, schedules_payload, settings_payload,
+      catalog_payload, schedules_payload, settings_payload, events_payload,
       selected_term_key, access_order
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (school_id, account_id) DO UPDATE SET
       school_name = excluded.school_name,
       account_name = excluded.account_name,
@@ -336,6 +346,7 @@ void _saveAccount(
       catalog_payload = excluded.catalog_payload,
       schedules_payload = excluded.schedules_payload,
       settings_payload = excluded.settings_payload,
+      events_payload = excluded.events_payload,
       selected_term_key = excluded.selected_term_key,
       access_order = excluded.access_order
     ''',
@@ -348,6 +359,10 @@ void _saveAccount(
       stored.catalog == null ? null : TermCatalogCodec.encode(stored.catalog!),
       _encodeItems(stored.schedules, ScheduleSnapshotCodec.encode),
       _encodeItems(stored.settings, ScheduleSettingsCodec.encode),
+      jsonEncode([
+        for (final event in stored.events)
+          jsonDecode(ScheduleEventCodec.encode(event)),
+      ]),
       stored.selectedTermKey,
       accessOrder,
     ],
@@ -462,6 +477,16 @@ Map<String, T> _decodeItems<T>(String payload, T Function(String) decode) {
   };
 }
 
+List<ScheduleEvent> _decodeEvents(String payload) {
+  final value = jsonDecode(payload);
+  if (value is! List<Object?>) {
+    throw const FormatException('Invalid schedule events.');
+  }
+  return [
+    for (final event in value) ScheduleEventCodec.decode(jsonEncode(event)),
+  ];
+}
+
 void _validateAccount(StoredScheduleAccount stored) {
   _validateScope(stored.account.scope);
   _string(stored.account.schoolName);
@@ -474,6 +499,10 @@ void _validateAccount(StoredScheduleAccount stored) {
   }
   for (final key in stored.settings.keys) {
     _string(key);
+  }
+  if (stored.events.map((event) => event.id).toSet().length !=
+      stored.events.length) {
+    throw const FormatException('Duplicate schedule events.');
   }
   final selected = stored.selectedTermKey;
   if (selected == null) return;

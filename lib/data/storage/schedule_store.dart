@@ -11,15 +11,38 @@ final class StoredScheduleAccount {
     this.catalog,
     Map<String, ScheduleSnapshot> schedules = const {},
     Map<String, ScheduleSettings> settings = const {},
+    List<ScheduleEvent> events = const [],
     this.selectedTermKey,
   }) : schedules = Map.unmodifiable(schedules),
-       settings = Map.unmodifiable(settings);
+       settings = Map.unmodifiable(settings),
+       events = List.unmodifiable(events);
 
   final AcademicAccountRecord account;
   final TermCatalog? catalog;
   final Map<String, ScheduleSnapshot> schedules;
   final Map<String, ScheduleSettings> settings;
+  final List<ScheduleEvent> events;
   final String? selectedTermKey;
+
+  StoredScheduleAccount copyWith({
+    AcademicAccountRecord? account,
+    TermCatalog? catalog,
+    bool clearCatalog = false,
+    Map<String, ScheduleSnapshot>? schedules,
+    Map<String, ScheduleSettings>? settings,
+    List<ScheduleEvent>? events,
+    String? selectedTermKey,
+    bool clearSelectedTerm = false,
+  }) => StoredScheduleAccount(
+    account: account ?? this.account,
+    catalog: clearCatalog ? null : catalog ?? this.catalog,
+    schedules: schedules ?? this.schedules,
+    settings: settings ?? this.settings,
+    events: events ?? this.events,
+    selectedTermKey: clearSelectedTerm
+        ? null
+        : selectedTermKey ?? this.selectedTermKey,
+  );
 }
 
 /// Persisted accounts in most recently selected or added order.

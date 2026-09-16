@@ -3,6 +3,7 @@ import 'package:zf_core/zf_core.dart';
 
 import '../../../core/adaptive_sheet.dart';
 import 'course_detail_sheet.dart';
+import '../view_models/schedule_labels.dart';
 
 Future<ScheduleEntry?> showScheduleCourseSearch(
   BuildContext context, {

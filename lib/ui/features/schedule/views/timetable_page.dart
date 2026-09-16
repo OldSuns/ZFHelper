@@ -8,12 +8,13 @@ import 'package:zf_core/zf_core.dart';
 import '../../../../data/repositories/schedule_repository.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/empty_state_card.dart';
-import '../../../core/feature_page.dart';
 import '../view_models/timetable_view_model.dart';
+import 'agenda_schedule_view.dart';
 import 'course_detail_sheet.dart';
 import 'course_editor_page.dart';
 import 'course_search_sheet.dart';
 import 'schedule_picker_sheets.dart';
+import 'schedule_event_editor.dart';
 import 'timetable_grid.dart';
 
 class TimetablePage extends StatefulWidget {
@@ -79,7 +80,7 @@ class _TimetablePageState extends State<TimetablePage> {
     _message('课程已保存到本机');
   }
 
-  Future<void> _details(ScheduleEntry entry) async {
+  Future<void> _details(ScheduleEntry entry, {int? week}) async {
     final snapshot = model.schedule;
     final target = model.editTarget;
     if (snapshot == null || target == null) return;
@@ -87,7 +88,7 @@ class _TimetablePageState extends State<TimetablePage> {
       context,
       entry: entry,
       snapshot: snapshot,
-      week: model.selectedWeek,
+      week: week ?? model.selectedWeek,
       onEdit: () =>
           unawaited(_edit(entry: entry, target: target, snapshot: snapshot)),
       onDelete: () => unawaited(_removeEntry(entry, target)),
@@ -114,7 +115,23 @@ class _TimetablePageState extends State<TimetablePage> {
             weeks.first,
       );
     }
+    model.showSection(ScheduleSection.timetable);
     await _details(current);
+  }
+
+  void _lessonDetails(ScheduleLesson lesson) =>
+      unawaited(_details(lesson.entry, week: lesson.week));
+
+  Future<void> _editEvent([ScheduleEvent? event]) async {
+    final result = await showScheduleEventEditor(
+      context,
+      model,
+      initialDate: event?.date ?? model.agendaDate,
+      event: event,
+    );
+    if (mounted && result != null) {
+      _message(result == ScheduleEventEditResult.saved ? '日程已保存到本机' : '日程已删除');
+    }
   }
 
   Future<bool> _confirm({
@@ -163,25 +180,21 @@ class _TimetablePageState extends State<TimetablePage> {
     listenable: model,
     builder: (context, _) => CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): model.previousWeek,
-        const SingleActivator(LogicalKeyboardKey.arrowRight): model.nextWeek,
-        const SingleActivator(LogicalKeyboardKey.home): () =>
-            unawaited(model.returnToCurrentWeek()),
+        if (model.section == ScheduleSection.timetable) ...{
+          const SingleActivator(LogicalKeyboardKey.arrowLeft):
+              model.previousWeek,
+          const SingleActivator(LogicalKeyboardKey.arrowRight): model.nextWeek,
+          const SingleActivator(LogicalKeyboardKey.home): () =>
+              unawaited(model.returnToCurrentWeek()),
+        },
       },
-      child: Focus(
-        autofocus: true,
-        child: model.hasSchedule ? _schedule() : _unimported(),
-      ),
+      child: Focus(autofocus: true, child: _schedule()),
     ),
   );
 
-  Widget _unimported() => FeaturePage(
-    title: '课表',
-    schoolName: model.account?.account.schoolName ?? widget.schoolName,
+  Widget _unimported() => ListView(
+    padding: const EdgeInsets.all(AppLayout.pagePadding),
     children: [
-      if (model.data.loading || model.data.refreshing)
-        const LinearProgressIndicator(),
-      if (model.account != null) _termButton(),
       _WeekHeader(viewModel: model),
       const SizedBox(height: 16),
       _WeekDays(viewModel: model),
@@ -203,12 +216,11 @@ class _TimetablePageState extends State<TimetablePage> {
         ],
       ),
       const SizedBox(height: 12),
-      if (model.data.failure != null) _failure(),
       EmptyStateCard(
         icon: Icons.calendar_month_outlined,
         title: '课表还没有同步',
         message: model.canRefresh
-            ? '在“设置 → 课表”中导入整个学期后，可离线查看每周课程。'
+            ? '在“设置 → 课表”中导入整个学期后，可离线查看今日课程与每周课表。'
             : '在设置中连接教务账号并导入课表，即可查看每周课程、上课时间与地点。',
         actionLabel: '前往设置',
         onAction: widget.onOpenSettings,
@@ -228,10 +240,24 @@ class _TimetablePageState extends State<TimetablePage> {
         ? null
         : () => selectScheduleTerm(context, model),
     icon: const Icon(Icons.expand_more, size: 20),
-    label: Text(
-      model.selectedTerm?.label ?? '选择学期',
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
+    label: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          model.selectedTerm?.label ?? '课表与日程',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          [
+            model.account?.account.schoolName ?? widget.schoolName,
+            if (model.account != null) model.account!.account.accountName,
+          ].join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
     ),
   );
 
@@ -283,87 +309,38 @@ class _TimetablePageState extends State<TimetablePage> {
             final wide =
                 constraints.maxWidth / textScale >= AppLayout.workspaceMinWidth;
             final theme = Theme.of(context);
-            final snapshot = model.schedule!;
             return Column(
               children: [
                 Padding(
                   padding: wide
-                      ? const EdgeInsets.fromLTRB(24, 16, 16, 4)
-                      : const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                      ? const EdgeInsets.fromLTRB(24, 12, 24, 12)
+                      : const EdgeInsets.fromLTRB(8, 4, 8, 0),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '课表',
-                              style: theme.textTheme.headlineSmall,
-                              maxLines: 1,
-                            ),
-                            if (!compact)
-                              Text(
-                                wide
-                                    ? '${model.account!.account.schoolName} · ${model.account!.account.accountName}'
-                                    : model.account!.account.schoolName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                          ],
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _termButton(),
                         ),
                       ),
+                      if (wide) ...[
+                        SizedBox(width: 240, child: _sectionTabs()),
+                        const SizedBox(width: 16),
+                      ],
                       IconButton(
                         tooltip: '查找课程',
-                        onPressed: _search,
+                        onPressed: model.hasSchedule ? _search : null,
                         icon: const Icon(Icons.search),
                       ),
                     ],
                   ),
                 ),
-                if (wide)
+                if (!wide)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _termButton(),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 260,
-                          child: _weekNavigation(compact: compact),
-                        ),
-                        if (model.currentPosition.status !=
-                            TeachingWeekStatus.unknown) ...[
-                          const SizedBox(width: 8),
-                          _currentWeekButton(),
-                        ],
-                      ],
-                    ),
-                  )
-                else ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _termButton(),
-                          ),
-                        ),
-                        if (model.currentPosition.status !=
-                            TeachingWeekStatus.unknown)
-                          _currentWeekButton(),
-                      ],
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _sectionTabs(),
                   ),
-                  _weekNavigation(compact: compact),
-                ],
-                if (model.data.refreshing)
+                if (model.data.loading || model.data.refreshing)
                   const LinearProgressIndicator(minHeight: 2),
                 if (model.data.failure != null)
                   Flexible(
@@ -379,34 +356,23 @@ class _TimetablePageState extends State<TimetablePage> {
                     ),
                   ),
                 Expanded(
-                  child: Padding(
-                    padding: wide
-                        ? const EdgeInsets.fromLTRB(24, 0, 24, 24)
-                        : EdgeInsets.zero,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(wide ? 16 : 0),
-                        border: wide
-                            ? Border.all(
-                                color: theme.colorScheme.outlineVariant,
-                              )
-                            : null,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(wide ? 16 : 0),
-                        child: _TeachingWeeks(
-                          key: ValueKey(model.editTarget),
-                          snapshot: snapshot,
-                          selectedWeek: model.selectedWeek,
-                          weekCount: model.weekCount,
-                          today: model.today,
-                          agenda: model.agenda,
-                          onWeek: model.showTeachingWeek,
-                          onCourse: _details,
-                        ),
-                      ),
+                  child: switch (model.section) {
+                    ScheduleSection.agenda => AgendaScheduleView(
+                      model: model,
+                      onCourse: _lessonDetails,
+                      onAdd: () => unawaited(_editEvent()),
+                      onEvent: _editEvent,
+                      onOpenSettings: widget.onOpenSettings,
                     ),
-                  ),
+                    ScheduleSection.timetable =>
+                      model.hasSchedule
+                          ? _weekContent(
+                              wide: wide,
+                              compact: compact,
+                              theme: theme,
+                            )
+                          : _unimported(),
+                  },
                 ),
               ],
             );
@@ -416,10 +382,122 @@ class _TimetablePageState extends State<TimetablePage> {
     ),
   );
 
-  Widget _currentWeekButton() => TextButton(
-    onPressed: model.isCurrentWeek ? null : model.returnToCurrentWeek,
-    child: const Text('回到本周'),
+  Widget _sectionTabs() {
+    final colors = Theme.of(context).colorScheme;
+    final showIcons = MediaQuery.textScalerOf(context).scale(14) / 14 < 1.5;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            for (final section in ScheduleSection.values)
+              Expanded(
+                child: Semantics(
+                  selected: model.section == section,
+                  child: TextButton.icon(
+                    key: ValueKey('schedule-section-${section.name}'),
+                    onPressed: () => model.showSection(section),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                      backgroundColor: model.section == section
+                          ? colors.primaryContainer
+                          : Colors.transparent,
+                      foregroundColor: model.section == section
+                          ? colors.onPrimaryContainer
+                          : colors.onSurfaceVariant,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: showIcons
+                        ? Icon(switch (section) {
+                            ScheduleSection.timetable =>
+                              Icons.view_week_outlined,
+                            ScheduleSection.agenda => Icons.event_note_outlined,
+                          }, size: 18)
+                        : null,
+                    label: Text(switch (section) {
+                      ScheduleSection.timetable => '课表',
+                      ScheduleSection.agenda => '日程',
+                    }),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _weekContent({
+    required bool wide,
+    required bool compact,
+    required ThemeData theme,
+  }) => Column(
+    children: [
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: wide ? 24 : 8),
+        child: Row(
+          children: [
+            if (wide) ...[
+              const Spacer(),
+              SizedBox(width: 320, child: _weekNavigation(compact: compact)),
+            ] else
+              Expanded(child: _weekNavigation(compact: compact)),
+            if (model.currentPosition.status != TeachingWeekStatus.unknown)
+              _currentWeekButton(compact: !wide),
+          ],
+        ),
+      ),
+      Expanded(
+        child: Padding(
+          padding: wide
+              ? const EdgeInsets.fromLTRB(24, 8, 24, 24)
+              : EdgeInsets.zero,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(wide ? 16 : 0),
+              border: wide
+                  ? Border.all(color: theme.colorScheme.outlineVariant)
+                  : null,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(wide ? 16 : 0),
+              child: _TeachingWeeks(
+                key: ValueKey(model.editTarget),
+                snapshot: model.schedule!,
+                selectedWeek: model.selectedWeek,
+                weekCount: model.weekCount,
+                today: model.today,
+                agenda: model.agenda,
+                onWeek: model.showTeachingWeek,
+                onCourse: _details,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
   );
+
+  Widget _currentWeekButton({bool compact = false}) => compact
+      ? IconButton(
+          tooltip: '回到本周',
+          onPressed: model.isCurrentWeek ? null : model.returnToCurrentWeek,
+          icon: const Icon(Icons.today_outlined),
+        )
+      : TextButton(
+          onPressed: model.isCurrentWeek ? null : model.returnToCurrentWeek,
+          child: const Text('回到本周'),
+        );
 
   Widget _weekNavigation({required bool compact}) => Row(
     children: [
@@ -437,9 +515,13 @@ class _TimetablePageState extends State<TimetablePage> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '第${model.selectedWeek}周',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Flexible(
+                    child: Text(
+                      '第${model.selectedWeek}周',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                   const Icon(Icons.expand_more, size: 18),
                 ],

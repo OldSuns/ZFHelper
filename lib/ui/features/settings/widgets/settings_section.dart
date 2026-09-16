@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-class SettingsSection extends StatelessWidget {
-  const SettingsSection({
+import '../../../core/app_theme.dart';
+
+class SettingsPageScaffold extends StatelessWidget {
+  const SettingsPageScaffold({
     required this.title,
     required this.children,
     super.key,
@@ -9,15 +11,43 @@ class SettingsSection extends StatelessWidget {
 
   final String title;
   final List<Widget> children;
+  static const _maxContentWidth = 760.0;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(title)),
+    body: SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+          child: ListView(
+            key: PageStorageKey('settings-$title'),
+            padding: const EdgeInsets.all(AppLayout.pagePadding),
+            children: children,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class SettingsSection extends StatelessWidget {
+  const SettingsSection({required this.children, this.title, super.key});
+
+  final String? title;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 10),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      ),
+      if (title != null)
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(title!, style: Theme.of(context).textTheme.titleMedium),
+        ),
       ListTileTheme.merge(
         minLeadingWidth: 24,
         horizontalTitleGap: 16,

@@ -15,6 +15,7 @@ enum ScheduleFailureKind {
 }
 
 typedef ScheduleTarget = ({AccountScope scope, AcademicTerm term, int epoch});
+typedef ScheduleEventTarget = ({AccountScope scope, int epoch});
 
 final class ScheduleFailure {
   const ScheduleFailure(this.kind, this.message);
@@ -30,6 +31,7 @@ final class ScheduleRepositoryState {
     this.refreshing = false,
     this.failure,
     this.accountEpoch = 0,
+    this.scheduleEpoch = 0,
   });
 
   final ScheduleLibrary library;
@@ -38,6 +40,7 @@ final class ScheduleRepositoryState {
   final bool refreshing;
   final ScheduleFailure? failure;
   final int accountEpoch;
+  final int scheduleEpoch;
 
   StoredScheduleAccount? get account => library.accounts
       .where((item) => item.account.scope == library.selectedAccount)
@@ -57,7 +60,12 @@ final class ScheduleRepositoryState {
     final term = selectedTerm;
     return scope == null || term == null
         ? null
-        : (scope: scope, term: term, epoch: accountEpoch);
+        : (scope: scope, term: term, epoch: scheduleEpoch);
+  }
+
+  ScheduleEventTarget? get eventTarget {
+    final scope = account?.account.scope;
+    return scope == null ? null : (scope: scope, epoch: accountEpoch);
   }
 
   ScheduleSettings get settings =>
@@ -85,6 +93,7 @@ final class ScheduleRepository {
   bool _closed = false;
   int _readGeneration = 0;
   final _accountEpochs = <AccountScope, int>{};
+  final _scheduleEpochs = <AccountScope, int>{};
   final _accountChanges = PendingAcademicAccountChanges();
   ScheduleFailure? _failure;
   Future<void>? _initializing;
@@ -97,6 +106,7 @@ final class ScheduleRepository {
     refreshing: _refreshing,
     failure: _failure,
     accountEpoch: _accountEpochs[_library.selectedAccount] ?? 0,
+    scheduleEpoch: _scheduleEpochs[_library.selectedAccount] ?? 0,
   );
   Stream<ScheduleRepositoryState> get changes => _changes.stream;
 
@@ -178,8 +188,7 @@ final class ScheduleRepository {
         }
         final schedules = {...previous.schedules};
         if (snapshot != null) schedules[snapshot.term.key] = snapshot;
-        final next = StoredScheduleAccount(
-          account: previous.account,
+        final next = previous.copyWith(
           catalog: catalog,
           schedules: schedules,
           settings: settings,
@@ -231,15 +240,12 @@ final class ScheduleRepository {
     return _localChange(() async {
       final previous = _account(scope);
       if (previous == null) return;
-      final next = StoredScheduleAccount(
-        account: previous.account,
+      final next = previous.copyWith(
         catalog: _mergeCatalog(
           previous.catalog ?? TermCatalog(),
           previous,
           term,
         ),
-        schedules: previous.schedules,
-        settings: previous.settings,
         selectedTermKey: term.key,
       );
       await _store.saveAccount(next);
@@ -271,7 +277,7 @@ final class ScheduleRepository {
           message: '该账号或学期的本地课表已移除，未保存修改',
         );
       }
-      if (target.epoch != (_accountEpochs[target.scope] ?? 0)) {
+      if (target.epoch != (_scheduleEpochs[target.scope] ?? 0)) {
         throw const ScheduleStorageException(
           operation: '保存课表设置',
           message: '课表已被清理，请重新打开当前课表后修改',
@@ -281,12 +287,126 @@ final class ScheduleRepository {
         previous.settings[termKey] ?? ScheduleSettings(),
         previous.schedules[termKey]!,
       );
-      final next = StoredScheduleAccount(
-        account: previous.account,
-        catalog: previous.catalog,
-        schedules: previous.schedules,
+      final next = previous.copyWith(
         settings: {...previous.settings, termKey: settings},
-        selectedTermKey: previous.selectedTermKey,
+      );
+      await _store.saveAccount(next);
+      _replace(next);
+    });
+  }
+
+  Future<bool> saveEvent(
+    ScheduleEvent event, {
+    required ScheduleEventTarget target,
+    ScheduleEvent? replacing,
+  }) => _editEvents(
+    target: target,
+    operation: '保存日程',
+    update: (events) {
+      if (replacing == null) {
+        if (events.any((item) => item.id == event.id)) {
+          throw const ScheduleStorageException(
+            operation: '保存日程',
+            message: '该日程已保存，请重新打开后编辑',
+          );
+        }
+        return [...events, event];
+      }
+      if (event.id != replacing.id) {
+        throw const ScheduleStorageException(
+          operation: '保存日程',
+          message: '日程标识已改变，请重新打开后编辑',
+        );
+      }
+      final index = _eventIndex(events, replacing, '保存日程');
+      return [
+        for (var i = 0; i < events.length; i++)
+          if (i == index) event else events[i],
+      ];
+    },
+  );
+
+  Future<bool> removeEvent(
+    ScheduleEvent event, {
+    required ScheduleEventTarget target,
+  }) => _editEvents(
+    target: target,
+    operation: '删除日程',
+    update: (events) {
+      final index = _eventIndex(events, event, '删除日程');
+      return [
+        for (var i = 0; i < events.length; i++)
+          if (i != index) events[i],
+      ];
+    },
+  );
+
+  Future<bool> setEventCompleted(
+    ScheduleEvent event,
+    bool completed, {
+    required ScheduleEventTarget target,
+  }) => _editEvents(
+    target: target,
+    operation: '更新日程状态',
+    update: (events) {
+      final index = _eventIndex(events, event, '更新日程状态');
+      if (!event.canComplete) {
+        throw const ScheduleStorageException(
+          operation: '更新日程状态',
+          message: '只有待办和作业可以标记完成',
+        );
+      }
+      return [
+        for (var i = 0; i < events.length; i++)
+          if (i == index) event.copyWith(completed: completed) else events[i],
+      ];
+    },
+  );
+
+  Future<bool> _editEvents({
+    required ScheduleEventTarget target,
+    required String operation,
+    required List<ScheduleEvent> Function(List<ScheduleEvent>) update,
+  }) => _localChange(() async {
+    final previous = _account(target.scope);
+    if (previous == null ||
+        target.epoch != (_accountEpochs[target.scope] ?? 0)) {
+      throw ScheduleStorageException(
+        operation: operation,
+        message: '该账号的本机数据已移除，请重新打开日程后操作',
+      );
+    }
+    final next = previous.copyWith(events: update(previous.events));
+    await _store.saveAccount(next);
+    _replace(next);
+  });
+
+  static int _eventIndex(
+    List<ScheduleEvent> events,
+    ScheduleEvent expected,
+    String operation,
+  ) {
+    final index = events.indexWhere((event) => event.id == expected.id);
+    if (index < 0 || events[index] != expected) {
+      throw ScheduleStorageException(
+        operation: operation,
+        message: '该日程已被修改或删除，请重新打开后操作',
+      );
+    }
+    return index;
+  }
+
+  Future<bool> clearSchedules(AccountScope scope) {
+    _cancelRead();
+    _scheduleEpochs.update(scope, (epoch) => epoch + 1, ifAbsent: () => 1);
+    return _localChange(() async {
+      final previous = _account(scope);
+      if (previous == null) return;
+      final next = previous.copyWith(
+        clearCatalog: true,
+        schedules: const {},
+        settings: const {},
+        clearSelectedTerm: true,
       );
       await _store.saveAccount(next);
       _replace(next);
@@ -297,6 +417,7 @@ final class ScheduleRepository {
     _cancelRead();
     _accountChanges.remove(scope);
     _accountEpochs.update(scope, (epoch) => epoch + 1, ifAbsent: () => 1);
+    _scheduleEpochs.update(scope, (epoch) => epoch + 1, ifAbsent: () => 1);
     return _localChange(() async {
       final wasSelected = _library.selectedAccount == scope;
       await _store.removeAccount(scope);
@@ -387,13 +508,8 @@ final class ScheduleRepository {
 
   StoredScheduleAccount _withAccount(AcademicAccountRecord account) {
     final previous = _account(account.scope);
-    return StoredScheduleAccount(
-      account: account,
-      catalog: previous?.catalog,
-      schedules: previous?.schedules ?? const {},
-      settings: previous?.settings ?? const {},
-      selectedTermKey: previous?.selectedTermKey,
-    );
+    return previous?.copyWith(account: account) ??
+        StoredScheduleAccount(account: account);
   }
 
   StoredScheduleAccount? _account(AccountScope scope) => _library.accounts

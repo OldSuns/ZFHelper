@@ -9,6 +9,8 @@ import '../../../../data/storage/schedule_store.dart';
 
 typedef DateRefreshTimerFactory = Timer Function(Duration, VoidCallback);
 
+enum ScheduleSection { timetable, agenda }
+
 final class TimetableViewModel extends ChangeNotifier {
   TimetableViewModel({
     required ScheduleRepository repository,
@@ -18,6 +20,7 @@ final class TimetableViewModel extends ChangeNotifier {
        _clock = clock,
        _today = clock() {
     _week = CalendarWeek.containing(_today);
+    _agendaDate = DateTime(_today.year, _today.month, _today.day);
     _subscription = repository.changes.listen(_dataChanged);
     _scheduleDateRefresh(_today);
     _dataChanged(repository.state);
@@ -28,6 +31,8 @@ final class TimetableViewModel extends ChangeNotifier {
   final DateRefreshTimerFactory _createTimer;
   late final StreamSubscription<ScheduleRepositoryState> _subscription;
   final _browsedWeeks = <(AccountScope, String), int>{};
+  final _browsedDates = <AccountScope, DateTime>{};
+  final _savingEvents = <(AccountScope, String)>{};
   Timer? _dateRefreshTimer;
   DateTime _today;
   late CalendarWeek _week;
@@ -35,6 +40,9 @@ final class TimetableViewModel extends ChangeNotifier {
   int _selectedWeek = 1;
   bool _hadSchedule = false;
   DateTime? _calendarMonday;
+  ScheduleSection _section = ScheduleSection.timetable;
+  late DateTime _agendaDate;
+  AccountScope? _agendaScope;
 
   ScheduleRepositoryState get data => _repository.state;
   ScheduleSnapshot? get schedule => data.effective;
@@ -43,6 +51,10 @@ final class TimetableViewModel extends ChangeNotifier {
   AcademicTerm? get selectedTerm => data.selectedTerm;
   StoredScheduleAccount? get account => data.account;
   ScheduleTarget? get editTarget => data.target;
+  ScheduleEventTarget? get eventTarget => data.eventTarget;
+  List<ScheduleEvent> get events => account?.events ?? const [];
+  ScheduleSection get section => _section;
+  DateTime get agendaDate => _agendaDate;
   DateTime get today => _today;
   CalendarWeek get week => schedule?.calendar.weekDates(_selectedWeek) ?? _week;
   bool get hasSchedule => schedule != null;
@@ -123,8 +135,7 @@ final class TimetableViewModel extends ChangeNotifier {
   }
 
   Future<void> returnToCurrentWeek() async {
-    _today = _clock();
-    _scheduleDateRefresh(_today);
+    refreshToday();
     if (!hasSchedule) {
       _week = CalendarWeek.containing(_today);
       notifyListeners();
@@ -153,6 +164,86 @@ final class TimetableViewModel extends ChangeNotifier {
   Future<bool> selectTerm(AcademicTerm term) => _repository.selectTerm(term);
   Future<bool> selectAccount(AccountScope scope) =>
       _repository.selectAccount(scope);
+
+  void showSection(ScheduleSection value) {
+    if (_section == value) return;
+    _section = value;
+    refreshToday();
+    notifyListeners();
+  }
+
+  void selectAgendaDate(DateTime value) {
+    final date = DateTime(value.year, value.month, value.day);
+    if (sameScheduleDate(date, _agendaDate)) return;
+    _agendaDate = date;
+    final scope = account?.account.scope;
+    if (scope != null) _browsedDates[scope] = date;
+    notifyListeners();
+  }
+
+  void shiftAgendaDate(int days) => selectAgendaDate(
+    DateTime(_agendaDate.year, _agendaDate.month, _agendaDate.day + days),
+  );
+
+  void shiftAgendaMonth(int months) {
+    final first = DateTime(_agendaDate.year, _agendaDate.month + months);
+    final lastDay = DateTime(first.year, first.month + 1, 0).day;
+    selectAgendaDate(
+      DateTime(first.year, first.month, math.min(_agendaDate.day, lastDay)),
+    );
+  }
+
+  void returnToToday() {
+    refreshToday();
+    selectAgendaDate(_today);
+  }
+
+  ScheduleDay dayOn(DateTime date) => ScheduleDay.fromSnapshot(schedule, date);
+
+  List<ScheduleEvent> eventsOn(DateTime date) =>
+      events.where((event) => sameScheduleDate(event.date, date)).toList()
+        ..sort((left, right) {
+          final time = (left.startMinutes ?? -1).compareTo(
+            right.startMinutes ?? -1,
+          );
+          return time != 0 ? time : left.title.compareTo(right.title);
+        });
+
+  bool hasAgendaOn(DateTime date) =>
+      events.any((event) => sameScheduleDate(event.date, date)) ||
+      dayOn(date).lessons.isNotEmpty;
+
+  bool isSavingEvent(String id) =>
+      _savingEvents.contains((account?.account.scope, id));
+
+  Future<bool> saveEvent(
+    ScheduleEvent event, {
+    required ScheduleEventTarget target,
+    ScheduleEvent? replacing,
+  }) => _repository.saveEvent(event, target: target, replacing: replacing);
+
+  Future<bool> removeEvent(
+    ScheduleEvent event, {
+    required ScheduleEventTarget target,
+  }) => _repository.removeEvent(event, target: target);
+
+  Future<bool> setEventCompleted(ScheduleEvent event, bool completed) async {
+    final target = eventTarget;
+    if (target == null) return false;
+    final key = (target.scope, event.id);
+    if (!_savingEvents.add(key)) return false;
+    notifyListeners();
+    try {
+      return await _repository.setEventCompleted(
+        event,
+        completed,
+        target: target,
+      );
+    } finally {
+      _savingEvents.remove(key);
+      if (!_disposed) notifyListeners();
+    }
+  }
 
   Future<bool> saveSettings(
     ScheduleSettings value, {
@@ -274,8 +365,8 @@ final class TimetableViewModel extends ChangeNotifier {
               .toList(),
         ),
       );
-  Future<bool> removeSavedAccount(AccountScope scope) =>
-      _repository.removeAccount(scope);
+  Future<bool> clearSavedSchedules(AccountScope scope) =>
+      _repository.clearSchedules(scope);
   void dismissFailure() => _repository.dismissFailure();
 
   Future<bool> toggleAgenda() {
@@ -291,9 +382,15 @@ final class TimetableViewModel extends ChangeNotifier {
     final now = _clock();
     final wasCurrent = isCurrentWeek;
     final changedDate = !_isSameDate(_today, now);
+    final agendaWasToday = _isSameDate(_agendaDate, _today);
     final changedMinute =
         _today.hour != now.hour || _today.minute != now.minute;
     _today = now;
+    if (changedDate && agendaWasToday) {
+      _agendaDate = DateTime(now.year, now.month, now.day);
+      final scope = _agendaScope;
+      if (scope != null) _browsedDates[scope] = _agendaDate;
+    }
     _scheduleDateRefresh(now);
     if (changedDate && wasCurrent) {
       if (hasSchedule) {
@@ -303,13 +400,21 @@ final class TimetableViewModel extends ChangeNotifier {
         _week = CalendarWeek.containing(now);
       }
     }
-    if (changedDate || (hasSchedule && changedMinute)) notifyListeners();
+    if (changedDate || ((hasSchedule || events.isNotEmpty) && changedMinute)) {
+      notifyListeners();
+    }
   }
 
   bool isToday(DateTime date) => _isSameDate(date, _today);
 
   void _dataChanged(ScheduleRepositoryState state) {
     final scope = state.account?.account.scope;
+    if (scope != _agendaScope) {
+      _agendaScope = scope;
+      _agendaDate =
+          _browsedDates[scope] ??
+          DateTime(_today.year, _today.month, _today.day);
+    }
     final term = state.selectedTerm;
     final nextKey = scope != null && term != null ? (scope, term.key) : null;
     if (nextKey != _termKey ||
@@ -323,7 +428,7 @@ final class TimetableViewModel extends ChangeNotifier {
     if (total != null && _selectedWeek > total) _selectedWeek = total;
     _hadSchedule = hasSchedule;
     _calendarMonday = schedule?.calendar.firstWeekMonday;
-    _scheduleDateRefresh(_today);
+    refreshToday();
     notifyListeners();
   }
 
@@ -334,7 +439,7 @@ final class TimetableViewModel extends ChangeNotifier {
 
   void _scheduleDateRefresh(DateTime now) {
     _dateRefreshTimer?.cancel();
-    final next = hasSchedule
+    final next = hasSchedule || events.isNotEmpty
         ? (now.isUtc
               ? DateTime.utc(
                   now.year,
@@ -358,10 +463,13 @@ final class TimetableViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _dateRefreshTimer?.cancel();
     unawaited(_subscription.cancel());
     super.dispose();
   }
+
+  bool _disposed = false;
 
   static String _dateLabel(DateTime date, bool includeYear) =>
       '${includeYear ? '${date.year}年' : ''}${date.month}月${date.day}日';
