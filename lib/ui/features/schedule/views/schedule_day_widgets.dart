@@ -137,7 +137,7 @@ class ScheduleLessonTile extends StatelessWidget {
       status: scheduleLessonPhaseText(phase),
       onTap: onTap,
       children: [
-        if (lesson.startMinutes != null)
+        if (lesson.startMinutes == null)
           Text(entry.schedulePeriodsText, style: theme.textTheme.labelMedium),
         _DetailLine(Icons.place_outlined, entry.schedulePlaceText),
         if (entry.teacher?.isNotEmpty ?? false)

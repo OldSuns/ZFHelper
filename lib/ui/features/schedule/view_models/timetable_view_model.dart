@@ -275,6 +275,7 @@ final class TimetableViewModel extends ChangeNotifier {
           ),
         );
     final originalSignature = settingsSignature(original);
+    final originalCampus = normalizePeriodCampus(original.periodCampus);
     final inheritsCalendar =
         original.calendarOverride == null && value.calendarOverride != null;
     final inheritsTimes =
@@ -308,7 +309,8 @@ final class TimetableViewModel extends ChangeNotifier {
                     )) ||
             (inheritsTimes &&
                 timesSignature(originalImport.periodTimes) !=
-                    timesSignature(imported.periodTimes))) {
+                    timesSignature(imported.periodTimes)) ||
+            normalizePeriodCampus(current.periodCampus) != originalCampus) {
           throw const ScheduleStorageException(
             operation: '保存校历与作息',
             message: '校历或作息已更新，本次未覆盖新设置，请重新打开后修改',
@@ -323,6 +325,8 @@ final class TimetableViewModel extends ChangeNotifier {
               ? value.periodSections
               : const [],
           useCustomPeriodTimes: value.useCustomPeriodTimes,
+          periodCampus: value.periodCampus,
+          clearPeriodCampus: value.periodCampus == null,
         );
       },
     );

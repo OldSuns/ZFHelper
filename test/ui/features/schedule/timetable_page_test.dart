@@ -75,14 +75,48 @@ void main() {
             ),
           ),
         );
-        final label = find.text('第 6–7 节');
-        expect(label, findsOneWidget);
+        final label = find.text('第 6–7 节').last;
+        expect(find.text('第 6–7 节'), findsNWidgets(2));
         expect(
           tester.getTopLeft(label).dx,
-          lessThan(tester.getTopLeft(find.text('A')).dx),
+          lessThanOrEqualTo(tester.getTopLeft(find.text('A')).dx),
         );
         expect(tester.takeException(), isNull);
       }
+
+      final completeDay = ScheduleDay.fromSnapshot(
+        scheduleTestSnapshot(entries: entries).copyWith(
+          periodTimes: [
+            for (final number in [1, 2, 6, 7, 10, 11])
+              PeriodTime(
+                number: number,
+                startMinutes: 8 * 60 + (number - 1) * 50,
+                endMinutes: 8 * 60 + (number - 1) * 50 + 45,
+              ),
+          ],
+        ),
+        date,
+      );
+      final timedAgenda = scheduleAgendaItems(completeDay, const []);
+      expect(timedAgenda.map((item) => item.group), [
+        AgendaTimeGroup.morning,
+        AgendaTimeGroup.afternoon,
+        AgendaTimeGroup.afternoon,
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ScheduleLessonTile(
+              lesson: completeDay.lessons.first,
+              now: date,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+      expect(find.text('08:00'), findsOneWidget);
+      expect(find.text('第 1 节'), findsNothing);
+      expect(tester.takeException(), isNull);
     },
   );
 

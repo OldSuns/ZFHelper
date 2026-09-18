@@ -204,60 +204,39 @@ void main() {
     },
   );
 
-  testWidgets(
-    'section-only edits preserve sparse numbers and normalize campus choices',
-    (tester) async {
-      final original = ScheduleSettings(
-        periodTimes: [
-          for (final number in [1, 2, 5, 6])
-            PeriodTime(
-              number: number,
-              startMinutes: 420 + number * 60,
-              endMinutes: 465 + number * 60,
-              campus: '',
-            ),
-        ],
-        periodSections: [
-          PeriodTimeSection(
-            session: PeriodSession.afternoon,
-            firstPeriod: 5,
-            lastPeriod: 6,
-          ),
-        ],
-      );
-      final result = await _openCalendar(tester, settings: original);
-      expect(tester.takeException(), isNull);
-      await _tap(tester, 'period-quick-arrange');
-      await _tapFinder(tester, find.text('仅划分时段'));
-      expect(
-        tester
-            .widget<DropdownButtonFormField<int>>(
-              find.byKey(const ValueKey('period-section-afternoon-first')),
-            )
-            .initialValue,
-        5,
-      );
-      expect(
-        tester
-            .widget<DropdownButtonFormField<int>>(
-              find.byKey(const ValueKey('period-section-afternoon-last')),
-            )
-            .initialValue,
-        6,
-      );
-      await _tap(tester, 'period-section-preview');
-      await _tapFinder(tester, find.text('应用到作息草稿'));
-      await _tap(tester, 'calendar-save');
-      final saved = (await result.future)!;
-      expect(saved.periodSections.single.firstPeriod, 5);
-      expect(
-        saved.periodTimes.map((p) => (p.number, p.startMinutes, p.endMinutes)),
-        original.periodTimes.map(
-          (p) => (p.number, p.startMinutes, p.endMinutes),
+  testWidgets('generated preview allows editing a specific period', (
+    tester,
+  ) async {
+    final original = _settings().copyWith(
+      periodTimes: [PeriodTime(number: 1, startMinutes: 480, endMinutes: 525)],
+      periodSections: [
+        PeriodTimeSection(
+          session: PeriodSession.morning,
+          firstPeriod: 1,
+          lastPeriod: 1,
         ),
-      );
-    },
-  );
+      ],
+    );
+    final result = await _openCalendar(tester, settings: original);
+    await _tap(tester, 'period-quick-arrange');
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '课间（分钟）'),
+      '5',
+    );
+    await _tapFinder(tester, find.text('生成预览'));
+    await _tapFinder(tester, find.byTooltip('修改第 1 节'));
+    await _enter(tester, 'preview-period-end', '09:00');
+    await _tap(tester, 'preview-period-apply');
+    await _tapFinder(tester, find.text('应用到作息草稿'));
+    await _tap(tester, 'calendar-save');
+    expect((await result.future)!.periodTimes.single.endMinutes, 540);
+  });
 
   testWidgets(
     'empty local times survive restore and undo without affecting courses',
@@ -302,9 +281,7 @@ void main() {
           textScale: scale,
         );
         await _tap(tester, 'period-quick-arrange');
-        await _tapFinder(tester, find.text('仅划分时段'));
         expect(tester.takeException(), isNull);
-        await _tapFinder(tester, find.text('取消').last);
         await _tapFinder(tester, find.byType(BackButton));
         await _tap(tester, 'period-row-1');
         await _enter(tester, 'period-edit-end', '09:00');

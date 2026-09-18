@@ -50,7 +50,11 @@ final class ScheduleLesson {
              number <= entry.endPeriod!;
              number++
            )
-             schedulePeriodTime(snapshot, number, campus: entry.campus),
+             schedulePeriodTime(
+               snapshot,
+               number,
+               campus: entry.campus ?? snapshot.periodCampus,
+             ),
        ]);
 
   final ScheduleEntry entry;

@@ -183,6 +183,45 @@ void main() {
       );
     });
 
+    test('a single campus timetable applies to courses without a campus', () {
+      final date = DateTime(2026, 9, 7);
+      final snapshot =
+          scheduleTestSnapshot(
+            entries: [
+              ScheduleEntry(
+                id: 'campus-course',
+                name: '未标校区课程',
+                weekday: 1,
+                startPeriod: 1,
+                endPeriod: 2,
+                weeks: [1],
+              ),
+            ],
+          ).copyWith(
+            periodTimes: [
+              PeriodTime(
+                number: 1,
+                campus: '北校区',
+                startMinutes: 480,
+                endMinutes: 525,
+              ),
+              PeriodTime(
+                number: 2,
+                campus: '北校区',
+                startMinutes: 535,
+                endMinutes: 580,
+              ),
+            ],
+          );
+      final lesson = ScheduleDay.fromSnapshot(snapshot, date).lessons.single;
+      expect(lesson.hasCompleteTimes, isTrue);
+      expect(lesson.startMinutes, 480);
+      expect(
+        lesson.phaseAt(DateTime(2026, 9, 7, 8, 10)),
+        isNot(ScheduleLessonPhase.unknown),
+      );
+    });
+
     test(
       'daily conflicts use campus clock times and events keep their phase',
       () {

@@ -51,6 +51,7 @@ abstract final class ScheduleSettingsCodec {
         : _writeCalendar(settings.calendarOverride!),
     'periodTimes': settings.periodTimes.map(_writePeriod).toList(),
     'periodSections': settings.periodSections.map(_writePeriodSection).toList(),
+    'periodCampus': settings.periodCampus,
     'useCustomPeriodTimes': settings.useCustomPeriodTimes,
     'localEntries': settings.localEntries.map(_writeEntry).toList(),
     'hiddenEntryIds': settings.hiddenEntryIds.toList()..sort(),
@@ -68,6 +69,7 @@ abstract final class ScheduleSettingsCodec {
           ? _list(data, 'periodSections').map(_readPeriodSection).toList()
           : const [],
       useCustomPeriodTimes: _boolean(data, 'useCustomPeriodTimes'),
+      periodCampus: _optionalString(data, 'periodCampus'),
       // Older version-1 settings predate the saved view preference.
       preferAgenda: data.containsKey('preferAgenda')
           ? _boolean(data, 'preferAgenda')

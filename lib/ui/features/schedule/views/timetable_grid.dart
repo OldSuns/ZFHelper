@@ -21,7 +21,7 @@ class _GridMetrics {
   final bool wide;
   final double textScale;
   final int dayCount;
-  double get axisWidth => wide ? 68 : 36;
+  double get axisWidth => wide ? 68 : 52;
   double get rowExtent => 56 * math.max(1, textScale);
   double dayWidth(double width) => (width - axisWidth) / dayCount;
 }

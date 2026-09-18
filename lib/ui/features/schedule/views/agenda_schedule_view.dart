@@ -111,14 +111,15 @@ class _AgendaScheduleViewState extends State<AgendaScheduleView> {
           ),
         for (final group in AgendaTimeGroup.values)
           if (entries.any((item) => item.group == group)) ...[
-            ScheduleSectionHeading(switch (group) {
-              AgendaTimeGroup.allDay => '全天',
-              AgendaTimeGroup.periods => '课程（按节次）',
-              AgendaTimeGroup.morning => '上午',
-              AgendaTimeGroup.afternoon => '下午',
-              AgendaTimeGroup.evening => '晚上',
-              AgendaTimeGroup.unspecified => '节次待安排',
-            }, count: entries.where((item) => item.group == group).length),
+            if (group != AgendaTimeGroup.periods)
+              ScheduleSectionHeading(switch (group) {
+                AgendaTimeGroup.allDay => '全天',
+                AgendaTimeGroup.morning => '上午',
+                AgendaTimeGroup.afternoon => '下午',
+                AgendaTimeGroup.evening => '晚上',
+                AgendaTimeGroup.periods => '',
+                AgendaTimeGroup.unspecified => '节次待安排',
+              }, count: entries.where((item) => item.group == group).length),
             for (final item in entries.where((item) => item.group == group))
               if (item.lesson case final lesson?)
                 ScheduleLessonTile(

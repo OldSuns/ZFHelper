@@ -78,6 +78,7 @@ void main() {
       expect(restored.calendar.positionOn(DateTime(2026, 9, 21)).week, 3);
       expect(restored.periodTimes.single.startMinutes, 840);
       expect(restored.fetchedAt, original.fetchedAt);
+      expect(restored.periodCampus, isNull);
       expect(restored.sourceLabel, '教务课表');
     },
   );
@@ -110,13 +111,20 @@ void main() {
         source: TeachingCalendarSource.user,
       ),
       periodTimes: [
-        PeriodTime(number: 5, startMinutes: 13 * 60, endMinutes: 13 * 60 + 45),
+        PeriodTime(
+          number: 5,
+          startMinutes: 13 * 60,
+          endMinutes: 13 * 60 + 45,
+          campus: '北校区',
+        ),
       ],
+      periodCampus: '北校区',
       periodSections: [
         PeriodTimeSection(
           session: PeriodSession.afternoon,
           firstPeriod: 5,
           lastPeriod: 5,
+          campus: '北校区',
         ),
       ],
       localEntries: [
@@ -135,7 +143,9 @@ void main() {
     expect(effective.calendar.source, TeachingCalendarSource.user);
     expect(effective.calendar.positionOn(DateTime(2026, 9, 7)).week, 2);
     expect(effective.periodTimes.single.startMinutes, 780);
+    expect(effective.periodCampus, '北校区');
     expect(restored.periodSections, settings.periodSections);
+    expect(restored.periodCampus, '北校区');
     expect(
       restored.reconcileImport(school, snapshot()).periodSections,
       restored.periodSections,

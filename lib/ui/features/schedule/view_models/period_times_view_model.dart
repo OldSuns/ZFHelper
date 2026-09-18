@@ -16,7 +16,9 @@ class PeriodTimesViewModel extends ChangeNotifier {
              : const [],
        ),
        _custom = settings.useCustomPeriodTimes {
-    _campus = normalizePeriodCampus(_plan.periods.firstOrNull?.campus);
+    _campus = normalizePeriodCampus(
+      settings.periodCampus ?? _plan.periods.firstOrNull?.campus,
+    );
   }
 
   final PeriodTimePlan _school;

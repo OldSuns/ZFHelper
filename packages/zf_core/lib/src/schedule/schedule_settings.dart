@@ -10,6 +10,7 @@ final class ScheduleSettings {
     List<PeriodTime> periodTimes = const [],
     List<PeriodTimeSection> periodSections = const [],
     bool? useCustomPeriodTimes,
+    this.periodCampus,
     List<ScheduleEntry> localEntries = const [],
     Iterable<String> hiddenEntryIds = const [],
     this.preferAgenda = false,
@@ -40,6 +41,9 @@ final class ScheduleSettings {
   final List<PeriodTime> periodTimes;
   final List<PeriodTimeSection> periodSections;
   final bool useCustomPeriodTimes;
+
+  /// Campus used for imported arrangements that do not declare one.
+  final String? periodCampus;
   final List<ScheduleEntry> localEntries;
   final Set<String> hiddenEntryIds;
   final bool preferAgenda;
@@ -52,6 +56,10 @@ final class ScheduleSettings {
     ],
     calendar: calendarOverride ?? snapshot.calendar,
     periodTimes: useCustomPeriodTimes ? periodTimes : snapshot.periodTimes,
+    periodCampus: _effectivePeriodCampus(
+      useCustomPeriodTimes ? periodTimes : snapshot.periodTimes,
+      periodCampus,
+    ),
   );
 
   /// Keeps adjustments linked when an import changes descriptive metadata.
@@ -88,6 +96,8 @@ final class ScheduleSettings {
     List<PeriodTime>? periodTimes,
     List<PeriodTimeSection>? periodSections,
     bool? useCustomPeriodTimes,
+    String? periodCampus,
+    bool clearPeriodCampus = false,
     List<ScheduleEntry>? localEntries,
     Iterable<String>? hiddenEntryIds,
     bool? preferAgenda,
@@ -98,8 +108,19 @@ final class ScheduleSettings {
     periodTimes: periodTimes ?? this.periodTimes,
     periodSections: periodSections ?? this.periodSections,
     useCustomPeriodTimes: useCustomPeriodTimes ?? this.useCustomPeriodTimes,
+    periodCampus: clearPeriodCampus ? null : periodCampus ?? this.periodCampus,
     localEntries: localEntries ?? this.localEntries,
     hiddenEntryIds: hiddenEntryIds ?? this.hiddenEntryIds,
     preferAgenda: preferAgenda ?? this.preferAgenda,
   );
+}
+
+String? _effectivePeriodCampus(List<PeriodTime> periods, String? selected) {
+  final campuses = periods
+      .map((period) => normalizePeriodCampus(period.campus))
+      .whereType<String>()
+      .toSet();
+  final normalized = normalizePeriodCampus(selected);
+  if (normalized != null && campuses.contains(normalized)) return normalized;
+  return campuses.length == 1 ? campuses.single : null;
 }

@@ -468,6 +468,7 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
       periodTimes: _times.useCustomTimes ? _times.plan.periods : const [],
       periodSections: _times.useCustomTimes ? _times.plan.sections : const [],
       useCustomPeriodTimes: _times.useCustomTimes,
+      periodCampus: _times.campus,
     );
     final save = widget.onSave;
     if (save != null) {

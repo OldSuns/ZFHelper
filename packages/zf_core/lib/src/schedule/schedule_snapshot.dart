@@ -13,6 +13,7 @@ final class ScheduleSnapshot {
     required this.fetchedAt,
     this.calendar = const TeachingCalendar.unknown(),
     List<PeriodTime> periodTimes = const [],
+    this.periodCampus,
     this.sourceLabel,
     List<String> importWarnings = const [],
   }) : entries = List.unmodifiable(entries),
@@ -28,6 +29,9 @@ final class ScheduleSnapshot {
   final DateTime fetchedAt;
   final TeachingCalendar calendar;
   final List<PeriodTime> periodTimes;
+
+  /// The effective timetable campus for arrangements without one.
+  final String? periodCampus;
   final String? sourceLabel;
   final List<String> importWarnings;
 
@@ -69,6 +73,7 @@ final class ScheduleSnapshot {
     DateTime? fetchedAt,
     TeachingCalendar? calendar,
     List<PeriodTime>? periodTimes,
+    String? periodCampus,
     String? sourceLabel,
     bool clearSourceLabel = false,
     List<String>? importWarnings,
@@ -78,6 +83,7 @@ final class ScheduleSnapshot {
     fetchedAt: fetchedAt ?? this.fetchedAt,
     calendar: calendar ?? this.calendar,
     periodTimes: periodTimes ?? this.periodTimes,
+    periodCampus: periodCampus ?? this.periodCampus,
     sourceLabel: clearSourceLabel ? null : sourceLabel ?? this.sourceLabel,
     importWarnings: importWarnings ?? this.importWarnings,
   );

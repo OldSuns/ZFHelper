@@ -131,7 +131,7 @@ class PeriodTimesEditor extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
-                  '未划分时段的课节只单独调整；快速排布中可仅划分时段，保留现有时间。',
+                  '未划分时段的课节只单独调整；生成预览后也可以直接修改具体节次。',
                   style: theme.textTheme.bodySmall,
                 ),
               ),

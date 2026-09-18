@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
 import 'period_time_fields.dart';
-import 'period_time_section_dialog.dart';
 
 class PeriodTimeGeneratorPage extends StatefulWidget {
   const PeriodTimeGeneratorPage({
@@ -172,25 +171,13 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
     });
   }
 
-  Future<void> _divideSections() async {
+  Future<void> _editPreviewPeriod(PeriodTime period) async {
     final result = await showDialog<PeriodTimePlan>(
       context: context,
-      builder: (_) =>
-          PeriodTimeSectionDialog(initialPlan: _preview, campus: _campus),
+      builder: (_) => _PreviewPeriodEditDialog(plan: _preview, period: period),
     );
     if (!mounted || result == null) return;
-    _showPreview(result, note: '仅划分时段，起止时间和课间保持不变。');
-  }
-
-  void _clearSections() {
-    try {
-      _showPreview(
-        _preview.withSections(campus: _campus, sections: []),
-        note: '已清除当前预览的时段划分，起止时间保持不变，未重新生成时间。',
-      );
-    } on PeriodTimeException catch (error) {
-      setState(() => _error = error.message);
-    }
+    _showPreview(result, note: '已修改第 ${period.number} 节时间。');
   }
 
   @override
@@ -266,7 +253,22 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
   );
 
   Widget _configuration(BuildContext context) => _panel([
-    Text(_campus ?? '通用作息', style: Theme.of(context).textTheme.titleMedium),
+    Row(
+      children: [
+        Expanded(
+          child: Text(
+            _campus ?? '通用作息',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        FilledButton.icon(
+          style: _buttonStyle,
+          onPressed: _generate,
+          icon: const Icon(Icons.auto_fix_high_outlined),
+          label: const Text('生成预览'),
+        ),
+      ],
+    ),
     const SizedBox(height: 8),
     const Text('生成时按上午、下午、晚上从第 1 节连续排布，仅修改当前校区。节数留空或填 0 可停用该时段。'),
     const SizedBox(height: 16),
@@ -335,27 +337,6 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       _message(context, _error!, error: true),
       const SizedBox(height: 12),
     ],
-    _pair(
-      FilledButton.icon(
-        style: _buttonStyle,
-        onPressed: _generate,
-        icon: const Icon(Icons.auto_fix_high_outlined),
-        label: const Text('生成预览'),
-      ),
-      OutlinedButton(
-        style: _buttonStyle,
-        onPressed: _divideSections,
-        child: const Text('仅划分时段'),
-      ),
-    ),
-    const SizedBox(height: 8),
-    const Text('“仅划分时段”按当前预览的实际节号选择范围，不使用上方生成参数，也不改变时间。'),
-    if (_preview.sections.any((s) => s.campus == _campus))
-      TextButton(
-        style: _buttonStyle,
-        onPressed: _clearSections,
-        child: const Text('清除当前校区的时段划分'),
-      ),
   ]);
 
   Widget _numberField(
@@ -396,7 +377,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       ),
       const SizedBox(height: 12),
       if (_stale) ...[
-        _message(context, '参数已修改，请重新生成预览或划分时段。'),
+        _message(context, '参数已修改，请重新生成预览。生成后的具体节次仍可直接修改。'),
         const SizedBox(height: 12),
       ],
       if (_previewError != null) ...[
@@ -452,6 +433,12 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
                               : null,
                         ),
                       ),
+                trailing: IconButton(
+                  tooltip: '修改第 ${period.number} 节',
+                  onPressed: () => _editPreviewPeriod(period),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                onTap: () => _editPreviewPeriod(period),
               ),
               if (next != null) const Divider(height: 1),
             ],
@@ -510,4 +497,105 @@ class _SessionFields {
   final count = TextEditingController();
   final start = TextEditingController();
   final timeForm = GlobalKey<FormState>();
+}
+
+class _PreviewPeriodEditDialog extends StatefulWidget {
+  const _PreviewPeriodEditDialog({required this.plan, required this.period});
+
+  final PeriodTimePlan plan;
+  final PeriodTime period;
+
+  @override
+  State<_PreviewPeriodEditDialog> createState() =>
+      _PreviewPeriodEditDialogState();
+}
+
+class _PreviewPeriodEditDialogState extends State<_PreviewPeriodEditDialog> {
+  final _form = GlobalKey<FormState>();
+  late final _start = TextEditingController(
+    text: periodClock(widget.period.startMinutes),
+  );
+  late final _end = TextEditingController(
+    text: periodClock(widget.period.endMinutes),
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _start.dispose();
+    _end.dispose();
+    super.dispose();
+  }
+
+  void _apply() {
+    if (!_form.currentState!.validate()) return;
+    try {
+      final result = widget.plan.edit(
+        number: widget.period.number,
+        campus: widget.period.campus,
+        startMinutes: parsePeriodClock(_start.text)!,
+        endMinutes: parsePeriodClock(_end.text)!,
+      );
+      Navigator.pop(context, result);
+    } on PeriodTimeException catch (error) {
+      setState(() => _error = error.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('修改第 ${widget.period.number} 节'),
+    scrollable: true,
+    content: SizedBox(
+      width: 400,
+      child: Form(
+        key: _form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('修改后，本时段后续节次会同步移动，保留原有课长和课间。'),
+            const SizedBox(height: 16),
+            PeriodClockField(
+              key: const ValueKey('preview-period-start'),
+              controller: _start,
+              label: '开始时间',
+            ),
+            const SizedBox(height: 16),
+            PeriodClockField(
+              key: const ValueKey('preview-period-end'),
+              controller: _end,
+              label: '结束时间',
+              allowDayEnd: true,
+              validator: (value) {
+                final start = parsePeriodClock(_start.text);
+                final end = parsePeriodClock(value ?? '');
+                return start != null && end != null && end <= start
+                    ? '结束时间必须晚于开始时间'
+                    : null;
+              },
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        key: const ValueKey('preview-period-apply'),
+        onPressed: _apply,
+        child: const Text('应用修改'),
+      ),
+    ],
+  );
 }
