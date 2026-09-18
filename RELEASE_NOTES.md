@@ -1,8 +1,9 @@
 ## Highlights
 
-- First CI-built Android and Windows release.
-- Android APK and AAB are signed with the project's release keystore.
-- Windows release is packaged as a complete ZIP archive.
+- Added in-app GitHub Release update checking.
+- Added rendered Markdown release notes with responsive desktop and mobile layouts.
+- Added direct links to the GitHub repository and release pages.
+- Improved update error messages for GitHub API status codes.
 
 ## Installation
 

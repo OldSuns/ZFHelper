@@ -1,7 +1,7 @@
 name: zfhelper
 description: "Android-first academic timetable and course client for ZFHelper."
 publish_to: 'none'
-version: 0.1.1+1
+version: 0.1.2+1
 
 environment:
   sdk: ^3.13.3

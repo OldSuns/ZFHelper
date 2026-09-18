@@ -9,7 +9,7 @@ Read [requirements](docs/requirements.md) for product scope, [architecture](docs
 - Inspect the affected implementation and its callers before editing. Reuse existing code and dependencies; choose the smallest correct change and leave unrelated files alone.
 - Preserve user changes, staged content, and existing formatting. Do not commit, push, publish, or perform destructive operations without authorization.
 - Before every commit, run formatting and the relevant validation checks; do not commit while those checks fail.
-- Before a version patch or pushing a release tag, update [RELEASE_NOTES.md](RELEASE_NOTES.md) with the latest release notes and include that update in the version commit.
+- Before a version patch or pushing a release tag, update [RELEASE_NOTES.md](RELEASE_NOTES.md) with only the latest release notes and include that update in the version commit; do not append a `Previous release` section.
 - Separate implemented behavior, planned work, and acceptance evidence. Update the relevant document when an interface or user-visible behavior changes.
 
 ## Product boundaries
