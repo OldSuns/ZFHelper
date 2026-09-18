@@ -138,8 +138,12 @@ jobs:
           } else {
             'Android artifacts are unsigned because release signing secrets were not configured; they are not suitable for official distribution or upgrade testing.'
           }
+          $releaseNotes = Get-Content -Raw -Encoding UTF8 RELEASE_NOTES.md
+          if ([string]::IsNullOrWhiteSpace($releaseNotes)) {
+            throw 'RELEASE_NOTES.md must not be empty.'
+          }
           $body = @(
-            "## ZFHelper $env:RELEASE_VERSION"
+            $releaseNotes.Trim()
             ''
             $signingNote
             ''

@@ -33,10 +33,10 @@ A version release is created only by pushing a `vX.Y.Z` tag. The tag workflow in
 
 Before creating a release:
 
-1. Update `pubspec.yaml` to `X.Y.Z+build` and synchronize the displayed version in both READMEs.
+1. Update `pubspec.yaml` to `X.Y.Z+build`, synchronize the displayed version in both READMEs, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
 2. Commit and push the version change; wait for CI to pass.
 3. Push `vX.Y.Z` from that commit.
-4. Check the GitHub Release assets and their `.sha256` files.
+4. Check the GitHub Release body, assets, and their `.sha256` files. The body starts with `RELEASE_NOTES.md`, followed by signing information, artifact checksums, and GitHub's generated Full Changelog.
 
 The release workflow builds an Android AAB, Android APK, and a ZIP containing the complete Windows release directory. Android signing uses the protected `release` Environment secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. If all four are configured, Android assets are signed; if none are configured, the workflow publishes assets marked `unsigned` for testing only. Partial configuration fails. Unsigned assets are not official distribution or upgrade evidence. The workflow never stores signing material in the repository and cleans temporary signing files after the build.
 
