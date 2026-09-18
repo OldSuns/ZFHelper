@@ -8,6 +8,7 @@ Read [requirements](docs/requirements.md) for product scope, [architecture](docs
 - Target Android 13+ (API 33) first and Windows second. Adapt layout to window width rather than assuming a device category.
 - Inspect the affected implementation and its callers before editing. Reuse existing code and dependencies; choose the smallest correct change and leave unrelated files alone.
 - Preserve user changes, staged content, and existing formatting. Do not commit, push, publish, or perform destructive operations without authorization.
+- Before every commit, run formatting and the relevant validation checks; do not commit while those checks fail.
 - Separate implemented behavior, planned work, and acceptance evidence. Update the relevant document when an interface or user-visible behavior changes.
 
 ## Product boundaries

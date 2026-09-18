@@ -75,7 +75,8 @@ System periodic updates and inexact course-boundary alarms can be delayed by pow
 | Real-school login, timetable, grades, and enrollment results | Need comparison against actual school records |
 | Android multi-account persistence, process recovery, background behavior, widget launchers, and restart behavior | Need production-device acceptance |
 | Windows minimize/sleep behavior during selection | Needs acceptance beyond source inspection |
-| Release signing and application upgrades | Need configuration and release acceptance |
+| GitHub CI quality checks and tag-triggered Android/Windows release builds | Configured in `.github/workflows/`; requires GitHub Actions acceptance |
+| Android release signing and application upgrades | Signing secrets and production-device acceptance still required |
 
 These entries retain the product direction without presenting it as working functionality or a delivery commitment. See [development](development.md) for recording evidence.
 

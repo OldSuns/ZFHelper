@@ -6,7 +6,7 @@ A Flutter/Dart client for the newer Zhengfang academic administration system. An
 
 ## Status
 
-Version **0.1.0+1**, under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. School compatibility and release readiness still require real-school and device acceptance.
+Version **0.1.0+1**, under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and `main`; version releases are built from `vX.Y.Z` tags. School compatibility and release readiness still require real-school and device acceptance.
 
 ## Features
 
@@ -65,7 +65,7 @@ For Android, use `flutter run -d <device-id>` with an ID from `flutter devices`.
 - Update checking and the GitHub action in the About dialog are disabled placeholders.
 - ICS export, school examination-schedule retrieval, system course reminders, Live Updates, and couple timetables are not implemented. Manually entered examination events are supported.
 - Scheduled auto-enrollment, cloud enrollment delegation, automatic withdrawal, and cross-device synchronization are outside the current scope.
-- Production-device background behavior, release signing, and upgrade flows still require acceptance. Local builds and constructed-data checks do not establish those results.
+- Production-device background behavior, signed-package installation, and upgrade flows still require acceptance. GitHub CI and unsigned release assets do not establish those results.
 
 ## License
 

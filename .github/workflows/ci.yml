@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Dart and Flutter quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.4
+          channel: stable
+          cache: true
+
+      - name: Restore application dependencies
+        run: flutter pub get
+
+      - name: Check application formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze application
+        run: flutter analyze --no-pub lib test
+
+      - name: Test application
+        run: flutter test --no-pub test
+
+      - name: Restore core dependencies
+        working-directory: packages/zf_core
+        run: dart pub get
+
+      - name: Check core formatting
+        working-directory: packages/zf_core
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze core
+        working-directory: packages/zf_core
+        run: dart analyze
+
+      - name: Test core with a process-tree deadline
+        working-directory: packages/zf_core
+        run: timeout --signal=TERM --kill-after=5s 60s dart test

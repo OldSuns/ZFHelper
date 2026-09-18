@@ -25,6 +25,23 @@ flutter build apk --debug
 
 Ship the complete `build/windows/x64/runner/Release/` directory, not just its executable. The Android debug APK is `build/app/outputs/flutter-apk/app-debug.apk`. Debug packages are not a release-signing solution; configure signing and validate installation/upgrades separately before distribution.
 
+## GitHub CI and releases
+
+Pull requests and pushes to `main` run [.github/workflows/ci.yml](../.github/workflows/ci.yml). It restores both Dart packages, checks formatting, analyzes the application and core package, and runs their tests. It does not build or upload platform release artifacts.
+
+A version release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. The build number after `+` stays in `pubspec.yaml` and is passed to Android; for example, `0.1.0+1` is released with tag `v0.1.0`.
+
+Before creating a release:
+
+1. Update `pubspec.yaml` to `X.Y.Z+build` and synchronize the displayed version in both READMEs.
+2. Commit and push the version change; wait for CI to pass.
+3. Push `vX.Y.Z` from that commit.
+4. Check the GitHub Release assets and their `.sha256` files.
+
+The release workflow builds an Android AAB, Android APK, and a ZIP containing the complete Windows release directory. Android signing uses the protected `release` Environment secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. If all four are configured, Android assets are signed; if none are configured, the workflow publishes assets marked `unsigned` for testing only. Partial configuration fails. Unsigned assets are not official distribution or upgrade evidence. The workflow never stores signing material in the repository and cleans temporary signing files after the build.
+
+Verify a downloaded asset with `Get-FileHash <file> -Algorithm SHA256` on PowerShell or `sha256sum <file>` on Unix. A successful workflow, signed package, installation, and upgrade are separate acceptance evidence; none proves real-school compatibility or production-device background behavior.
+
 ## Targeted validation
 
 Choose existing checks relevant to the change before expanding coverage. Do not repeatedly run whole suites or device smoke checks for unrelated documentation or formatting work. Resolve dependencies first when package configuration changes.
@@ -81,4 +98,4 @@ Use a compact record when reporting validation:
 
 Keep source inspection, constructed-data tests, compilation, emulator checks, production-device behavior, and authenticated real-school results separate. A running service, HTTP 200, or successful debug build is not proof of successful enrollment. Documentation changes do not refresh historical acceptance results.
 
-Current acceptance gaps include real-school authentication and business-data/result comparisons; Android multi-account persistence, process recovery and long-running/background behavior; launcher/widget restart behavior; Windows minimize/sleep behavior; and formal signing/upgrade workflows. Record newly executed evidence rather than carrying old build results forward as validation of the current revision.
+Current acceptance gaps include real-school authentication and business-data/result comparisons; Android multi-account persistence, process recovery and long-running/background behavior; launcher/widget restart behavior; Windows minimize/sleep behavior; and formal signed-package installation/upgrade workflows. CI, automated builds, and unsigned release assets do not close these gaps. Record newly executed evidence rather than carrying old build results forward as validation of the current revision.

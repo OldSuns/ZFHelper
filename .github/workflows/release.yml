@@ -1,0 +1,156 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.4
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release artifacts
+    runs-on: windows-latest
+    environment: release
+    timeout-minutes: 45
+    steps:
+      - name: Check out tag
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Read and validate version
+        id: version
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pubspec = Get-Content -Raw -Encoding UTF8 pubspec.yaml
+          $match = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\+([0-9]+))?\s*$')
+          if (-not $match.Success) {
+            throw 'pubspec.yaml must declare version as X.Y.Z or X.Y.Z+build.'
+          }
+
+          $version = $match.Groups[1].Value
+          $tagVersion = $env:RELEASE_TAG.Substring(1)
+          if ($tagVersion -ne $version) {
+            throw "Tag v$tagVersion does not match pubspec version $version."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore dependencies
+        run: flutter pub get
+
+      - name: Prepare Android signing
+        id: signing
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $values = @{
+            ANDROID_KEYSTORE_BASE64 = $env:ANDROID_KEYSTORE_BASE64
+            ANDROID_KEYSTORE_PASSWORD = $env:ANDROID_KEYSTORE_PASSWORD
+            ANDROID_KEY_ALIAS = $env:ANDROID_KEY_ALIAS
+            ANDROID_KEY_PASSWORD = $env:ANDROID_KEY_PASSWORD
+          }
+          $hasSigning = $values.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) } | Measure-Object | Select-Object -ExpandProperty Count
+          if ($hasSigning -eq 0) {
+            $keystorePath = Join-Path $env:RUNNER_TEMP 'zfhelper-release.jks'
+            [IO.File]::WriteAllBytes($keystorePath, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+            $gradleKeystorePath = $keystorePath.Replace('\', '/')
+            @(
+              "storeFile=$gradleKeystorePath"
+              "storePassword=$env:ANDROID_KEYSTORE_PASSWORD"
+              "keyAlias=$env:ANDROID_KEY_ALIAS"
+              "keyPassword=$env:ANDROID_KEY_PASSWORD"
+            ) -join [Environment]::NewLine | Set-Content -Encoding UTF8 android/key.properties
+            'signed=true' >> $env:GITHUB_OUTPUT
+          } elseif ($hasSigning -eq 4) {
+            'signed=false' >> $env:GITHUB_OUTPUT
+          } else {
+            throw 'Android signing secrets are incomplete; configure all four or none.'
+          }
+
+      - name: Build Android app bundle
+        run: flutter build appbundle --release
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Build Windows application
+        run: flutter build windows --release
+
+      - name: Package and checksum artifacts
+        id: artifacts
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          ANDROID_SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $suffix = if ($env:ANDROID_SIGNED -eq 'true') { '' } else { '-unsigned' }
+          Copy-Item 'build/app/outputs/bundle/release/app-release.aab' "artifacts/zfhelper-$env:RELEASE_VERSION$suffix.aab"
+          Copy-Item 'build/app/outputs/flutter-apk/app-release.apk' "artifacts/zfhelper-$env:RELEASE_VERSION$suffix.apk"
+          Compress-Archive -Path 'build/windows/x64/runner/Release/*' -DestinationPath "artifacts/zfhelper-$env:RELEASE_VERSION-windows.zip"
+          $artifactFiles = Get-ChildItem artifacts -File
+          foreach ($file in $artifactFiles) {
+            (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + "  " + $file.Name |
+              Out-File -Encoding ascii "$($file.FullName).sha256"
+          }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          ANDROID_SIGNED: ${{ steps.signing.outputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $signingNote = if ($env:ANDROID_SIGNED -eq 'true') {
+            'Android artifacts are signed.'
+          } else {
+            'Android artifacts are unsigned because release signing secrets were not configured; they are not suitable for official distribution or upgrade testing.'
+          }
+          $body = @(
+            "## ZFHelper $env:RELEASE_VERSION"
+            ''
+            $signingNote
+            ''
+            'SHA-256 files are provided next to each artifact.'
+          ) -join [Environment]::NewLine
+          $assetPaths = Get-ChildItem artifacts -File | ForEach-Object { $_.FullName }
+          gh release create $env:RELEASE_TAG $assetPaths --title "ZFHelper $env:RELEASE_VERSION" --generate-notes --notes $body
+
+      - name: Clean up Android signing material
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue android/key.properties
+          Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP 'zfhelper-release.jks')

@@ -28,7 +28,7 @@ Run the smallest relevant existing application or pure-Dart test. Use the non-wr
 
 For documentation-only changes, verify facts, Markdown structure, and relative links; tests and application builds are unnecessary solely for prose. Do not claim real-school or device success based on mocks, HTTP status, source inspection, or local builds. Report the revision, command, sample/device, result, and unverified scope.
 
-No CI, release automation, or integration-test runner is assumed by this guide.
+Pull requests and pushes to `main` are checked by [.github/workflows/ci.yml](.github/workflows/ci.yml). Version releases are built and published only from `vX.Y.Z` tags by [.github/workflows/release.yml](.github/workflows/release.yml). See [the development guide](docs/development.md) for the exact checks, release assets, signing secrets, and unsigned-build limitations. No integration-test runner is assumed by this guide.
 
 ## Security, privacy, and protocol changes
 

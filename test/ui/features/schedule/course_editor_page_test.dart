@@ -8,7 +8,9 @@ import 'package:zfhelper/ui/core/app_theme.dart';
 import 'package:zfhelper/ui/features/schedule/views/course_editor_page.dart';
 
 void main() {
-  testWidgets('new courses explicitly select only the current week', (tester) async {
+  testWidgets('new courses explicitly select only the current week', (
+    tester,
+  ) async {
     final result = await _openEditor(tester, initialWeek: 7);
 
     expect(_field(tester, 'course-name').controller!.text, isEmpty);
@@ -22,8 +24,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('creates a local course beyond the observed weeks and periods', (tester) async {
-    final result = await _openEditor(tester, visibleWeekCount: 20, periodCount: 12);
+  testWidgets('creates a local course beyond the observed weeks and periods', (
+    tester,
+  ) async {
+    final result = await _openEditor(
+      tester,
+      visibleWeekCount: 20,
+      periodCount: 12,
+    );
     await _enter(tester, 'course-name', '  晚间专题  ');
     await _enter(tester, 'course-teacher', '测试教师');
     await _enter(tester, 'course-campus', '南校区');
@@ -48,18 +56,28 @@ void main() {
     expect(entry.location, '研究楼 301');
   });
 
-  testWidgets('week shortcuts use the visible range and preserve parity', (tester) async {
-    final result = await _openEditor(tester, entry: _entry(), visibleWeekCount: 28);
+  testWidgets('week shortcuts use the visible range and preserve parity', (
+    tester,
+  ) async {
+    final result = await _openEditor(
+      tester,
+      entry: _entry(),
+      visibleWeekCount: 28,
+    );
     await _tap(tester, 'course-even-weeks');
     expect(_field(tester, 'course-weeks').controller!.text, '1-28(双)');
     await _tap(tester, 'course-odd-weeks');
     expect(find.text('共 14 个教学周'), findsOneWidget);
     await _tap(tester, 'course-save');
 
-    expect((await result.future)!.weeks, {for (var week = 1; week <= 28; week += 2) week});
+    expect((await result.future)!.weeks, {
+      for (var week = 1; week <= 28; week += 2) week,
+    });
   });
 
-  testWidgets('editing a local record retains its identity and metadata', (tester) async {
+  testWidgets('editing a local record retains its identity and metadata', (
+    tester,
+  ) async {
     final original = _entry();
     final result = await _openEditor(tester, entry: original);
     await _enter(tester, 'course-name', '修改后的自习');
@@ -76,7 +94,9 @@ void main() {
     expect(original.weeks, {2, 4, 6});
   });
 
-  testWidgets('adjusting an import creates a linked local record', (tester) async {
+  testWidgets('adjusting an import creates a linked local record', (
+    tester,
+  ) async {
     final original = _entry(origin: ScheduleEntryOrigin.imported);
     final result = await _openEditor(tester, entry: original);
     await _enter(tester, 'course-location', '新的教室');
@@ -92,7 +112,9 @@ void main() {
     expect(original.location, '原教室');
   });
 
-  testWidgets('an empty or invalid week expression never becomes every week', (tester) async {
+  testWidgets('an empty or invalid week expression never becomes every week', (
+    tester,
+  ) async {
     final result = await _openEditor(tester, entry: _entry());
     await _enter(tester, 'course-weeks', '');
     await _tap(tester, 'course-save');
@@ -105,7 +127,9 @@ void main() {
     expect(result.isCompleted, isFalse);
   });
 
-  testWidgets('rejects backwards periods before returning a result', (tester) async {
+  testWidgets('rejects backwards periods before returning a result', (
+    tester,
+  ) async {
     final result = await _openEditor(tester, entry: _entry());
     await _enter(tester, 'course-start-period', '6');
     await _enter(tester, 'course-end-period', '3');
@@ -115,7 +139,9 @@ void main() {
     expect(result.isCompleted, isFalse);
   });
 
-  testWidgets('cancel discards the draft without changing the source entry', (tester) async {
+  testWidgets('cancel discards the draft without changing the source entry', (
+    tester,
+  ) async {
     final original = _entry();
     final result = await _openEditor(tester, entry: original);
     await _enter(tester, 'course-name', '取消的名字');
@@ -127,30 +153,56 @@ void main() {
   });
 
   for (final layout in [
-    (size: const Size(375, 740), scale: 1.0, brightness: Brightness.light, keyboard: 0.0),
-    (size: const Size(320, 640), scale: 2.0, brightness: Brightness.dark, keyboard: 200.0),
-    (size: const Size(760, 420), scale: 2.0, brightness: Brightness.light, keyboard: 160.0),
-    (size: const Size(1200, 800), scale: 2.0, brightness: Brightness.dark, keyboard: 0.0),
+    (
+      size: const Size(375, 740),
+      scale: 1.0,
+      brightness: Brightness.light,
+      keyboard: 0.0,
+    ),
+    (
+      size: const Size(320, 640),
+      scale: 2.0,
+      brightness: Brightness.dark,
+      keyboard: 200.0,
+    ),
+    (
+      size: const Size(760, 420),
+      scale: 2.0,
+      brightness: Brightness.light,
+      keyboard: 160.0,
+    ),
+    (
+      size: const Size(1200, 800),
+      scale: 2.0,
+      brightness: Brightness.dark,
+      keyboard: 0.0,
+    ),
   ]) {
-    testWidgets('course form works at ${layout.size} and ${layout.scale} text scale', (tester) async {
-      final result = await _openEditor(
-        tester,
-        entry: _entry(),
-        size: layout.size,
-        textScale: layout.scale,
-        brightness: layout.brightness,
-      );
-      tester.view.viewInsets = FakeViewPadding(bottom: layout.keyboard);
-      addTearDown(tester.view.resetViewInsets);
-      await tester.pumpAndSettle();
-      await _enter(tester, 'course-weeks', '1-30(单)');
-      final save = find.byKey(const ValueKey('course-save'));
-      expect(tester.getBottomRight(save).dy, lessThanOrEqualTo(layout.size.height - layout.keyboard));
-      expect(tester.takeException(), isNull);
-      await _tap(tester, 'course-save');
-      expect((await result.future)!.weeks, hasLength(15));
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'course form works at ${layout.size} and ${layout.scale} text scale',
+      (tester) async {
+        final result = await _openEditor(
+          tester,
+          entry: _entry(),
+          size: layout.size,
+          textScale: layout.scale,
+          brightness: layout.brightness,
+        );
+        tester.view.viewInsets = FakeViewPadding(bottom: layout.keyboard);
+        addTearDown(tester.view.resetViewInsets);
+        await tester.pumpAndSettle();
+        await _enter(tester, 'course-weeks', '1-30(单)');
+        final save = find.byKey(const ValueKey('course-save'));
+        expect(
+          tester.getBottomRight(save).dy,
+          lessThanOrEqualTo(layout.size.height - layout.keyboard),
+        );
+        expect(tester.takeException(), isNull);
+        await _tap(tester, 'course-save');
+        expect((await result.future)!.weeks, hasLength(15));
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }
 
@@ -186,16 +238,18 @@ Future<Completer<ScheduleEntry?>> _openEditor(
         body: Builder(
           builder: (context) => TextButton(
             onPressed: () async {
-              result.complete(await Navigator.of(context).push<ScheduleEntry>(
-                MaterialPageRoute(
-                  builder: (_) => CourseEditorPage(
-                    entry: entry,
-                    initialWeek: initialWeek,
-                    visibleWeekCount: visibleWeekCount,
-                    periodCount: periodCount,
+              result.complete(
+                await Navigator.of(context).push<ScheduleEntry>(
+                  MaterialPageRoute(
+                    builder: (_) => CourseEditorPage(
+                      entry: entry,
+                      initialWeek: initialWeek,
+                      visibleWeekCount: visibleWeekCount,
+                      periodCount: periodCount,
+                    ),
                   ),
                 ),
-              ));
+              );
             },
             child: const Text('打开课程编辑'),
           ),
@@ -233,19 +287,20 @@ Future<void> _weekday(WidgetTester tester, String day) async {
   await tester.pumpAndSettle();
 }
 
-ScheduleEntry _entry({ScheduleEntryOrigin origin = ScheduleEntryOrigin.local}) =>
-    ScheduleEntry(
-      id: 'original-id',
-      name: '原课程',
-      teachingClassId: 'teaching-class',
-      courseCode: 'course-code',
-      teacher: '原教师',
-      location: '原教室',
-      campus: '北校区',
-      weekday: DateTime.monday,
-      startPeriod: 1,
-      endPeriod: 2,
-      weeks: const [2, 4, 6],
-      origin: origin,
-      metadata: const {'note': '保留的信息'},
-    );
+ScheduleEntry _entry({
+  ScheduleEntryOrigin origin = ScheduleEntryOrigin.local,
+}) => ScheduleEntry(
+  id: 'original-id',
+  name: '原课程',
+  teachingClassId: 'teaching-class',
+  courseCode: 'course-code',
+  teacher: '原教师',
+  location: '原教室',
+  campus: '北校区',
+  weekday: DateTime.monday,
+  startPeriod: 1,
+  endPeriod: 2,
+  weeks: const [2, 4, 6],
+  origin: origin,
+  metadata: const {'note': '保留的信息'},
+);

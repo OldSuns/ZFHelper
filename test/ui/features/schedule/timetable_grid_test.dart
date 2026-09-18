@@ -64,7 +64,7 @@ void main() {
           tester,
           snapshot,
           week: week,
-          size: const Size(375, 640),
+          size: const Size(390, 640),
           today: DateTime(2026, 9, 13, 8, 20),
         );
         final card = tester.getRect(
