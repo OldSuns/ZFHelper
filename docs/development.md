@@ -4,7 +4,7 @@
 
 The application declares Flutter **>=3.47.4** and Dart **^3.13.3** in [pubspec.yaml](../pubspec.yaml). The [core package](../packages/zf_core/pubspec.yaml) accepts Dart **>=3.13.0 <4.0.0**. Use a Flutter SDK satisfying the application constraints; resolved dependencies are recorded in the lockfiles, not inferred from these minimums.
 
-Android requires the Flutter Android toolchain. The application minimum is API 33 (Android 13); compile/target SDK and NDK follow Flutter, and Java/Kotlin bytecode targets Java 17. Windows builds require the Visual Studio C++ desktop/CMake toolchain; web login requires WebView2 Runtime. Check local toolchains with `flutter doctor`.
+Android requires the Flutter Android toolchain. The application minimum is API 33 (Android 13); compile/target SDK and NDK follow Flutter, and Java/Kotlin bytecode targets Java 17. Windows builds require the Visual Studio C++ desktop/CMake toolchain; web login requires WebView2 Runtime. Release builds use the pinned `windows-2022` GitHub Actions runner for compatibility with the official WebView plugin's Windows implementation. Check local toolchains with `flutter doctor`.
 
 ## Run and build
 

@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     name: Build release artifacts
-    runs-on: windows-latest
+    runs-on: windows-2022
     environment: release
     timeout-minutes: 45
     steps:
