@@ -20,6 +20,9 @@ dependencies:
   sqlite3: ^3.5.2
   zf_core:
     path: packages/zf_core
+  url_launcher: ^6.3.2
+  package_info_plus: ^10.2.1
+  flutter_markdown_community: ^0.7.7+2
 
 dev_dependencies:
   flutter_test:

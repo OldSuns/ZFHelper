@@ -16,6 +16,7 @@ import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/settings_page.dart';
 import '../ui/features/settings/view_models/schedule_widget_view_model.dart';
+import '../ui/features/settings/view_models/update_check_view_model.dart';
 import 'app_configuration.dart';
 
 enum AppDestination {
@@ -46,6 +47,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final AuthViewModel _auth;
   late final GradesViewModel _grades;
   late final CoursesViewModel _courses;
+  late final UpdateCheckViewModel _updateCheck;
   ScheduleWidgetViewModel? _scheduleWidget;
   StreamSubscription<DateTime>? _widgetLaunches;
   bool _checkingExit = false;
@@ -70,6 +72,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
     _grades = GradesViewModel(repository: widget.configuration.grades);
     _courses = CoursesViewModel(repository: widget.configuration.courses);
+    _updateCheck = UpdateCheckViewModel(
+      repository: widget.configuration.releases,
+    );
     final widgetPlatform = widget.configuration.scheduleWidgetPlatform;
     if (widgetPlatform != null) {
       _scheduleWidget = ScheduleWidgetViewModel(
@@ -95,6 +100,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _timetable.dispose();
     _grades.dispose();
     _courses.dispose();
+    _updateCheck.dispose();
     _auth.dispose();
     unawaited(_widgetLaunches?.cancel());
     _scheduleWidget?.dispose();
@@ -102,6 +108,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
     unawaited(widget.configuration.courses.dispose());
+    widget.configuration.releases.dispose();
     unawaited(widget.configuration.auth.dispose());
     super.dispose();
   }
@@ -301,6 +308,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         timetable: _timetable,
         grades: _grades,
         courses: _courses,
+        updateCheck: _updateCheck,
         scheduleWidget: _scheduleWidget,
       ),
     };

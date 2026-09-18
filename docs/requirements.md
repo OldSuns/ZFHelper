@@ -69,7 +69,7 @@ System periodic updates and inexact course-boundary alarms can be delayed by pow
 
 | Item | Status |
 | --- | --- |
-| Update checking and About-dialog GitHub action | Disabled UI placeholders; no implementation |
+| Update checking and About-dialog GitHub action | Manually checks the latest GitHub Release, shows release details, and opens the release or repository page in the browser |
 | ICS export and school examination-schedule retrieval | Not implemented; manually entered examination events already work |
 | System course reminders, Live Updates/status-bar enhancements, and couple timetables | Not implemented; no cloud-sharing guarantee or acceptance claim |
 | Real-school login, timetable, grades, and enrollment results | Need comparison against actual school records |

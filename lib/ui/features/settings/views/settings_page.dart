@@ -6,6 +6,7 @@ import '../../grades/view_models/grades_view_model.dart';
 import '../../schedule/view_models/timetable_view_model.dart';
 import '../view_models/appearance_view_model.dart';
 import '../view_models/schedule_widget_view_model.dart';
+import '../view_models/update_check_view_model.dart';
 import '../widgets/settings_section.dart';
 import 'account_settings_page.dart';
 import 'app_settings_page.dart';
@@ -19,6 +20,7 @@ class SettingsPage extends StatelessWidget {
     required this.timetable,
     required this.grades,
     required this.courses,
+    required this.updateCheck,
     this.scheduleWidget,
     super.key,
   });
@@ -28,6 +30,7 @@ class SettingsPage extends StatelessWidget {
   final TimetableViewModel timetable;
   final GradesViewModel grades;
   final CoursesViewModel courses;
+  final UpdateCheckViewModel updateCheck;
   final ScheduleWidgetViewModel? scheduleWidget;
 
   @override
@@ -91,6 +94,7 @@ class SettingsPage extends StatelessWidget {
                       timetable: timetable,
                       grades: grades,
                       courses: courses,
+                      updateCheck: updateCheck,
                     ),
                   ),
                 ),

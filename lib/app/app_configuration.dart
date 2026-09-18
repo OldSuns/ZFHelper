@@ -2,6 +2,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:zf_core/zf_core.dart';
 
 import '../data/repositories/schedule_repository.dart';
+import '../data/repositories/release_repository.dart';
 import '../data/repositories/schedule_source.dart';
 import '../data/repositories/grade_repository.dart';
 import '../data/repositories/grade_source.dart';
@@ -28,7 +29,8 @@ final class AppConfiguration {
     required this.courses,
     required this.appearance,
     this.scheduleWidgetPlatform,
-  });
+    ReleaseRepository? releases,
+  }) : releases = releases ?? ReleaseRepository();
 
   factory AppConfiguration.standard() {
     final auth = AuthRepository(
@@ -49,6 +51,7 @@ final class AppConfiguration {
     );
     return AppConfiguration(
       scheduleWidgetPlatform: createScheduleWidgetPlatform(),
+      releases: ReleaseRepository(),
       appearance: AppearanceViewModel(store: SecureAppearanceStore()),
       auth: auth,
       clock: DateTime.now,
@@ -91,6 +94,7 @@ final class AppConfiguration {
   final ScheduleRepository schedule;
   final GradeRepository grades;
   final CourseRepository courses;
+  final ReleaseRepository releases;
   final AppearanceViewModel appearance;
   final ScheduleWidgetPlatform? scheduleWidgetPlatform;
 
