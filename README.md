@@ -6,7 +6,7 @@ A Flutter/Dart client for the newer Zhengfang academic administration system. An
 
 ## Status
 
-Version **0.1.0+1**, under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and `main`; version releases are built from `vX.Y.Z` tags. School compatibility and release readiness still require real-school and device acceptance.
+Version **0.1.1+1**, under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and `main`; version releases are built from `vX.Y.Z` tags. School compatibility and release readiness still require real-school and device acceptance.
 
 ## Features
 

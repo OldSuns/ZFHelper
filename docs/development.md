@@ -29,7 +29,7 @@ Ship the complete `build/windows/x64/runner/Release/` directory, not just its ex
 
 Pull requests and pushes to `main` run [.github/workflows/ci.yml](../.github/workflows/ci.yml). It restores both Dart packages, checks formatting, analyzes the application and core package, and runs their tests. It does not build or upload platform release artifacts.
 
-A version release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. The build number after `+` stays in `pubspec.yaml` and is passed to Android; for example, `0.1.0+1` is released with tag `v0.1.0`.
+A version release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. The build number after `+` stays in `pubspec.yaml` and is passed to Android; for example, `0.1.1+1` is released with tag `v0.1.1`.
 
 Before creating a release:
 
