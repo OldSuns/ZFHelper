@@ -67,8 +67,8 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
     }
     if (model.latest == null ||
         model.currentVersion == null ||
-        model.currentRelease == null ||
-        model.updateAvailable == null) {
+        model.updateAvailable == null ||
+        (model.updateAvailable == false && model.currentRelease == null)) {
       return const _MessageCard(
         icon: Icons.system_update_alt_rounded,
         message: '准备检查更新…',
