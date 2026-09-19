@@ -72,11 +72,15 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '默认约占 3×2 格，可缩至约 2×1 格，实际占格由桌面决定。低矮时显示课程与时间摘要，增高后补充地点或切换为可滚动课表；窄布局自动纵向排列。点击课程可打开对应日期的日程。',
+                        '小组件会随桌面尺寸自动切换：约 2×1 格突出当前或下一节课，常规尺寸显示今日列表，横向展开显示今天与明天，继续增高后显示本周七天概览。实际占格和可用尺寸由桌面决定。',
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        '跟随应用当前选择的账号、学期和外观。已保存的课程可以离线查看，课表和校历修改后自动同步。',
+                        '课程名称优先显示；空间充足时再补充时间、节次、地点和教师。列表会定位到当前或下一节课程，点击课程、日期或星期可打开对应日期的日程。',
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '内容跟随应用当前选择的账号、学期和外观。已保存的课程可以离线查看，课表和校历修改后自动同步。',
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -138,7 +142,7 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
             ],
             const SizedBox(height: AppLayout.sectionGap),
             Text(
-              '也可长按桌面添加小组件，长按已添加的小组件调整大小。显示按系统周期和课程边界刷新；系统省电时可能延迟，宽列表提供刷新按钮，也可在此重新同步。',
+              '也可长按桌面添加小组件，长按已添加的小组件调整大小。显示按系统周期、日期和课程边界刷新；系统省电时可能延迟。列表、双日和周概览提供刷新按钮，也可在此重新同步。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

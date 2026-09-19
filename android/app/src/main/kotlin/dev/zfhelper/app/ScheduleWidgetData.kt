@@ -10,7 +10,10 @@ import org.json.JSONTokener
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
+import java.time.DayOfWeek
 import java.time.format.DateTimeParseException
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 internal enum class ScheduleWidgetFailureKind { SNAPSHOT, DISPLAY }
 
@@ -75,6 +78,38 @@ internal data class ScheduleWidgetDay(
     val byPeriod: Boolean,
     val lessons: List<ScheduleWidgetLesson>,
 )
+
+internal data class ScheduleWidgetWeekDay(
+    val date: LocalDate,
+    val lessons: List<ScheduleWidgetLesson>,
+)
+
+internal data class ScheduleWidgetWeek(
+    val number: Int,
+    val days: List<ScheduleWidgetWeekDay>,
+)
+
+internal fun ScheduleWidgetSnapshot.weekAt(date: LocalDate): ScheduleWidgetWeek? {
+    if (days.isEmpty()) return null
+    val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val firstMonday = days.first().date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val lastSunday = days.last().date.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
+    if (date < firstMonday || date > lastSunday) return null
+    val anchor = days.minBy { kotlin.math.abs(ChronoUnit.DAYS.between(it.date, date)) }
+    val anchorMonday = anchor.date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val number = anchor.week + ChronoUnit.WEEKS.between(anchorMonday, monday).toInt()
+    if (number < 1) return null
+    return ScheduleWidgetWeek(
+        number,
+        List(7) { offset ->
+            val day = monday.plusDays(offset.toLong())
+            ScheduleWidgetWeekDay(
+                day,
+                days.firstOrNull { it.date == day }?.lessons.orEmpty(),
+            )
+        },
+    )
+}
 
 internal data class ScheduleWidgetSnapshot(
     val generatedAt: Long,

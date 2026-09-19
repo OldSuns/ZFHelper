@@ -61,7 +61,7 @@ Appearance supports system, light, and dark modes across restarts, with Catppucc
 
 The home-screen widget is a read-only, offline projection of the selected timetable account and term, following application appearance. It uses the effective whole-term timetable, calendar, period times, and local adjustments; personal events and credentials are not included.
 
-It adapts from course summaries to scrollable narrow/wide lists as size and font scale allow, focuses the current or next course, and opens the corresponding agenda date when tapped. Launcher grid allocation is launcher-dependent. Timetable/account/calendar/appearance changes synchronize the snapshot; removal waits for snapshot cleanup and reports failures.
+It adapts across four information densities as size and font scale allow: a current/next-course strip, a scrollable list for today or the next course day, side-by-side today/tomorrow columns that fall back to the next course when both columns are empty, and a seven-day weekly summary. Course names take priority over timing, period, location, and teacher details. It focuses the current or next course, and course/date/day taps open the corresponding agenda date. Launcher grid allocation remains launcher-dependent. Timetable/account/calendar/appearance changes synchronize the snapshot; removal waits for snapshot cleanup and reports failures.
 
 System periodic updates and inexact course-boundary alarms can be delayed by power management. The widget is not a precise reminder service and is not available on Windows.
 

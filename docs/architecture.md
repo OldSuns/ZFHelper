@@ -66,7 +66,7 @@ Windows uses process runtime: closing the app stops further attempts, and active
 
 `ScheduleWidgetViewModel` listens to timetable and appearance changes, publishes through `ScheduleWidgetPlatform`, and projects the selected term's effective courses using the same date/calendar rules as the application. Snapshot synchronization follows account removal; cleanup failures are reported.
 
-Kotlin `AppWidgetProvider` and `RemoteViews` read the private snapshot and refresh without requiring a visible Flutter page or instantiating the lazy engine. Sizing rules choose summary/card/narrow-list/wide-list candidates using actual font metrics. Taps carry the date back to agenda. Periodic updates and inexact boundary alarms are offline refresh opportunities, not punctual notifications. Windows has no widget adapter.
+Kotlin `AppWidgetProvider` and responsive `RemoteViews` read the private snapshot and refresh without requiring a visible Flutter page or instantiating the lazy engine. Measured sizing rules select current/next, current-or-next-course-day list, today/tomorrow, or seven-day week-summary layouts using actual font metrics; the lowest width breakpoint also covers launcher-reported content widths below `minResizeWidth`. The Android host derives empty weekdays only from the dated snapshot and does not recalculate school calendar rules. Taps carry the selected date back to agenda. Periodic updates and inexact boundary alarms are offline refresh opportunities, not punctual notifications. Windows has no widget adapter.
 
 ## Protocol evidence and third-party material
 

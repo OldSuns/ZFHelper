@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="schedule_widget_name">课表</string>
-    <string name="schedule_widget_description">查看当前与下一节课程，展开查看今日完整课表</string>
+    <string name="schedule_widget_description">按尺寸查看下一节、今明课程和本周概览</string>
     <string name="schedule_widget_refresh">刷新本地课表</string>
     <string name="schedule_widget_focus">当前与下一节</string>
     <string name="schedule_widget_start">打开应用同步课表</string>
     <string name="schedule_widget_today">今日课表</string>
+    <string name="schedule_widget_two_day">今明课程</string>
+    <string name="schedule_widget_week">本周概览</string>
 </resources>
