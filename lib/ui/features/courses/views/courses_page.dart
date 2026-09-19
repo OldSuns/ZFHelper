@@ -1041,9 +1041,9 @@ class _CoursesPageState extends State<CoursesPage> {
       color: Theme.of(context).colorScheme.errorContainer,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -1059,9 +1059,12 @@ class _CoursesPageState extends State<CoursesPage> {
                     ),
                   ),
                   if (model.data.accountSyncPending)
-                    TextButton(
-                      onPressed: model.busy ? null : model.retryAccountSync,
-                      child: const Text('重试账号同步'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: model.busy ? null : model.retryAccountSync,
+                        child: const Text('重试账号同步'),
+                      ),
                     ),
                 ],
               ),

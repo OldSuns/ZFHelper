@@ -49,13 +49,6 @@ final class ZhengfangSelectionParser {
     }
     collect(source, '');
     if (rounds.isEmpty) {
-      final visible = _visibleText(document);
-      if (_closedMessage.hasMatch(visible)) {
-        throw const SelectionException(
-          SelectionFailureCode.roundClosed,
-          '当前不属于选课阶段，如有需要，请与管理员联系',
-        );
-      }
       final id = _first(form, const [
         'firstXkkzId',
         'firstXkkzXh',

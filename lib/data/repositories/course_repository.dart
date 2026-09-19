@@ -190,7 +190,9 @@ final class CourseRepository {
       var round = context.rounds
           .where((item) => item.key == preferred)
           .firstOrNull;
-      if (requestedRound != null && round == null) {
+      if (requestedRound != null &&
+          round == null &&
+          context.rounds.isNotEmpty) {
         throw const SelectionException(
           SelectionFailureCode.roundClosed,
           '此选课轮次已关闭或更新，请重新查询轮次',
@@ -218,6 +220,24 @@ final class CourseRepository {
           fetchedAt: now,
           selectedFetchedAt: now,
         );
+      } else if (context.rounds.isEmpty) {
+        // The selected-record endpoint remains available after selection closes.
+        final selected = await session.readSelected(context);
+        if (!_validRead(generation, scope, session)) return false;
+        final roundKey = stored.selectedRoundKey;
+        if (roundKey != null) {
+          final previous = stored.catalogs
+              .where((cache) => cache.roundKey == roundKey)
+              .firstOrNull;
+          final now = _clock();
+          catalog = CourseRoundCache(
+            roundKey: roundKey,
+            courses: previous?.courses ?? const [],
+            selectedCourses: selected,
+            fetchedAt: previous?.fetchedAt ?? now,
+            selectedFetchedAt: now,
+          );
+        }
       }
       await _write(() async {
         if (!_validRead(generation, scope, session)) return;
@@ -240,19 +260,23 @@ final class CourseRepository {
             selectedFetchedAt: refreshed.selectedFetchedAt,
           );
         }
-        final roundKeys = context.rounds.map((item) => item.key).toSet();
+        final liveRounds = context.rounds.isNotEmpty;
+        final rounds = liveRounds ? context.rounds : current.rounds;
+        final roundKeys = rounds.map((item) => item.key).toSet();
         await _save(
           StoredCourseAccount(
             account: current.account,
-            rounds: context.rounds,
-            roundsFetchedAt: context.fetchedAt,
-            selectedRoundKey: round?.key,
+            rounds: rounds,
+            roundsFetchedAt: liveRounds
+                ? context.fetchedAt
+                : current.roundsFetchedAt,
+            selectedRoundKey: round?.key ?? current.selectedRoundKey,
             catalogs: [
               ?catalog,
               ...current.catalogs.where(
                 (item) =>
                     item.roundKey != catalog?.roundKey &&
-                    roundKeys.contains(item.roundKey),
+                    (!liveRounds || roundKeys.contains(item.roundKey)),
               ),
             ],
           ),

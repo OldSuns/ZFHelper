@@ -132,34 +132,34 @@ void main() {
     },
   );
 
-  test('reports when the school is outside the selection period', () async {
-    final client = _Client([
-      '''<input type="hidden" id="sessionUserKey" value="student-fixture">
+  test(
+    'reads selected courses when the school is outside the selection period',
+    () async {
+      final client = _Client([
+        '''<input type="hidden" id="sessionUserKey" value="student-fixture">
       <input type="hidden" id="iskxk" value="0">
       <p>对不起，当前不属于选课阶段，如有需要，请与管理员联系！</p>''',
-    ]);
-    final gateway = ZhengfangSelectionGateway(
-      profile: SchoolConnection(
-        name: '测试学校',
-        baseUri: Uri.parse('https://jw.example.test/jwglxt/'),
-      ),
-      client: client,
-      clock: () => DateTime.utc(2026, 9, 14),
-      studentId: 'student-fixture',
-    );
-
-    await expectLater(
-      gateway.readContext(),
-      throwsA(
-        isA<SelectionException>().having(
-          (error) => error.code,
-          'code',
-          SelectionFailureCode.roundClosed,
+        [
+          {'kch_id': 'course-closed', 'kcmc': '已选课程', 'jxb_id': 'class-closed'},
+        ],
+      ]);
+      final gateway = ZhengfangSelectionGateway(
+        profile: SchoolConnection(
+          name: '测试学校',
+          baseUri: Uri.parse('https://jw.example.test/jwglxt/'),
         ),
-      ),
-    );
-    expect(client.requests.single.uri.queryParameters['gnmkdm'], 'N253512');
-  });
+        client: client,
+        clock: () => DateTime.utc(2026, 9, 14),
+        studentId: 'student-fixture',
+      );
+
+      final context = await gateway.readContext();
+      expect(context.rounds, isEmpty);
+      expect((await gateway.readSelected(context)).single.name, '已选课程');
+      expect(client.requests, hasLength(2));
+      expect(client.requests.last.uri.queryParameters['gnmkdm'], 'N253512');
+    },
+  );
 }
 
 final class _Client implements AuthenticatedReadClient {

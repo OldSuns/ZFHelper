@@ -65,6 +65,14 @@ void main() {
       source.enrollments = [20, null];
       expect(await repository.refresh(), isTrue);
       expect(repository.state.catalog!.courses.single.available, isNull);
+
+      source.closed = true;
+      source.selectedCourses = const [
+        SelectedCourse(courseId: 'course', sectionId: 'class-0', name: '算法'),
+      ];
+      expect(await repository.refresh(), isTrue);
+      expect(repository.state.catalog!.courses.single.name, '算法');
+      expect(repository.state.catalog!.selectedCourses.single.name, '算法');
     },
   );
 }
@@ -77,8 +85,10 @@ final class _Source implements CourseSource, SelectionAccessSession {
   );
   static const _parser = ZhengfangSelectionParser();
   List<int?> enrollments = [20, 28];
+  List<SelectedCourse> selectedCourses = const [];
   int sectionReads = 0;
   bool failDetails = false;
+  bool closed = false;
   Future<void> Function()? beforeSelectedRead;
 
   @override
@@ -103,7 +113,7 @@ final class _Source implements CourseSource, SelectionAccessSession {
   bool get isCurrent => true;
   @override
   Future<SelectionContext> readContext() async => SelectionContext(
-    rounds: [_round],
+    rounds: closed ? const [] : [_round],
     fetchedAt: DateTime.utc(2026, 9, 14),
     pageUri: Uri.parse('https://jw.example.test/jwglxt/xsxk/index.html'),
   );
@@ -150,7 +160,7 @@ final class _Source implements CourseSource, SelectionAccessSession {
     SelectionRound? round,
   }) async {
     await beforeSelectedRead?.call();
-    return const [];
+    return selectedCourses;
   }
 
   @override
