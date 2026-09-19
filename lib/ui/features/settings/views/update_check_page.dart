@@ -18,6 +18,11 @@ class UpdateCheckPage extends StatefulWidget {
 }
 
 class _UpdateCheckPageState extends State<UpdateCheckPage> {
+  bool _openingDownload = false;
+
+  String _downloadLabel(ReleaseAsset asset) =>
+      asset.name.toLowerCase().endsWith('.apk') ? '下载 APK' : '下载 Windows 版';
+
   @override
   void initState() {
     super.initState();
@@ -93,10 +98,30 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
       foreground: foreground,
     );
     final notes = _ReleaseNotesCard(release: release, foreground: foreground);
+    final downloadAsset = switch (Theme.of(context).platform) {
+      TargetPlatform.android => release.assetWithExtension('.apk'),
+      TargetPlatform.windows => release.assetWithExtension('.zip'),
+      _ => null,
+    };
     final actions = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton.icon(
+        if (downloadAsset != null) ...[
+          FilledButton.icon(
+            onPressed: _openingDownload
+                ? null
+                : () => _openDownload(context, downloadAsset),
+            icon: _openingDownload
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download),
+            label: Text(_downloadLabel(downloadAsset)),
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
           onPressed: () => _openRelease(context, release.htmlUrl),
           icon: const Icon(Icons.open_in_new),
           label: const Text('打开发布页'),
@@ -139,6 +164,22 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
         );
       },
     );
+  }
+
+  Future<void> _openDownload(BuildContext context, ReleaseAsset asset) async {
+    setState(() => _openingDownload = true);
+    final url = await widget.viewModel.repository.resolveDownloadUrl(asset);
+    if (!mounted || !context.mounted) return;
+    var opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!opened && url != asset.url) {
+      opened = await launchUrl(asset.url, mode: LaunchMode.externalApplication);
+    }
+    if (!mounted || !context.mounted) return;
+    setState(() => _openingDownload = false);
+    if (!opened) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法打开下载地址，请打开发布页下载')));
+    }
   }
 
   Future<void> _openRelease(BuildContext context, Uri url) async {

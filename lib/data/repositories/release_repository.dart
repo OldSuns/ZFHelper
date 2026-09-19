@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart';
 
+typedef DownloadProbe = Future<bool> Function(Uri url);
+
 const githubRepositoryUrl = 'https://github.com/OldSuns/ZFHelper';
+const _downloadMirrorPrefix = 'https://ghfast.top/';
 const _releasesApiUrl =
     'https://api.github.com/repos/OldSuns/ZFHelper/releases';
 
@@ -11,6 +14,7 @@ final class ReleaseInfo {
     required this.body,
     required this.publishedAt,
     required this.htmlUrl,
+    this.assets = const [],
   });
 
   factory ReleaseInfo.fromJson(Map<String, Object?> json) {
@@ -19,12 +23,14 @@ final class ReleaseInfo {
     final body = json['body'];
     final publishedAt = json['published_at'];
     final htmlUrl = json['html_url'];
+    final assets = json['assets'];
     if (tagName is! String ||
         tagName.isEmpty ||
         (name != null && name is! String) ||
         (body != null && body is! String) ||
         publishedAt is! String ||
-        htmlUrl is! String) {
+        htmlUrl is! String ||
+        (assets != null && assets is! List)) {
       throw const FormatException('GitHub Release 响应缺少有效字段');
     }
     final published = DateTime.tryParse(publishedAt);
@@ -35,12 +41,14 @@ final class ReleaseInfo {
         url.host != 'github.com') {
       throw const FormatException('GitHub Release 响应字段格式无效');
     }
+    final releaseAssets = assets is List ? assets : const <Object?>[];
     return ReleaseInfo(
       tagName: tagName,
       name: name as String? ?? tagName,
       body: body as String? ?? '',
       publishedAt: published.toLocal(),
       htmlUrl: url,
+      assets: [for (final item in releaseAssets) ?ReleaseAsset.tryParse(item)],
     );
   }
 
@@ -49,6 +57,39 @@ final class ReleaseInfo {
   final String body;
   final DateTime publishedAt;
   final Uri htmlUrl;
+  final List<ReleaseAsset> assets;
+
+  ReleaseAsset? assetWithExtension(String extension) {
+    final normalized = extension.toLowerCase();
+    for (final asset in assets) {
+      if (asset.name.toLowerCase().endsWith(normalized)) return asset;
+    }
+    return null;
+  }
+}
+
+final class ReleaseAsset {
+  const ReleaseAsset({required this.name, required this.url});
+
+  static ReleaseAsset? tryParse(Object? value) {
+    if (value is! Map) return null;
+    final name = value['name'];
+    final browserUrl = value['browser_download_url'];
+    if (name is! String || name.isEmpty || browserUrl is! String) return null;
+    final url = Uri.tryParse(browserUrl);
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.host != 'github.com' ||
+        !url.path.startsWith('/OldSuns/ZFHelper/releases/download/')) {
+      return null;
+    }
+    return ReleaseAsset(name: name, url: url);
+  }
+
+  final String name;
+  final Uri url;
+
+  Uri get mirrorUrl => Uri.parse('$_downloadMirrorPrefix$url');
 }
 
 /// Returns a negative, zero, or positive value according to semantic version order.
@@ -76,14 +117,22 @@ List<int> _versionParts(String value) {
 }
 
 final class ReleaseRepository {
-  ReleaseRepository({Dio? client}) : _client = client ?? Dio();
+  ReleaseRepository({Dio? client, this._probe}) : _client = client ?? Dio();
 
   final Dio _client;
+  final DownloadProbe? _probe;
 
   Future<ReleaseInfo> fetchLatest() => _fetch('latest');
 
   Future<ReleaseInfo> fetchByTag(String tag) =>
       _fetch('tags/${Uri.encodeComponent(tag)}');
+
+  Future<Uri> resolveDownloadUrl(ReleaseAsset asset) async {
+    if (await (_probe ?? _probeDownload)(asset.mirrorUrl)) {
+      return asset.mirrorUrl;
+    }
+    return asset.url;
+  }
 
   Future<ReleaseInfo> _fetch(String path) async {
     try {
@@ -114,6 +163,31 @@ final class ReleaseRepository {
       throw ReleaseException(error.message);
     } on DioException catch (error) {
       throw ReleaseException(_networkMessage(error));
+    }
+  }
+
+  Future<bool> _probeDownload(Uri url) async {
+    try {
+      final response = await _client.headUri<Object?>(
+        url,
+        options: Options(
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+          followRedirects: true,
+          validateStatus: (status) =>
+              status != null && status >= 200 && status < 400,
+        ),
+      );
+      return response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 400 &&
+          !(response.headers
+                  .value(Headers.contentTypeHeader)
+                  ?.toLowerCase()
+                  .startsWith('text/html') ??
+              false);
+    } on DioException {
+      return false;
     }
   }
 
