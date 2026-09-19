@@ -222,6 +222,29 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        final termPicker = find.byKey(const ValueKey('schedule-term-picker'));
+        final agendaTab = find.byKey(const ValueKey('schedule-section-agenda'));
+        final searchButton = find.byTooltip('查找课程');
+        expect(tester.widget(termPicker), isA<TextButton>());
+        expect(tester.widget(agendaTab), isA<IconButton>());
+        expect(
+          tester.getCenter(agendaTab).dy,
+          tester.getCenter(searchButton).dy,
+        );
+        await tester.tap(termPicker);
+        await tester.pumpAndSettle();
+        expect(find.text('选择学期'), findsOneWidget);
+        expect(
+          tester
+              .widget<IconButton>(
+                find.byKey(const ValueKey('schedule-term-catalog-refresh')),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        expect(source.requests, 0);
+        await tester.tap(find.byTooltip('关闭学期选择'));
+        await tester.pumpAndSettle();
         await tester.drag(
           find.byKey(const ValueKey('timetable-week-pages')),
           const Offset(-350, 0),
@@ -253,6 +276,17 @@ void main() {
           await tester.pumpAndSettle();
           expect(model.selectedWeek, 21);
           expect(find.text('学期末实验'), findsOneWidget);
+          expect(
+            tester.widget(agendaTab),
+            size.width >= AppLayout.workspaceMinWidth
+                ? isA<TextButton>()
+                : isA<IconButton>(),
+          );
+          expect(tester.widget(termPicker), isA<TextButton>());
+          expect(
+            tester.getCenter(agendaTab).dy,
+            tester.getCenter(searchButton).dy,
+          );
           expect(tester.takeException(), isNull);
         }
         expect(source.requests, 0);
@@ -291,6 +325,20 @@ void main() {
         for (final size in [const Size(1366, 768), const Size(320, 640)]) {
           tester.view.physicalSize = size;
           await tester.pumpAndSettle();
+          if (size.width == 320) {
+            final compactTermPicker = tester.widget<IconButton>(termPicker);
+            expect(compactTermPicker.tooltip, '选择学期');
+            expect(compactTermPicker.onPressed, isNotNull);
+            expect(tester.widget(agendaTab), isA<IconButton>());
+            expect(
+              tester.getCenter(termPicker).dy,
+              tester.getCenter(searchButton).dy,
+            );
+            expect(
+              tester.getCenter(agendaTab).dy,
+              tester.getCenter(searchButton).dy,
+            );
+          }
           expect(tester.takeException(), isNull);
         }
         tester.view.physicalSize = const Size(390, 844);

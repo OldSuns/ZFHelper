@@ -235,31 +235,43 @@ class _TimetablePageState extends State<TimetablePage> {
     ],
   );
 
-  Widget _termButton() => TextButton.icon(
-    onPressed: model.account == null || model.data.loading
+  Widget _termButton({bool iconOnly = false}) {
+    final onPressed = model.account == null || model.data.loading
         ? null
-        : () => selectScheduleTerm(context, model),
-    icon: const Icon(Icons.expand_more, size: 20),
-    label: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          model.selectedTerm?.label ?? '课表与日程',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Text(
-          [
-            model.account?.account.schoolName ?? widget.schoolName,
-            if (model.account != null) model.account!.account.accountName,
-          ].join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    ),
-  );
+        : () => selectScheduleTerm(context, model);
+    if (iconOnly) {
+      return IconButton(
+        key: const ValueKey('schedule-term-picker'),
+        tooltip: '选择学期',
+        onPressed: onPressed,
+        icon: const Icon(Icons.calendar_month_outlined),
+      );
+    }
+    return TextButton.icon(
+      key: const ValueKey('schedule-term-picker'),
+      onPressed: onPressed,
+      icon: const Icon(Icons.expand_more, size: 20),
+      label: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            model.selectedTerm?.label ?? '课表与日程',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            [
+              model.account?.account.schoolName ?? widget.schoolName,
+              if (model.account != null) model.account!.account.accountName,
+            ].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _failure() {
     final failure = model.data.failure!;
@@ -306,8 +318,9 @@ class _TimetablePageState extends State<TimetablePage> {
           builder: (context, constraints) {
             final compact = constraints.maxHeight < 420;
             final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
-            final wide =
-                constraints.maxWidth / textScale >= AppLayout.workspaceMinWidth;
+            final effectiveWidth = constraints.maxWidth / textScale;
+            final wide = effectiveWidth >= AppLayout.workspaceMinWidth;
+            final cramped = effectiveWidth < 360;
             final theme = Theme.of(context);
             return Column(
               children: [
@@ -317,16 +330,22 @@ class _TimetablePageState extends State<TimetablePage> {
                       : const EdgeInsets.fromLTRB(8, 4, 8, 0),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _termButton(),
+                      if (cramped) ...[
+                        _termButton(iconOnly: true),
+                        const Spacer(),
+                      ] else
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _termButton(),
+                          ),
                         ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: wide ? 240 : 96,
+                        child: _sectionTabs(compact: !wide),
                       ),
-                      if (wide) ...[
-                        SizedBox(width: 240, child: _sectionTabs()),
-                        const SizedBox(width: 16),
-                      ],
+                      SizedBox(width: wide ? 16 : 8),
                       IconButton(
                         tooltip: '查找课程',
                         onPressed: model.hasSchedule ? _search : null,
@@ -335,11 +354,6 @@ class _TimetablePageState extends State<TimetablePage> {
                     ],
                   ),
                 ),
-                if (!wide)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: _sectionTabs(),
-                  ),
                 if (model.data.loading || model.data.refreshing)
                   const LinearProgressIndicator(minHeight: 2),
                 if (model.data.failure != null)
@@ -382,58 +396,85 @@ class _TimetablePageState extends State<TimetablePage> {
     ),
   );
 
-  Widget _sectionTabs() {
+  Widget _sectionTabs({required bool compact}) {
     final colors = Theme.of(context).colorScheme;
-    final showIcons = MediaQuery.textScalerOf(context).scale(14) / 14 < 1.5;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(compact ? 12 : 16),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: EdgeInsets.all(compact ? 0 : 4),
         child: Row(
           children: [
             for (final section in ScheduleSection.values)
-              Expanded(
-                child: Semantics(
-                  selected: model.section == section,
-                  child: TextButton.icon(
-                    key: ValueKey('schedule-section-${section.name}'),
-                    onPressed: () => model.showSection(section),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      backgroundColor: model.section == section
-                          ? colors.primaryContainer
-                          : Colors.transparent,
-                      foregroundColor: model.section == section
-                          ? colors.onPrimaryContainer
-                          : colors.onSurfaceVariant,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: showIcons
-                        ? Icon(switch (section) {
-                            ScheduleSection.timetable =>
-                              Icons.view_week_outlined,
-                            ScheduleSection.agenda => Icons.event_note_outlined,
-                          }, size: 18)
-                        : null,
-                    label: Text(switch (section) {
-                      ScheduleSection.timetable => '课表',
-                      ScheduleSection.agenda => '日程',
-                    }),
+              if (compact)
+                _sectionButton(section, colors: colors, compact: true)
+              else
+                Expanded(
+                  child: _sectionButton(
+                    section,
+                    colors: colors,
+                    compact: false,
                   ),
                 ),
-              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _sectionButton(
+    ScheduleSection section, {
+    required ColorScheme colors,
+    required bool compact,
+  }) {
+    final selected = model.section == section;
+    final label = switch (section) {
+      ScheduleSection.timetable => '课表',
+      ScheduleSection.agenda => '日程',
+    };
+    final icon = switch (section) {
+      ScheduleSection.timetable => Icons.view_week_outlined,
+      ScheduleSection.agenda => Icons.event_note_outlined,
+    };
+    final background = selected ? colors.primaryContainer : Colors.transparent;
+    final foreground = selected
+        ? colors.onPrimaryContainer
+        : colors.onSurfaceVariant;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    );
+    return Semantics(
+      selected: selected,
+      child: compact
+          ? IconButton(
+              key: ValueKey('schedule-section-${section.name}'),
+              tooltip: label,
+              onPressed: () => model.showSection(section),
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                backgroundColor: background,
+                foregroundColor: foreground,
+                shape: shape,
+              ),
+              icon: Icon(icon),
+            )
+          : TextButton.icon(
+              key: ValueKey('schedule-section-${section.name}'),
+              onPressed: () => model.showSection(section),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                backgroundColor: background,
+                foregroundColor: foreground,
+                shape: shape,
+              ),
+              icon: MediaQuery.textScalerOf(context).scale(14) / 14 < 1.5
+                  ? Icon(icon, size: 18)
+                  : null,
+              label: Text(label),
+            ),
     );
   }
 

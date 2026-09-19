@@ -13,7 +13,7 @@ Future<bool> selectScheduleTerm(
 }) async {
   var account = viewModel.account;
   if (account == null) return false;
-  if (viewModel.canRefresh) {
+  if (!_hasLocalTermChoices(account) && viewModel.canRefresh) {
     await viewModel.refreshCatalog();
     if (!context.mounted) return false;
     account = viewModel.account;
@@ -23,6 +23,7 @@ Future<bool> selectScheduleTerm(
     context,
     account: account,
     forImport: forImport,
+    viewModel: viewModel,
   );
   if (!context.mounted || term == null) return false;
   if (viewModel.account?.account.scope != account.account.scope) {
@@ -36,31 +37,55 @@ Future<bool> selectScheduleTerm(
       viewModel.selectedTerm == term;
 }
 
+bool _hasLocalTermChoices(StoredScheduleAccount account) {
+  final catalog = account.catalog;
+  return account.schedules.isNotEmpty ||
+      catalog != null &&
+          (catalog.terms.isNotEmpty ||
+              catalog.yearOptions.isNotEmpty && catalog.termOptions.isNotEmpty);
+}
+
 Future<AcademicTerm?> showScheduleTermPicker(
   BuildContext context, {
   required StoredScheduleAccount account,
   bool forImport = false,
+  TimetableViewModel? viewModel,
 }) => showAdaptiveSheet<AcademicTerm>(
   context: context,
-  builder: (context) => _TermPicker(account: account, forImport: forImport),
+  builder: (context) =>
+      _TermPicker(account: account, forImport: forImport, viewModel: viewModel),
 );
 
 class _TermPicker extends StatefulWidget {
-  const _TermPicker({required this.account, required this.forImport});
+  const _TermPicker({
+    required this.account,
+    required this.forImport,
+    required this.viewModel,
+  });
   final StoredScheduleAccount account;
   final bool forImport;
+  final TimetableViewModel? viewModel;
 
   @override
   State<_TermPicker> createState() => _TermPickerState();
 }
 
 class _TermPickerState extends State<_TermPicker> {
+  late StoredScheduleAccount _account;
   String? _year;
   String? _term;
   final _manualYear = TextEditingController();
   ZhengfangSemester? _manualSemester;
   String? _yearError;
   String? _semesterError;
+  bool _refreshing = false;
+  String? _refreshFailure;
+
+  @override
+  void initState() {
+    super.initState();
+    _account = widget.account;
+  }
 
   @override
   void dispose() {
@@ -85,9 +110,32 @@ class _TermPickerState extends State<_TermPicker> {
     }
   }
 
+  Future<void> _refreshCatalog() async {
+    final viewModel = widget.viewModel;
+    if (viewModel == null || _refreshing) return;
+    final scope = _account.account.scope;
+    setState(() {
+      _refreshing = true;
+      _refreshFailure = null;
+    });
+    final refreshed = await viewModel.refreshCatalog();
+    if (!mounted) return;
+    final account = viewModel.account;
+    setState(() {
+      _refreshing = false;
+      if (refreshed && account != null && account.account.scope == scope) {
+        _account = account;
+        _year = null;
+        _term = null;
+      } else {
+        _refreshFailure = viewModel.data.failure?.message ?? '刷新学期列表失败，请稍后重试';
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final account = widget.account;
+    final account = _account;
     final catalog = account.catalog;
     final selectedYearCode = _year ?? catalog?.selectedTerm?.yearCode;
     final selectedTermCode = _term ?? catalog?.selectedTerm?.termCode;
@@ -114,6 +162,18 @@ class _TermPickerState extends State<_TermPicker> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                if (widget.viewModel?.canRefresh ?? false)
+                  IconButton(
+                    key: const ValueKey('schedule-term-catalog-refresh'),
+                    tooltip: '刷新学期列表',
+                    onPressed: _refreshing ? null : _refreshCatalog,
+                    icon: _refreshing
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                  ),
                 IconButton(
                   tooltip: '关闭学期选择',
                   onPressed: () => Navigator.of(context).pop(),
@@ -127,6 +187,16 @@ class _TermPickerState extends State<_TermPicker> {
                   ? '请选择要导入的学年和学期。也可以手动填写，不依赖学校页面提供选项。'
                   : '已保存的学期可离线查看。其他学期可手动选择，再前往“设置 → 课表”导入。',
             ),
+            if (_refreshFailure != null) ...[
+              const SizedBox(height: 8),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _refreshFailure!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             for (final term in terms)
               ListTile(
@@ -195,58 +265,66 @@ class _TermPickerState extends State<_TermPicker> {
               ),
             ],
             const Divider(),
-            const SizedBox(height: 12),
-            Text('手动选择学年学期', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            if (catalog == null ||
-                catalog.yearOptions.isEmpty ||
-                catalog.termOptions.isEmpty)
-              const Text('学校页面未提供完整学期列表，请填写你要查看的学年和学期。'),
-            const SizedBox(height: 16),
-            TextField(
-              key: const ValueKey('schedule-manual-year'),
-              controller: _manualYear,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.next,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(4),
-              ],
-              decoration: InputDecoration(
-                labelText: '学年起始年份',
-                helperText: '填写学年开始的四位年份',
-                errorText: _yearError,
-                errorMaxLines: 3,
+            ExpansionTile(
+              key: const ValueKey('schedule-manual-term-expansion'),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              title: Text(
+                '手动选择学年学期',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              onChanged: (_) {
-                if (_yearError != null) setState(() => _yearError = null);
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<ZhengfangSemester>(
-              key: const ValueKey('schedule-manual-semester'),
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: '学期',
-                errorText: _semesterError,
-              ),
-              items: [
-                for (final semester in ZhengfangSemester.values)
-                  DropdownMenuItem(
-                    value: semester,
-                    child: Text(semester.label),
+              children: [
+                if (catalog == null ||
+                    catalog.yearOptions.isEmpty ||
+                    catalog.termOptions.isEmpty)
+                  const Text('学校页面未提供完整学期列表，请填写你要查看的学年和学期。'),
+                const SizedBox(height: 16),
+                TextField(
+                  key: const ValueKey('schedule-manual-year'),
+                  controller: _manualYear,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: '学年起始年份',
+                    helperText: '填写学年开始的四位年份',
+                    errorText: _yearError,
+                    errorMaxLines: 3,
                   ),
+                  onChanged: (_) {
+                    if (_yearError != null) setState(() => _yearError = null);
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<ZhengfangSemester>(
+                  key: const ValueKey('schedule-manual-semester'),
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: '学期',
+                    errorText: _semesterError,
+                  ),
+                  items: [
+                    for (final semester in ZhengfangSemester.values)
+                      DropdownMenuItem(
+                        value: semester,
+                        child: Text(semester.label),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    _manualSemester = value;
+                    _semesterError = null;
+                  }),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  key: const ValueKey('schedule-manual-term-submit'),
+                  onPressed: _selectManualTerm,
+                  child: Text(widget.forImport ? '导入此学期' : '查看此学期'),
+                ),
               ],
-              onChanged: (value) => setState(() {
-                _manualSemester = value;
-                _semesterError = null;
-              }),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: const ValueKey('schedule-manual-term-submit'),
-              onPressed: _selectManualTerm,
-              child: Text(widget.forImport ? '导入此学期' : '查看此学期'),
             ),
           ],
         ),

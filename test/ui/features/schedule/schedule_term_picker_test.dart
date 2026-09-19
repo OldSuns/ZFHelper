@@ -36,8 +36,11 @@ void main() {
       await tester.tap(find.text('选择导入学期'));
       await tester.pumpAndSettle();
       final year = find.byKey(const ValueKey('schedule-manual-year'));
-      expect(tester.widget<TextField>(year).controller!.text, isEmpty);
       expect(find.text('手动选择学年学期'), findsOneWidget);
+      expect(year, findsNothing);
+      await tester.tap(find.text('手动选择学年学期'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(year).controller!.text, isEmpty);
       await tester.enterText(year, '2025');
       final semester = find.byKey(const ValueKey('schedule-manual-semester'));
       await tester.ensureVisible(semester);
