@@ -163,9 +163,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
-  void _selectDestination(int index) {
+  void _selectDestination(int index, {bool resetTimetableSection = true}) {
     _timetable.refreshToday();
-    setState(() => _destination = AppDestination.values[index]);
+    final destination = AppDestination.values[index];
+    if (resetTimetableSection && destination == AppDestination.timetable) {
+      _timetable.showSection(ScheduleSection.timetable);
+    }
+    setState(() => _destination = destination);
   }
 
   void _openSettings() => _selectDestination(AppDestination.settings.index);
@@ -196,7 +200,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       Navigator.of(context).popUntil((route) => route.isFirst);
       _timetable.selectAgendaDate(date);
       _timetable.showSection(ScheduleSection.agenda);
-      _selectDestination(AppDestination.timetable.index);
+      _selectDestination(
+        AppDestination.timetable.index,
+        resetTimetableSection: false,
+      );
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }

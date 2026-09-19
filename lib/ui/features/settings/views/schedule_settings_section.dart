@@ -43,12 +43,7 @@ class ScheduleSettingsSection extends StatelessWidget {
       await _chooseTerm(context, importAfterSelection: true);
       return;
     }
-    _message(
-      context,
-      viewModel.schedule!.importWarnings.isEmpty
-          ? '课表已保存在本机，下次主动更新前一直可用'
-          : '课表已保存在本机，请查看下方的导入提示',
-    );
+    _message(context, '课表已保存在本机，下次主动更新前一直可用');
   }
 
   Future<void> _chooseTerm(
@@ -201,7 +196,6 @@ class ScheduleSettingsSection extends StatelessWidget {
       final canEdit =
           viewModel.imported != null && viewModel.editTarget != null;
       final failure = viewModel.data.failure;
-      final warnings = viewModel.imported?.importWarnings ?? const <String>[];
       return SettingsSection(
         title: title,
         children: [
@@ -263,27 +257,17 @@ class ScheduleSettingsSection extends StatelessWidget {
                   ? () => _refresh(context, useSchoolDefault: true)
                   : null,
             ),
-          if (warnings.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('导入提示'),
-              subtitle: Text(warnings.join('\n')),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 8,
-              ),
-            ),
-          SettingsEntry(
-            icon: Icons.add_rounded,
-            title: '添加课程',
-            subtitle: '向当前学期添加本地课程',
-            onTap: canEdit && !busy ? () => _addCourse(context) : null,
-          ),
           SettingsEntry(
             icon: Icons.schedule_outlined,
             title: '校历与作息',
             subtitle: '设置当前学期的教学周与上课时间',
             onTap: canEdit && !busy ? () => _calendar(context) : null,
+          ),
+          SettingsEntry(
+            icon: Icons.add_rounded,
+            title: '添加课程',
+            subtitle: '向当前学期添加本地课程',
+            onTap: canEdit && !busy ? () => _addCourse(context) : null,
           ),
           SwitchListTile.adaptive(
             secondary: const Icon(Icons.view_agenda_outlined),
