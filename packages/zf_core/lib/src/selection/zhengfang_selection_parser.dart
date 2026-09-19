@@ -49,6 +49,13 @@ final class ZhengfangSelectionParser {
     }
     collect(source, '');
     if (rounds.isEmpty) {
+      final visible = _visibleText(document);
+      if (_closedMessage.hasMatch(visible)) {
+        throw const SelectionException(
+          SelectionFailureCode.roundClosed,
+          '当前不属于选课阶段，如有需要，请与管理员联系',
+        );
+      }
       final id = _first(form, const [
         'firstXkkzId',
         'firstXkkzXh',
@@ -237,7 +244,8 @@ final _queryCourse = RegExp(
 );
 
 final _closedMessage = RegExp(
-  r'(?:选课|轮次).{0,18}(?:未开始|未开放|已结束|已关闭|未到|尚未开始)|不在选课时间|只可退课|暂无.{0,5}选课',
+  r'(?:选课|轮次).{0,18}(?:未开始|未开放|已结束|已关闭|未到|尚未开始)|'
+  r'不在选课时间|不属于选课阶段|只可退课|暂无.{0,5}选课',
 );
 final _loginMessage = RegExp(
   r'请先登[录陆]|未登[录陆]|请重新登[录陆]|登[录陆].{0,8}(?:超时|失效|过期)|会话.{0,8}(?:失效|过期)|notlogin',

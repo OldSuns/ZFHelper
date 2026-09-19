@@ -11,6 +11,7 @@ final class PasswordLoginForm {
     required this.action,
     required List<MapEntry<String, String>> hiddenFields,
     required this.passwordFieldCount,
+    required this.passwordUsesRsa,
     required this.hasVisibleCaptcha,
     required this.captchaUri,
   }) : hiddenFields = List.unmodifiable(hiddenFields);
@@ -19,6 +20,7 @@ final class PasswordLoginForm {
   final Uri action;
   final List<MapEntry<String, String>> hiddenFields;
   final int passwordFieldCount;
+  final bool passwordUsesRsa;
   final bool hasVisibleCaptcha;
   final Uri captchaUri;
 }
@@ -56,7 +58,12 @@ PasswordLoginForm parsePasswordForm(
   final token = scope
       .querySelector('input[name="csrftoken"]')
       ?.attributes['value'];
-  if (token == null || token.trim().isEmpty) {
+  final passwordMode = document
+      .querySelector('#mmsfjm, input[name="mmsfjm"]')
+      ?.attributes['value']
+      ?.trim();
+  final passwordUsesRsa = passwordMode != '0';
+  if (passwordUsesRsa && (token == null || token.trim().isEmpty)) {
     throw const LoginFailure(
       LoginFailureCode.browserRequired,
       '该登录页没有标准新正方登录令牌，请使用网页登录',
@@ -72,7 +79,9 @@ PasswordLoginForm parsePasswordForm(
       : resolveLoginUri(baseUri, action, profile);
   checkLoginOrigin(actionUri, profile);
 
-  final hidden = <MapEntry<String, String>>[MapEntry('csrftoken', token)];
+  final hidden = <MapEntry<String, String>>[
+    if (token != null) MapEntry('csrftoken', token),
+  ];
   for (final input in scope.querySelectorAll('input')) {
     final name = input.attributes['name'];
     if (input.attributes['type']?.toLowerCase() != 'hidden' ||
@@ -110,6 +119,7 @@ PasswordLoginForm parsePasswordForm(
     action: actionUri,
     hiddenFields: hidden,
     passwordFieldCount: passwordFieldCount == 0 ? 1 : passwordFieldCount,
+    passwordUsesRsa: passwordUsesRsa,
     hasVisibleCaptcha: captchaInput != null,
     captchaUri: captchaUri,
   );
@@ -153,7 +163,11 @@ bool isLoginDocument(Document document) =>
     (document.querySelector('input[name="csrftoken"]') != null &&
         document.querySelector('input[name="yhm"]') != null);
 
-LoginAccount parseAuthenticatedAccount(Document document, String usernameHint) {
+LoginAccount parseAuthenticatedAccount(
+  Document document,
+  String usernameHint, {
+  String? studentIdOverride,
+}) {
   final visiblePassword = document
       .querySelectorAll('input[name="mm"]')
       .any(_isVisibleControl);
@@ -175,14 +189,7 @@ LoginAccount parseAuthenticatedAccount(Document document, String usernameHint) {
         '.student-name',
         '#xhxm',
       ])?.replaceFirst(RegExp(r'\s*(?:学生|同学)\s*$'), '').trim();
-  final studentId = _firstIdentity(document, const [
-    'input[name="xh"]',
-    'span[name="xh"]',
-    'div[name="xh"]',
-    '.student-id',
-    '#xh',
-    '.user-id',
-  ]);
+  final studentId = studentIdOverride ?? parseAuthenticatedStudentId(document);
   final notice = classifyLoginPage(document);
   if (notice.failure != null) throw notice.failure!;
   final title = document.querySelector('title')?.text ?? '';
@@ -239,6 +246,19 @@ void checkLoginOrigin(Uri uri, SchoolConnection profile) {
     );
   }
 }
+
+String? parseAuthenticatedStudentId(Document document) =>
+    _firstIdentity(document, const [
+      '#sessionUserKey',
+      'input[name="studentId"]',
+      '#studentId',
+      'input[name="xh"]',
+      'span[name="xh"]',
+      'div[name="xh"]',
+      '.student-id',
+      '#xh',
+      '.user-id',
+    ]);
 
 String? _firstIdentity(Document document, List<String> selectors) {
   for (final selector in selectors) {

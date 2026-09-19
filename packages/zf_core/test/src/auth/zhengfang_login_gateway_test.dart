@@ -77,6 +77,57 @@ void main() {
   );
 
   test(
+    'submits plaintext fields when the school disables password encryption',
+    () async {
+      final cipher = RecordingPasswordCipher();
+      final transport = ScriptedAuthTransport([
+        (request) => textResponse(
+          request,
+          loginPage(token: '', passwordMode: '0', duplicatePassword: true),
+        ),
+        (request) {
+          expect(request.method, 'POST');
+          expect(formValues(request, 'csrftoken'), ['']);
+          expect(formValues(request, 'mm'), [
+            credentials.password,
+            credentials.password,
+          ]);
+          return successRedirect(request);
+        },
+        accountResponse,
+      ]);
+
+      final result = await gatewayFor(
+        transport,
+        cipher: cipher,
+      ).loginPassword(credentials) as LoginSuccess;
+
+      expect(result.session.account.id, '20260001');
+      expect(cipher.calls, isEmpty);
+    },
+  );
+
+  test('falls back to the authenticated menu for the student id', () async {
+    final transport = ScriptedAuthTransport([
+      (request) => textResponse(request, '<h4 class="media-heading">示例用户</h4>'),
+      (request) {
+        expect(request.uri.path, '/jwglxt/xtgl/index_initMenu.html');
+        expect(request.uri.queryParameters['jsdm'], 'xs');
+        return textResponse(
+          request,
+          '<input type="hidden" id="sessionUserKey" value="student-fixture">',
+        );
+      },
+    ]);
+
+    final session = await gatewayFor(transport).verifySession();
+
+    expect(session.account.id, 'student-fixture');
+    expect(session.account.studentId, 'student-fixture');
+    expect(session.account.displayName, '示例用户');
+  });
+
+  test(
     'loads an initially visible captcha before sending any password',
     () async {
       final transport = ScriptedAuthTransport([
@@ -576,7 +627,7 @@ void main() {
     () async {
       AuthHttpResponse nameOnly(AuthHttpRequest request) =>
           textResponse(request, '<h4 class="media-heading">李明 学生</h4>');
-      final transport = ScriptedAuthTransport([nameOnly, nameOnly]);
+      final transport = ScriptedAuthTransport([nameOnly, nameOnly, nameOnly]);
       final gateway = gatewayFor(transport);
 
       await expectLater(

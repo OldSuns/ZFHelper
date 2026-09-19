@@ -95,9 +95,11 @@ String loginPage({
   String action = 'login_slogin.html',
   String extraHidden = '',
   bool duplicatePassword = false,
+  String? passwordMode,
 }) =>
     '''
 <!doctype html><html><body>
+${passwordMode == null ? '' : '<input type="hidden" id="mmsfjm" value="$passwordMode">'}
 <form action="$action" method="post">
 <input type="hidden" name="csrftoken" value="$token">
 <input name="yhm"><input type="password" name="mm">

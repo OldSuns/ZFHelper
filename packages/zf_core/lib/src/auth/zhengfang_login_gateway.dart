@@ -139,12 +139,14 @@ final class ZhengfangLoginGateway
 
   Future<LoginStep> _postPassword(String captcha) async {
     final pending = _requirePending();
-    final encrypted = await _encryptPassword(pending.credentials.password);
+    final password = pending.form.passwordUsesRsa
+        ? await _encryptPassword(pending.credentials.password)
+        : pending.credentials.password;
     final fields = [
       ...pending.form.hiddenFields,
       MapEntry('yhm', pending.credentials.username),
       for (var index = 0; index < pending.form.passwordFieldCount; index++)
-        MapEntry('mm', encrypted),
+        MapEntry('mm', password),
       if (captcha.isNotEmpty) MapEntry('yzm', captcha),
     ];
     final response = await _send(
@@ -272,10 +274,23 @@ final class ZhengfangLoginGateway
       throw const LoginFailure(LoginFailureCode.expired, '教务登录状态已失效，请重新登录');
     }
     _requireSuccess(response, '账号核验');
-    final account = parseAuthenticatedAccount(
-      parseLoginDocument(response),
-      usernameHint,
-    );
+    final accountDocument = parseLoginDocument(response);
+    late final LoginAccount account;
+    try {
+      account = parseAuthenticatedAccount(accountDocument, usernameHint);
+    } on LoginFailure catch (error) {
+      if (error.code != LoginFailureCode.missingIdentity) rethrow;
+      final menuResponse = await _get(_menuUri, verifyingAccount: true);
+      _requireSuccess(menuResponse, '首页身份核验');
+      final studentId = parseAuthenticatedStudentId(
+        parseLoginDocument(menuResponse),
+      );
+      account = parseAuthenticatedAccount(
+        accountDocument,
+        usernameHint,
+        studentIdOverride: studentId,
+      );
+    }
     final cookies = await _transport.cookiesFor(_profile.accountUri);
     _ensureOpen();
     if (cookies.isEmpty) {
@@ -292,6 +307,15 @@ final class ZhengfangLoginGateway
     _hasVerifiedIdentity = true;
     return session;
   }
+
+  Uri get _menuUri => _profile.baseUri
+      .resolve('xtgl/index_initMenu.html')
+      .replace(
+        queryParameters: {
+          'jsdm': 'xs',
+          '_': _clock().millisecondsSinceEpoch.toString(),
+        },
+      );
 
   Future<AuthHttpResponse> _get(
     Uri uri, {
