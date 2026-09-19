@@ -12,8 +12,8 @@ final class SchoolConnection {
     this.publicKeyPath = 'xtgl/login_getPublicKey.html',
     this.captchaPath = 'kaptcha',
     this.accountPath = 'xtgl/index_cxYhxxIndex.html',
-    this.schedulePagePath = defaultSchedulePath,
-    this.scheduleQueryPath = defaultSchedulePath,
+    this.schedulePagePath = defaultSchedulePagePath,
+    this.scheduleQueryPath = defaultScheduleQueryPath,
     this.schedulePeriodsPath,
     this.gradePagePath = defaultGradePagePath,
     this.gradeQueryPath = defaultGradeQueryPath,
@@ -77,8 +77,8 @@ final class SchoolConnection {
     String publicKeyPath = 'xtgl/login_getPublicKey.html',
     String captchaPath = 'kaptcha',
     String accountPath = 'xtgl/index_cxYhxxIndex.html',
-    String schedulePagePath = defaultSchedulePath,
-    String scheduleQueryPath = defaultSchedulePath,
+    String schedulePagePath = defaultSchedulePagePath,
+    String scheduleQueryPath = defaultScheduleQueryPath,
     String? schedulePeriodsPath,
     String gradePagePath = defaultGradePagePath,
     String gradeQueryPath = defaultGradeQueryPath,
@@ -110,7 +110,11 @@ final class SchoolConnection {
   final String publicKeyPath;
   final String captchaPath;
   final String accountPath;
-  static const defaultSchedulePath = 'kbcx/xskbcx_cxXsKb.html?gnmkdm=N253508';
+  static const defaultSchedulePagePath =
+      'kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508';
+  static const defaultScheduleQueryPath =
+      'kbcx/xskbcx_cxXsKb.html?gnmkdm=N253508';
+  static const defaultSchedulePath = defaultScheduleQueryPath;
   static const defaultGradePagePath = 'cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005';
   static const defaultGradeQueryPath =
       'cjcx/cjcx_cxDgXscj.html?doType=query&gnmkdm=N305005';

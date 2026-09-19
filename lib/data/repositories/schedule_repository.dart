@@ -233,6 +233,66 @@ final class ScheduleRepository {
     }
   }
 
+  Future<bool> refreshCatalog() async {
+    await initialize();
+    if (!_initialized || _closed || _refreshing) return false;
+    final record = state.account;
+    if (record == null) return false;
+    final scope = record.account.scope;
+    final generation = ++_readGeneration;
+    _refreshing = true;
+    _failure = null;
+    _emit();
+    try {
+      final session = _source.open(scope);
+      if (session is! ScheduleCatalogReadSession) return false;
+      final catalog = await (session as ScheduleCatalogReadSession)
+          .readCatalog();
+      if (!_validRead(generation, scope, session)) return false;
+      await _write(() async {
+        if (!_validRead(generation, scope, session)) return;
+        final current = _account(scope);
+        if (current == null) return;
+        final updated = current.copyWith(catalog: catalog);
+        await _store.saveAccount(updated);
+        if (_closed) return;
+        _replace(updated, select: _library.selectedAccount == scope);
+      });
+      return _validRead(generation, scope, session);
+    } on LoginFailure catch (error) {
+      if (error.code != LoginFailureCode.cancelled &&
+          generation == _readGeneration) {
+        _failure = ScheduleFailure(
+          error.code == LoginFailureCode.network
+              ? ScheduleFailureKind.network
+              : ScheduleFailureKind.authentication,
+          error.message,
+        );
+      }
+      return false;
+    } on ScheduleStorageException catch (error) {
+      if (generation == _readGeneration) {
+        _failure = ScheduleFailure(ScheduleFailureKind.storage, error.message);
+      }
+      return false;
+    } on FormatException catch (error) {
+      if (generation == _readGeneration) {
+        _failure = ScheduleFailure(
+          error is ScheduleParseException && error.field == 'xnm/xqm'
+              ? ScheduleFailureKind.termSelection
+              : ScheduleFailureKind.protocol,
+          error is ScheduleParseException
+              ? error.message
+              : '学校返回的学期列表格式无法识别，请核对课表接口或稍后重试',
+        );
+      }
+      return false;
+    } finally {
+      if (generation == _readGeneration) _refreshing = false;
+      _emit();
+    }
+  }
+
   Future<bool> selectTerm(AcademicTerm term) {
     _cancelRead();
     final scope = state.account?.account.scope;

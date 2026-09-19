@@ -10,6 +10,10 @@ abstract interface class ScheduleReadSession {
   Future<ScheduleImportResult> read({AcademicTerm? term});
 }
 
+abstract interface class ScheduleCatalogReadSession {
+  Future<TermCatalog> readCatalog();
+}
+
 abstract interface class ScheduleSource {
   AcademicAccountRecord? get connectedAccount;
   Stream<AcademicAccountChange> get accountChanges;
@@ -36,7 +40,8 @@ final class AuthenticatedScheduleSource implements ScheduleSource {
       _AuthenticatedScheduleRead(_source.open(scope), _clock);
 }
 
-final class _AuthenticatedScheduleRead implements ScheduleReadSession {
+final class _AuthenticatedScheduleRead
+    implements ScheduleReadSession, ScheduleCatalogReadSession {
   _AuthenticatedScheduleRead(this._session, this._clock);
 
   final AcademicReadSession _session;
@@ -45,13 +50,19 @@ final class _AuthenticatedScheduleRead implements ScheduleReadSession {
   @override
   bool get isCurrent => _session.isCurrent;
 
+  ZhengfangScheduleGateway _gateway(AuthenticatedReadClient client) =>
+      ZhengfangScheduleGateway(
+        profile: _session.profile,
+        client: client,
+        clock: _clock,
+        studentId: _session.studentId,
+      );
+
   @override
-  Future<ScheduleImportResult> read({AcademicTerm? term}) => _session.read(
-    (client) => ZhengfangScheduleGateway(
-      profile: _session.profile,
-      client: client,
-      clock: _clock,
-      studentId: _session.studentId,
-    ).importSchedule(term: term),
-  );
+  Future<ScheduleImportResult> read({AcademicTerm? term}) =>
+      _session.read((client) => _gateway(client).importSchedule(term: term));
+
+  @override
+  Future<TermCatalog> readCatalog() =>
+      _session.read((client) => _gateway(client).readTermCatalog());
 }

@@ -101,6 +101,7 @@ final class TimetableViewModel extends ChangeNotifier {
   Future<void> retryLocalLoad() => _repository.retryLocalLoad();
   Future<bool> refresh({bool useSchoolDefault = false}) =>
       _repository.refresh(useSchoolDefault: useSchoolDefault);
+  Future<bool> refreshCatalog() => _repository.refreshCatalog();
 
   void previousWeek() {
     if (!canPreviousWeek) return;

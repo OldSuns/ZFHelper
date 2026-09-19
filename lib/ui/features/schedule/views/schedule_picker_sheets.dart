@@ -11,8 +11,14 @@ Future<bool> selectScheduleTerm(
   TimetableViewModel viewModel, {
   bool forImport = false,
 }) async {
-  final account = viewModel.account;
+  var account = viewModel.account;
   if (account == null) return false;
+  if (viewModel.canRefresh) {
+    await viewModel.refreshCatalog();
+    if (!context.mounted) return false;
+    account = viewModel.account;
+    if (account == null) return false;
+  }
   final term = await showScheduleTermPicker(
     context,
     account: account,
@@ -83,6 +89,8 @@ class _TermPickerState extends State<_TermPicker> {
   Widget build(BuildContext context) {
     final account = widget.account;
     final catalog = account.catalog;
+    final selectedYearCode = _year ?? catalog?.selectedTerm?.yearCode;
+    final selectedTermCode = _term ?? catalog?.selectedTerm?.termCode;
     final terms = <String, AcademicTerm>{
       for (final term in catalog?.terms ?? <AcademicTerm>[]) term.key: term,
       for (final snapshot in account.schedules.values)
@@ -145,6 +153,7 @@ class _TermPickerState extends State<_TermPicker> {
                 key: const ValueKey('schedule-year-picker'),
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '学校提供的学年'),
+                initialValue: selectedYearCode,
                 items: [
                   for (final year in catalog.yearOptions)
                     DropdownMenuItem(value: year.code, child: Text(year.label)),
@@ -156,6 +165,7 @@ class _TermPickerState extends State<_TermPicker> {
                 key: const ValueKey('schedule-term-picker'),
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: '学校提供的学期'),
+                initialValue: selectedTermCode,
                 items: [
                   for (final term in catalog.termOptions)
                     DropdownMenuItem(value: term.code, child: Text(term.label)),
@@ -164,14 +174,14 @@ class _TermPickerState extends State<_TermPicker> {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _year == null || _term == null
+                onPressed: selectedYearCode == null || selectedTermCode == null
                     ? null
                     : () {
                         final year = catalog.yearOptions.firstWhere(
-                          (item) => item.code == _year,
+                          (item) => item.code == selectedYearCode,
                         );
                         final term = catalog.termOptions.firstWhere(
-                          (item) => item.code == _term,
+                          (item) => item.code == selectedTermCode,
                         );
                         Navigator.of(context).pop(
                           AcademicTerm(

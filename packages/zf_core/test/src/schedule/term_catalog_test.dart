@@ -35,6 +35,54 @@ void main() {
     },
   );
 
+  test('parses the current Zhengfang timetable selectors', () {
+    final catalog = parser.parseTermCatalog('''
+      <form id="ajaxForm">
+        <select name="xnm" id="xnm" style="display:none">
+          <option value="">---请选择---</option>
+          <option value="2026" selected="selected">2026-2027</option>
+          <option value="2025">2025-2026</option>
+        </select>
+        <select name="xqm" id="xqm" style="display:none">
+          <option value="">---请选择---</option>
+          <option value="3" selected="selected">1</option>
+          <option value="12">2</option>
+          <option value="16">3</option>
+        </select>
+      </form>
+    ''');
+    expect(catalog.yearOptions.map((option) => option.code), ['2026', '2025']);
+    expect(catalog.termOptions.map((option) => option.code), ['3', '12', '16']);
+    expect(catalog.selectedTerm, isNotNull);
+    expect(catalog.selectedTerm!.yearCode, '2026');
+    expect(catalog.selectedTerm!.termCode, '3');
+  });
+
+  test(
+    'limits Zhengfang years to the current year and four previous years',
+    () {
+      final catalog = parser.parseTermCatalog('''
+      <select name="xnm">
+        <option value="2035">2035-2036</option>
+        <option value="2026" selected>2026-2027</option>
+        <option value="2025">2025-2026</option>
+        <option value="2024">2024-2025</option>
+        <option value="2023">2023-2024</option>
+        <option value="2022">2022-2023</option>
+        <option value="2021">2021-2022</option>
+      </select>
+      <select name="xqm"><option value="3" selected>1</option></select>
+    ''');
+      expect(catalog.yearOptions.map((option) => option.code), [
+        '2026',
+        '2025',
+        '2024',
+        '2023',
+        '2022',
+      ]);
+    },
+  );
+
   test(
     'retains school codes and selector labels without a Cartesian catalog',
     () {

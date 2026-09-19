@@ -192,6 +192,41 @@ void main() {
   });
 
   test(
+    'defaults the timetable page to the selector page and query to JSON',
+    () {
+      final profile = SchoolConnection(
+        name: '测试学校',
+        baseUri: Uri.parse('https://school.example/jwglxt/'),
+      );
+      expect(
+        profile.schedulePagePath,
+        SchoolConnection.defaultSchedulePagePath,
+      );
+      expect(
+        profile.scheduleQueryPath,
+        SchoolConnection.defaultScheduleQueryPath,
+      );
+      expect(profile.schedulePagePath, isNot(profile.scheduleQueryPath));
+    },
+  );
+
+  test('migrates the old shared timetable endpoint', () {
+    final profile = SchoolConnection(
+      name: '测试学校',
+      baseUri: Uri.parse('https://school.example/jwglxt/'),
+    );
+    final saved = SchoolConnectionCodec.toMap(profile)
+      ..['schedulePagePath'] = SchoolConnection.defaultSchedulePath
+      ..['scheduleQueryPath'] = SchoolConnection.defaultSchedulePath;
+    final migrated = SchoolConnectionCodec.fromMap(saved);
+    expect(migrated.schedulePagePath, SchoolConnection.defaultSchedulePagePath);
+    expect(
+      migrated.scheduleQueryPath,
+      SchoolConnection.defaultScheduleQueryPath,
+    );
+  });
+
+  test(
     'school storage retains grade paths and migrates absent legacy keys',
     () {
       final profile = SchoolConnection(

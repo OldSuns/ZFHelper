@@ -145,11 +145,11 @@ void main() {
     expect(restored.session.account.id, record.session.account.id);
     expect(
       restored.profile.schedulePagePath,
-      SchoolConnection.defaultSchedulePath,
+      SchoolConnection.defaultSchedulePagePath,
     );
     expect(
       restored.profile.scheduleQueryPath,
-      SchoolConnection.defaultSchedulePath,
+      SchoolConnection.defaultScheduleQueryPath,
     );
     expect(restored.profile.schedulePeriodsPath, isNull);
     expect(

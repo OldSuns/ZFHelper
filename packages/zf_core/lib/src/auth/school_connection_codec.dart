@@ -46,10 +46,10 @@ abstract final class SchoolConnectionCodec {
       captchaPath: _string(value, 'captchaPath'),
       accountPath: _string(value, 'accountPath'),
       schedulePagePath: legacyLogin
-          ? SchoolConnection.defaultSchedulePath
-          : _string(value, 'schedulePagePath'),
+          ? SchoolConnection.defaultSchedulePagePath
+          : _schedulePagePath(value),
       scheduleQueryPath: legacyLogin
-          ? SchoolConnection.defaultSchedulePath
+          ? SchoolConnection.defaultScheduleQueryPath
           : _string(value, 'scheduleQueryPath'),
       schedulePeriodsPath: legacyLogin
           ? null
@@ -67,6 +67,13 @@ abstract final class SchoolConnectionCodec {
           : SchoolConnection.defaultSelectionPagePath,
       webLoginUri: webLogin == null ? null : Uri.parse(webLogin),
     );
+  }
+
+  static String _schedulePagePath(Map<String, Object?> data) {
+    final path = _string(data, 'schedulePagePath');
+    return path == SchoolConnection.defaultSchedulePath
+        ? SchoolConnection.defaultSchedulePagePath
+        : path;
   }
 
   static String _string(Map<String, Object?> data, String key) {

@@ -32,13 +32,20 @@ final class ZhengfangScheduleGateway {
   final String? _studentId;
   static const _parser = ZhengfangScheduleParser();
 
+  /// Reads the school's year/term selectors without importing a timetable.
+  Future<TermCatalog> readTermCatalog() async {
+    final termPage = await _readTermPage();
+    return termPage.catalog;
+  }
+
   Future<ScheduleImportResult> importSchedule({AcademicTerm? term}) async {
     AuthHttpResponse? page;
     TermCatalog? catalog;
     var selected = term;
     if (selected == null) {
-      page = await _read(AuthHttpRequest.get(_profile.schedulePageUri));
-      catalog = _parser.parseTermCatalog(page.text);
+      final termPage = await _readTermPage();
+      page = termPage.page;
+      catalog = termPage.catalog;
       selected = catalog.selectedTerm;
       if (selected == null) return ScheduleImportResult(catalog: catalog);
     }
@@ -94,6 +101,11 @@ final class ZhengfangScheduleGateway {
       );
     }
     return ScheduleImportResult(catalog: catalog, snapshot: snapshot);
+  }
+
+  Future<({AuthHttpResponse page, TermCatalog catalog})> _readTermPage() async {
+    final page = await _read(AuthHttpRequest.get(_profile.schedulePageUri));
+    return (page: page, catalog: _parser.parseTermCatalog(page.text));
   }
 
   Future<List<PeriodTime>> _periodTimes(

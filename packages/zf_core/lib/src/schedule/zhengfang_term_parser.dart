@@ -34,10 +34,12 @@ TermCatalog parseZhengfangTermCatalog(String source) {
       field: 'xnm/xqm',
     );
   }
-  final yearOptions = year == null ? <TermOption>[] : _options(year);
-  final termOptions = term == null ? <TermOption>[] : _options(term);
   final selectedYear = year == null ? null : _selected(year);
   final selectedPart = term == null ? null : _selected(term);
+  final yearOptions = year == null
+      ? <TermOption>[]
+      : _options(year, selectedCode: selectedYear?.code, recentYears: true);
+  final termOptions = term == null ? <TermOption>[] : _options(term);
   final selected = selectedYear == null || selectedPart == null
       ? selectedPair
       : AcademicTerm(
@@ -71,7 +73,11 @@ Element? _field(Document document, Set<String> names) {
   return null;
 }
 
-List<TermOption> _options(Element field) {
+List<TermOption> _options(
+  Element field, {
+  String? selectedCode,
+  bool recentYears = false,
+}) {
   if (field.localName == 'input') {
     final value = _option(field);
     return value == null ? [] : [value];
@@ -81,7 +87,14 @@ List<TermOption> _options(Element field) {
     final value = _option(element);
     if (value != null) options[value.code] = value;
   }
-  return options.values.toList();
+  final values = options.values.toList();
+  if (!recentYears || selectedCode == null) return values;
+  final currentYear = int.tryParse(selectedCode);
+  if (currentYear == null) return values;
+  return values.where((option) {
+    final year = int.tryParse(option.code);
+    return year != null && year <= currentYear && year > currentYear - 5;
+  }).toList();
 }
 
 TermOption? _selected(Element field) {
