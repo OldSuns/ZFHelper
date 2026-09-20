@@ -1,9 +1,9 @@
 ## Highlights
 
-- Added responsive Android timetable widgets for current/next lesson, today or next-course-day lists, today/tomorrow columns, and weekly summaries.
-- Improved widget resizing behavior, including narrow tall layouts, stable weekly rows, and fallback content when adjacent days are empty.
-- Fixed timetable navigation so opening the Timetable destination defaults to the timetable view while explicit widget launches still open Agenda.
-- Removed the timetable import notice and reordered the Calendar & periods and Add course settings entries.
+- Kept the weekly timetable grid on narrow screens instead of switching views automatically.
+- Preserved the complete school login entry in school settings and reported HTTP failures separately from invalid response formats.
+- Simplified period settings by using generic periods when the school provides no campus data, while retaining existing manual campus configurations.
+- Allowed smart period arrangement settings to be applied directly to the draft without generating a preview first, while preserving edits made to a valid preview.
 
 ## Installation
 
