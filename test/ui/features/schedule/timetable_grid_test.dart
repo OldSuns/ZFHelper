@@ -318,27 +318,29 @@ void main() {
   ]) {
     for (final brightness in Brightness.values) {
       testWidgets(
-        'readable agenda at ${layout.size} with ${layout.scale} text in ${brightness.name}',
+        'grid stays selected at ${layout.size} with ${layout.scale} text in ${brightness.name}',
         (tester) async {
-          final longName = '现代中医临床基础与诊疗实践课程——用于检验长课程名称的完整显示';
-          final entry = _lesson('long', longName, weekday: 1, start: 1, end: 1);
-          final opened = <ScheduleEntry>[];
+          final snapshot = _snapshot([
+            _lesson('monday', '周一课程', weekday: 1, start: 1, end: 1),
+            _lesson('saturday', '周六课程', weekday: 6, start: 1, end: 1),
+          ]);
           await _pumpGrid(
             tester,
-            _snapshot([entry]),
+            snapshot,
             size: layout.size,
             textScale: layout.scale,
             brightness: brightness,
-            onTap: opened.add,
           );
 
           expect(
-            find.byKey(const ValueKey('schedule-course-long')),
-            findsNothing,
+            find.byKey(const ValueKey('schedule-course-monday')),
+            findsOneWidget,
           );
-          expect(find.text(longName), findsOneWidget);
-          await tester.tap(find.text(longName));
-          expect(opened, [entry]);
+          expect(
+            find.byKey(const ValueKey('schedule-course-saturday')),
+            findsOneWidget,
+          );
+          expect(find.byKey(const ValueKey('schedule-date-7')), findsOneWidget);
           expect(tester.takeException(), isNull);
         },
       );

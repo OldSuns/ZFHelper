@@ -8,9 +8,6 @@ import '../../../core/app_theme.dart';
 import 'course_detail_sheet.dart';
 import '../view_models/schedule_labels.dart';
 
-const _minimumDayWidth = 48.0;
-const _maximumGridTextScale = 1.45;
-
 class _GridMetrics {
   const _GridMetrics({
     required this.wide,
@@ -141,16 +138,12 @@ class _TimetableGridState extends State<TimetableGrid> {
         textScale: textScale,
         dayCount: hasWeekend ? DateTime.daysPerWeek : DateTime.friday,
       );
-      final useAgenda =
-          widget.agenda ||
-          metrics.dayWidth(constraints.maxWidth) < _minimumDayWidth ||
-          textScale > _maximumGridTextScale;
       return Semantics(
         container: true,
         label: '第 ${widget.week} 周课表',
         child: Column(
           children: [
-            if (!useAgenda)
+            if (!widget.agenda)
               _WeekdayHeader(
                 dates: dates,
                 today: widget.today,
@@ -174,7 +167,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           hasPending: pending.isNotEmpty,
                         ),
                       )
-                    else if (useAgenda)
+                    else if (widget.agenda)
                       ..._agendaSlivers(placed, dates)
                     else
                       SliverToBoxAdapter(
@@ -486,7 +479,7 @@ class _WeekdayHeader extends StatelessWidget {
                 weekday: day,
                 date: dates?.days[day - 1],
                 today: today,
-                horizontal: metrics.wide,
+                horizontal: metrics.wide && metrics.textScale <= 1.45,
               ),
             ),
         ],
