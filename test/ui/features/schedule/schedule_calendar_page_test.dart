@@ -8,6 +8,44 @@ import 'package:zfhelper/ui/core/app_theme.dart';
 import 'package:zfhelper/ui/features/schedule/views/schedule_calendar_page.dart';
 
 void main() {
+  testWidgets('hides campus controls when school times are generic', (
+    tester,
+  ) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(
+        periods: [PeriodTime(number: 1, startMinutes: 480, endMinutes: 525)],
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('period-campus-generic')), findsOneWidget);
+    expect(find.byTooltip('新增校区作息'), findsNothing);
+  });
+
+  testWidgets('keeps saved manual campus controls', (tester) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(
+        periods: [PeriodTime(number: 1, startMinutes: 480, endMinutes: 525)],
+      ),
+      settings: ScheduleSettings(
+        periodTimes: [
+          PeriodTime(
+            number: 1,
+            startMinutes: 490,
+            endMinutes: 535,
+            campus: '北校区',
+          ),
+        ],
+        periodCampus: '北校区',
+        useCustomPeriodTimes: true,
+      ),
+    );
+
+    expect(find.byTooltip('新增校区作息'), findsOneWidget);
+    expect(find.byKey(const ValueKey('period-campus-generic')), findsNothing);
+  });
+
   testWidgets('unknown calendars do not guess the first date or term length', (
     tester,
   ) async {
@@ -203,6 +241,34 @@ void main() {
       );
     },
   );
+
+  testWidgets('applies generator inputs without a preview step', (
+    tester,
+  ) async {
+    final result = await _openCalendar(tester);
+    await _tap(tester, 'period-quick-arrange');
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '节数').at(0),
+      '2',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '首课开始').at(0),
+      '08:00',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '课间（分钟）'),
+      '5',
+    );
+    await _tapFinder(tester, find.text('应用到作息草稿'));
+    await _tap(tester, 'calendar-save');
+
+    final settings = await result.future;
+    expect(settings!.periodTimes, hasLength(2));
+    expect(settings.periodTimes.map((period) => period.number), [1, 2]);
+  });
 
   testWidgets('generated preview allows editing a specific period', (
     tester,

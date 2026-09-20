@@ -112,7 +112,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
     _error = null;
   });
 
-  void _generate() {
+  void _generate({bool apply = false}) {
     var valid = _countsForm.currentState!.validate();
     valid = _durationsForm.currentState!.validate() && valid;
     for (final fields in _sessions.values) {
@@ -134,28 +134,41 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       if (enabled.isEmpty) {
         throw const PeriodTimeException('请至少为一个时段填写节数。');
       }
-      _showPreview(
-        widget.initialPlan.generate(
-          campus: _campus,
-          inputs: [
-            for (final entry in enabled)
-              PeriodSectionInput(
-                session: entry.key,
-                count: int.parse(entry.value.count.text),
-                startMinutes: parsePeriodClock(entry.value.start.text)!,
-              ),
-          ],
-          classMinutes: int.parse(_classMinutes.text),
-          breakMinutes: int.parse(_breakMinutes.text),
-          longBreakEvery: _longBreak ? int.parse(_longEvery.text) : null,
-          longBreakMinutes: _longBreak ? int.parse(_longMinutes.text) : null,
-        ),
+      final plan = widget.initialPlan.generate(
+        campus: _campus,
+        inputs: [
+          for (final entry in enabled)
+            PeriodSectionInput(
+              session: entry.key,
+              count: int.parse(entry.value.count.text),
+              startMinutes: parsePeriodClock(entry.value.start.text)!,
+            ),
+        ],
+        classMinutes: int.parse(_classMinutes.text),
+        breakMinutes: int.parse(_breakMinutes.text),
+        longBreakEvery: _longBreak ? int.parse(_longEvery.text) : null,
+        longBreakMinutes: _longBreak ? int.parse(_longMinutes.text) : null,
       );
+      final error = _validationError(plan);
+      if (error != null) throw PeriodTimeException(error);
+      if (apply) {
+        Navigator.pop(context, plan);
+      } else {
+        _showPreview(plan);
+      }
     } on PeriodTimeException catch (error) {
       setState(() {
         _error = error.message;
         _stale = _hasPreview;
       });
+    }
+  }
+
+  void _apply() {
+    if (_hasPreview && !_stale && _previewError == null) {
+      Navigator.pop(context, _preview);
+    } else {
+      _generate(apply: true);
     }
   }
 
@@ -238,9 +251,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
                   ),
                   FilledButton(
                     style: _buttonStyle,
-                    onPressed: _hasPreview && !_stale && _previewError == null
-                        ? () => Navigator.pop(context, _preview)
-                        : null,
+                    onPressed: _apply,
                     child: const Text('应用到作息草稿'),
                   ),
                 ),

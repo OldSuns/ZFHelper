@@ -37,6 +37,13 @@ class PeriodTimesViewModel extends ChangeNotifier {
   List<PeriodTimeSection> get sections =>
       _plan.sections.where((section) => section.campus == _campus).toList();
 
+  bool get hasCampusData =>
+      _campus != null ||
+      [
+        ..._school.periods,
+        ..._plan.periods,
+      ].any((period) => normalizePeriodCampus(period.campus) != null);
+
   List<String?> get campuses {
     final names = {
       for (final period in [..._school.periods, ..._plan.periods])

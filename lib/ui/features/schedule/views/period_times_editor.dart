@@ -41,38 +41,44 @@ class PeriodTimesEditor extends StatelessWidget {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  key: ValueKey(('period-campus', viewModel.campus)),
-                  initialValue: viewModel.campus ?? '',
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: '校区作息',
-                    isDense: true,
-                  ),
-                  items: [
-                    for (final campus in viewModel.campuses)
-                      DropdownMenuItem(
-                        value: campus ?? '',
-                        child: Text(
-                          campus ?? '通用（未指定校区）',
-                          overflow: TextOverflow.ellipsis,
+          if (viewModel.hasCampusData)
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(('period-campus', viewModel.campus)),
+                    initialValue: viewModel.campus ?? '',
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: '校区作息',
+                      isDense: true,
+                    ),
+                    items: [
+                      for (final campus in viewModel.campuses)
+                        DropdownMenuItem(
+                          value: campus ?? '',
+                          child: Text(
+                            campus ?? '通用（未指定校区）',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                  ],
-                  onChanged: (value) => viewModel.selectCampus(value),
+                    ],
+                    onChanged: (value) => viewModel.selectCampus(value),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: '新增校区作息',
-                onPressed: () => _addCampus(context),
-                icon: const Icon(Icons.add_location_alt_outlined),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: '新增校区作息',
+                  onPressed: () => _addCampus(context),
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                ),
+              ],
+            )
+          else
+            const Text(
+              '通用作息（教务系统未提供校区信息）',
+              key: ValueKey('period-campus-generic'),
+            ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
