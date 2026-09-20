@@ -21,6 +21,10 @@ void main() {
   for (final scenario in [
     (address: 'https://one.example', base: 'https://one.example/'),
     (
+      address: 'http://direct-root.example/xtgl/login_slogin.html',
+      base: 'http://direct-root.example/',
+    ),
+    (
       address: 'bare.example:8787/custom',
       base: 'https://bare.example:8787/custom/',
     ),

@@ -692,7 +692,7 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.text(testProfile.name), findsOneWidget);
-    expect(find.text(testProfile.baseUri.toString()), findsOneWidget);
+    expect(find.text(testProfile.loginUri.toString()), findsOneWidget);
   });
 
   for (final size in [

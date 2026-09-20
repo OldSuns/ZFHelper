@@ -354,7 +354,7 @@ class AccountSettingsPage extends StatelessWidget {
           Text(profile.name, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           SelectableText(
-            profile.baseUri.toString(),
+            profile.loginUri.toString(),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

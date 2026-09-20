@@ -464,6 +464,30 @@ void main() {
       );
     }
 
+    test('maps an HTTP error response to its status code', () async {
+      final transport = _transport(
+        _Adapter((options, _) {
+          throw DioException.badResponse(
+            statusCode: 503,
+            requestOptions: options,
+            response: Response<Object?>(
+              requestOptions: options,
+              statusCode: 503,
+              data: 'server-error',
+            ),
+          );
+        }),
+      );
+      await expectLater(
+        transport.send(AuthHttpRequest.get(_base)),
+        throwsA(
+          _failure(
+            LoginFailureCode.network,
+          ).having((error) => error.message, 'message', '教务请求失败：学校返回 HTTP 503'),
+        ),
+      );
+    });
+
     test(
       'malformed response cookies fail explicitly without exposing them',
       () async {

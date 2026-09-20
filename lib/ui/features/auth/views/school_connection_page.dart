@@ -35,8 +35,13 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
   @override
   void initState() {
     super.initState();
+    final profile = widget.profile;
     _address = TextEditingController(
-      text: widget.isNewSchool ? '' : widget.profile?.baseUri.toString() ?? '',
+      text: widget.isNewSchool || profile == null
+          ? ''
+          : profile.loginPath == 'xtgl/login_slogin.html'
+          ? profile.loginUri.toString()
+          : profile.baseUri.toString(),
     );
     _name = TextEditingController(
       text: widget.isNewSchool ? '' : widget.profile?.name ?? '',

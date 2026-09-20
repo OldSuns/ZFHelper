@@ -275,9 +275,17 @@ final class DioAuthTransport implements AuthTransport {
   }
 
   static LoginFailure _mapNetworkFailure(DioException error) {
-    if (error.error is FormatException ||
-        error.error is ArgumentError ||
-        error.type == DioExceptionType.badResponse) {
+    if (error.type == DioExceptionType.badResponse) {
+      final status = error.response?.statusCode;
+      if (status != null) {
+        return LoginFailure(
+          status >= 500 ? LoginFailureCode.network : LoginFailureCode.protocol,
+          '教务请求失败：学校返回 HTTP $status',
+        );
+      }
+      return const LoginFailure(LoginFailureCode.protocol, '教务请求返回了无效状态');
+    }
+    if (error.error is FormatException || error.error is ArgumentError) {
       return const LoginFailure(LoginFailureCode.protocol, '教务响应格式无效');
     }
     return switch (error.type) {

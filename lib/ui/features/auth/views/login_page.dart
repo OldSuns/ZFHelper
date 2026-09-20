@@ -674,7 +674,7 @@ class _SchoolSelector extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  profile.baseUri.toString(),
+                  profile.loginUri.toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
