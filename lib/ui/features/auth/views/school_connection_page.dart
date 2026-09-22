@@ -39,7 +39,7 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
     _address = TextEditingController(
       text: widget.isNewSchool || profile == null
           ? ''
-          : profile.loginPath == 'xtgl/login_slogin.html'
+          : profile.loginPath == SchoolConnection.defaultLoginPath
           ? profile.loginUri.toString()
           : profile.baseUri.toString(),
     );
@@ -203,7 +203,12 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
   List<Widget> _addressDetails() => [
     if (_viewModel.recognizedAddress case final address?) ...[
       const SizedBox(height: 16),
-      _AddressPreview(address: address),
+      _AddressPreview(
+        address: address,
+        loginPath: _viewModel.resetsCustomSettings
+            ? null
+            : widget.profile?.loginPath,
+      ),
     ],
     if (!widget.isNewSchool &&
         widget.profile != null &&
@@ -288,12 +293,16 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
 }
 
 class _AddressPreview extends StatelessWidget {
-  const _AddressPreview({required this.address});
+  const _AddressPreview({required this.address, this.loginPath});
   final Uri address;
+  final String? loginPath;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final loginUri = address.resolve(
+      loginPath ?? SchoolConnection.defaultLoginPath,
+    );
     return Semantics(
       container: true,
       liveRegion: true,
@@ -307,7 +316,7 @@ class _AddressPreview extends StatelessWidget {
               Text('网址识别结果', style: theme.textTheme.titleSmall),
               const SizedBox(height: 16),
               Text(
-                '网站地址',
+                '教务根地址',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -323,6 +332,17 @@ class _AddressPreview extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(address.path, key: const ValueKey('recognized-base-path')),
+              Text(
+                '登录入口',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                loginUri.toString(),
+                key: const ValueKey('recognized-login-uri'),
+              ),
               if (address.scheme == 'http') ...[
                 const SizedBox(height: 12),
                 const Text('当前为 HTTP 连接，未使用 HTTPS 加密。'),

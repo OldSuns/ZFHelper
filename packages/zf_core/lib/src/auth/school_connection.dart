@@ -8,7 +8,7 @@ final class SchoolConnection {
     String? schoolId,
     required String name,
     required Uri baseUri,
-    this.loginPath = 'xtgl/login_slogin.html',
+    this.loginPath = defaultLoginPath,
     this.publicKeyPath = 'xtgl/login_getPublicKey.html',
     this.captchaPath = 'kaptcha',
     this.accountPath = 'xtgl/index_cxYhxxIndex.html',
@@ -73,7 +73,7 @@ final class SchoolConnection {
     String? schoolId,
     required String name,
     required String address,
-    String loginPath = 'xtgl/login_slogin.html',
+    String loginPath = defaultLoginPath,
     String publicKeyPath = 'xtgl/login_getPublicKey.html',
     String captchaPath = 'kaptcha',
     String accountPath = 'xtgl/index_cxYhxxIndex.html',
@@ -110,6 +110,7 @@ final class SchoolConnection {
   final String publicKeyPath;
   final String captchaPath;
   final String accountPath;
+  static const defaultLoginPath = 'xtgl/login_slogin.html';
   static const defaultSchedulePagePath =
       'kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508';
   static const defaultScheduleQueryPath =

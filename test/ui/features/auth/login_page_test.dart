@@ -686,6 +686,10 @@ void main() {
     );
     await tester.pump();
     expect(find.text('https://new.example'), findsOneWidget);
+    expect(
+      find.text('https://new.example/jwglxt/xtgl/login_slogin.html'),
+      findsOneWidget,
+    );
     await tester.enterText(address, 'bad address');
     await tester.pump();
     expect(find.byKey(const ValueKey('recognized-origin')), findsNothing);
