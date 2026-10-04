@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
+import 'package:zfhelper/data/repositories/release_repository.dart';
 import 'package:zfhelper/data/storage/appearance_store.dart';
+import 'package:zfhelper/data/storage/update_preferences_store.dart';
 import 'package:zfhelper/platform/secure_appearance_store.dart';
 import 'package:zfhelper/platform/schedule_widget_platform.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
@@ -14,12 +17,14 @@ import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/app_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/display_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/update_check_page.dart';
 
 import 'support/auth_fakes.dart';
 import 'support/schedule_fakes.dart';
 import 'support/grade_fakes.dart';
 import 'support/course_fakes.dart';
 import 'support/settings_fakes.dart';
+import 'support/update_fakes.dart';
 
 void main() {
   Future<void> pumpApp(
@@ -30,6 +35,8 @@ void main() {
     AppClock? clock,
     AppearanceStore? appearanceStore,
     ScheduleWidgetPlatform? scheduleWidgetPlatform,
+    ReleaseRepository? releases,
+    UpdatePreferencesStore? updatePreferences,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -45,6 +52,8 @@ void main() {
         configuration: AppConfiguration(
           appearance: testAppearance(store: appearanceStore),
           scheduleWidgetPlatform: scheduleWidgetPlatform,
+          releases: releases,
+          updatePreferences: updatePreferences,
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           auth: testAuth(),
@@ -403,6 +412,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('9月14日 — 9月20日'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the startup auto-check announces a new release once', (
+    tester,
+  ) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'ZFHelper',
+      packageName: 'dev.zfhelper.app',
+      version: '0.1.7',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+    final harness = ReleaseRepositoryHarness(
+      respond: (options) => releaseJsonResponse(
+        releaseJson(tag: 'v0.2.0', assets: [apkAssetJson('0.2.0')]),
+      ),
+    );
+    addTearDown(harness.dispose);
+    final preferences = TestUpdatePreferencesStore();
+
+    await pumpApp(
+      tester,
+      releases: harness.repository,
+      updatePreferences: preferences,
+    );
+
+    expect(find.text('发现新版本 v0.2.0'), findsOneWidget);
+    expect(preferences.value.lastNotifiedTag, 'v0.2.0');
+
+    await tester.tap(find.text('查看'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UpdateCheckPage), findsOneWidget);
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('发现新版本 v0.2.0'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

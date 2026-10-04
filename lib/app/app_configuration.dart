@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:path_provider/path_provider.dart';
 import 'package:zf_core/zf_core.dart';
 
@@ -12,11 +14,14 @@ import '../data/services/dio_auth_transport.dart';
 import '../data/storage/sqlite_schedule_store.dart';
 import '../data/storage/sqlite_grade_store.dart';
 import '../data/storage/sqlite_selection_store.dart';
+import '../data/storage/update_preferences_store.dart';
+import '../platform/app_installer_platform.dart';
 import '../platform/secure_login_vault.dart';
 import '../platform/secure_appearance_store.dart';
 import '../platform/selection_runtime.dart';
 import '../platform/schedule_widget_platform.dart';
 import '../ui/features/settings/view_models/appearance_view_model.dart';
+import '../ui/features/settings/view_models/update_check_view_model.dart';
 
 typedef AppClock = DateTime Function();
 
@@ -30,7 +35,21 @@ final class AppConfiguration {
     required this.appearance,
     this.scheduleWidgetPlatform,
     ReleaseRepository? releases,
-  }) : releases = releases ?? ReleaseRepository();
+    UpdatePreferencesStore? updatePreferences,
+    this.appInstaller,
+    this.updateDownloadDirectory,
+  }) : releases = releases ?? ReleaseRepository(),
+       updatePreferences =
+           updatePreferences ??
+           JsonFileUpdatePreferencesStore(
+             resolvePath: () async {
+               final directory = await getApplicationSupportDirectory();
+               await directory.create(recursive: true);
+               return directory.uri
+                   .resolve('zfhelper-update.json')
+                   .toFilePath();
+             },
+           );
 
   factory AppConfiguration.standard() {
     final auth = AuthRepository(
@@ -52,6 +71,22 @@ final class AppConfiguration {
     return AppConfiguration(
       scheduleWidgetPlatform: createScheduleWidgetPlatform(),
       releases: ReleaseRepository(),
+      updatePreferences: JsonFileUpdatePreferencesStore(
+        resolvePath: () async {
+          final directory = await getApplicationSupportDirectory();
+          await directory.create(recursive: true);
+          return directory.uri.resolve('zfhelper-update.json').toFilePath();
+        },
+      ),
+      appInstaller: createAppInstallerPlatform(),
+      updateDownloadDirectory: () async {
+        final directory = await getTemporaryDirectory();
+        final updates = Directory(
+          '${directory.path}${Platform.pathSeparator}updates',
+        );
+        await updates.create(recursive: true);
+        return updates.path;
+      },
       appearance: AppearanceViewModel(store: SecureAppearanceStore()),
       auth: auth,
       clock: DateTime.now,
@@ -95,6 +130,9 @@ final class AppConfiguration {
   final GradeRepository grades;
   final CourseRepository courses;
   final ReleaseRepository releases;
+  final UpdatePreferencesStore updatePreferences;
+  final AppInstallerPlatform? appInstaller;
+  final DownloadDirectoryResolver? updateDownloadDirectory;
   final AppearanceViewModel appearance;
   final ScheduleWidgetPlatform? scheduleWidgetPlatform;
 

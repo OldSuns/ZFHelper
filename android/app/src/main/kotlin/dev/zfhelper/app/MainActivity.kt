@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.webkit.CookieManager
 import android.webkit.WebViewClient
+import androidx.core.content.FileProvider
 import androidx.webkit.CookieManagerCompat
 import androidx.webkit.WebViewFeature
 import com.pichillilorenzo.flutter_inappwebview_android.InAppWebViewFlutterPlugin
@@ -13,11 +15,16 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.IOException
 
 private const val LOGIN_COOKIE_CHANNEL = "zfhelper/login_cookies"
+private const val APP_INSTALLER_CHANNEL = "zfhelper/app_installer"
+private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
 
 class MainActivity : FlutterActivity() {
     private var loginCookieChannel: MethodChannel? = null
+    private var appInstallerChannel: MethodChannel? = null
     private val selectionRuntime: SelectionRuntimeHost
         get() = (application as ZfHelperApplication).selectionRuntime
     private val scheduleWidgets: ScheduleWidgetHost
@@ -81,6 +88,74 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        }
+        appInstallerChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_INSTALLER_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "installApk" -> installApk(call, result)
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    private fun installApk(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path")
+        if (path.isNullOrBlank()) {
+            result.error("invalid_path", "安装文件路径无效", null)
+            return
+        }
+        val file = try {
+            File(path).canonicalFile
+        } catch (_: IOException) {
+            result.error("invalid_path", "安装文件路径无效", null)
+            return
+        }
+        // Only expose files inside this app's own cache directory through the
+        // FileProvider grant; anything else is rejected.
+        val appCacheDir = cacheDir.canonicalFile
+        if (!file.path.startsWith(appCacheDir.path) || !file.isFile) {
+            result.error("file_not_found", "安装包不存在或已失效，请重新下载", null)
+            return
+        }
+        if (!packageManager.canRequestPackageInstalls()) {
+            // Let the user grant "install unknown apps" for this app, then
+            // return a recognizable error so the UI can ask for a retry.
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:$packageName"),
+                    ),
+                )
+            } catch (_: RuntimeException) {
+                result.error("permission_settings_failed", "无法打开安装权限页面", null)
+                return
+            }
+            result.error("permission_required", "需要允许安装未知应用后重试", null)
+            return
+        }
+        val uri = try {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        } catch (_: IllegalArgumentException) {
+            result.error("install_failed", "安装文件无法访问，请重新下载", null)
+            return
+        }
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, APK_MIME_TYPE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(packageManager) == null) {
+            result.error("no_installer", "未找到可用的系统安装器", null)
+            return
+        }
+        try {
+            startActivity(intent)
+            result.success(null)
+        } catch (_: RuntimeException) {
+            result.error("install_failed", "安装器启动失败，请稍后重试", null)
         }
     }
 
@@ -156,6 +231,8 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         loginCookieChannel?.setMethodCallHandler(null)
         loginCookieChannel = null
+        appInstallerChannel?.setMethodCallHandler(null)
+        appInstallerChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

@@ -70,4 +70,6 @@ flutter {
 dependencies {
     // Matches flutter_inappwebview_android's CookieManagerCompat dependency.
     implementation("androidx.webkit:webkit:1.12.0")
+    // FileProvider for handing downloaded update APKs to the system installer.
+    implementation("androidx.core:core:1.13.1")
 }

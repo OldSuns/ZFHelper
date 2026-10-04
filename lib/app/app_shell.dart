@@ -15,6 +15,7 @@ import '../ui/features/courses/views/courses_page.dart';
 import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/settings_page.dart';
+import '../ui/features/settings/views/update_check_page.dart';
 import '../ui/features/settings/view_models/schedule_widget_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
 import 'app_configuration.dart';
@@ -74,7 +75,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _courses = CoursesViewModel(repository: widget.configuration.courses);
     _updateCheck = UpdateCheckViewModel(
       repository: widget.configuration.releases,
+      preferences: widget.configuration.updatePreferences,
+      clock: widget.configuration.clock,
+      installer: widget.configuration.appInstaller,
+      resolveDownloadDirectory: widget.configuration.updateDownloadDirectory,
     );
+    _updateCheck.addListener(_handleUpdateNotice);
     final widgetPlatform = widget.configuration.scheduleWidgetPlatform;
     if (widgetPlatform != null) {
       _scheduleWidget = ScheduleWidgetViewModel(
@@ -91,12 +97,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(_courses.initialize());
     unawaited(_auth.restore());
     unawaited(widget.configuration.appearance.initialize());
+    unawaited(_updateCheck.autoCheck());
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _updateCheck.removeListener(_handleUpdateNotice);
     _timetable.dispose();
     _grades.dispose();
     _courses.dispose();
@@ -170,6 +178,29 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _timetable.showSection(ScheduleSection.timetable);
     }
     setState(() => _destination = destination);
+  }
+
+  void _handleUpdateNotice() {
+    if (!mounted) return;
+    final tag = _updateCheck.consumeNotice();
+    if (tag == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('发现新版本 $tag'),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: '查看',
+          onPressed: () {
+            if (!mounted) return;
+            Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (context) => UpdateCheckPage(viewModel: _updateCheck),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _openSettings() => _selectDestination(AppDestination.settings.index);

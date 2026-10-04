@@ -75,6 +75,7 @@ class SettingsEntry extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.showBadge = false,
     super.key,
   });
 
@@ -82,13 +83,31 @@ class SettingsEntry extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
+  final bool showBadge;
 
   @override
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon),
     title: Text(title),
     subtitle: Text(subtitle),
-    trailing: const Icon(Icons.chevron_right),
+    trailing: showBadge
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Badge(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                textStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onError,
+                  fontSize: 11,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                label: const Text('新'),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.chevron_right),
+            ],
+          )
+        : const Icon(Icons.chevron_right),
     enabled: onTap != null,
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
     onTap: onTap,

@@ -107,17 +107,30 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (downloadAsset != null) ...[
-          FilledButton.icon(
-            onPressed: _openingDownload
-                ? null
-                : () => _openDownload(context, downloadAsset),
-            icon: _openingDownload
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.download),
-            label: Text(_downloadLabel(downloadAsset)),
+          if (model.installer != null &&
+              downloadAsset.name.toLowerCase().endsWith('.apk')) ...[
+            _AndroidDownloadPanel(model: model, asset: downloadAsset),
+          ] else ...[
+            FilledButton.icon(
+              onPressed: _openingDownload
+                  ? null
+                  : () => _openDownload(context, downloadAsset),
+              icon: _openingDownload
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download),
+              label: Text(_downloadLabel(downloadAsset)),
+            ),
+          ],
+          const SizedBox(height: 8),
+        ],
+        if (downloadAsset == null &&
+            Theme.of(context).platform == TargetPlatform.android) ...[
+          const Text(
+            '该版本未提供 Android 安装包，请打开发布页下载。',
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
         ],
@@ -189,6 +202,71 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
     }
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('无法打开 GitHub 发布页')));
+  }
+}
+
+class _AndroidDownloadPanel extends StatelessWidget {
+  const _AndroidDownloadPanel({required this.model, required this.asset});
+
+  final UpdateCheckViewModel model;
+  final ReleaseAsset asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = model.downloadState;
+    final installFailure = model.installFailure;
+    return switch (state) {
+      UpdateDownloadIdle() => FilledButton.icon(
+        onPressed: () => model.startDownload(asset),
+        icon: const Icon(Icons.download),
+        label: const Text('下载并安装'),
+      ),
+      UpdateDownloadProgress() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LinearProgressIndicator(
+            value: state.total == null || state.total! <= 0
+                ? null
+                : state.received / state.total!,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            state.total == null || state.total! <= 0
+                ? '下载中…（已接收 ${(state.received / 1024 / 1024).toStringAsFixed(1)} MB）'
+                : '下载中 ${(state.received / state.total! * 100).toStringAsFixed(0)}%'
+                      '（${(state.received / 1024 / 1024).toStringAsFixed(1)} MB'
+                      ' / ${(state.total! / 1024 / 1024).toStringAsFixed(1)} MB）',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+      UpdateDownloadReady() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (installFailure != null) ...[
+            Text(installFailure, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+          ],
+          FilledButton.icon(
+            onPressed: model.installDownloaded,
+            icon: const Icon(Icons.install_mobile),
+            label: const Text('安装'),
+          ),
+        ],
+      ),
+      UpdateDownloadFailed() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(state.message, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => model.startDownload(asset),
+            icon: const Icon(Icons.refresh),
+            label: const Text('重试下载'),
+          ),
+        ],
+      ),
+    };
   }
 }
 

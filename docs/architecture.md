@@ -10,7 +10,7 @@ ZFHelper shares a Flutter UI and application layer between Android and Windows. 
 | [lib/ui](../lib/ui) | Views for rendering/interaction; ViewModels for page state; shared `AppTheme` and responsive layout rules |
 | [lib/data/repositories](../lib/data/repositories) | Consistent cached business state, authenticated source access, identity projections, refresh/write sequencing, and removal semantics |
 | [lib/data/storage](../lib/data/storage) | SQLite stores, account-scoped saved records, and application persistence codecs |
-| [lib/platform](../lib/platform) | Secure storage, WebView/cookie handoff, selection runtime, and widget method/event channels |
+| [lib/platform](../lib/platform) | Secure storage, WebView/cookie handoff, selection runtime, widget method/event channels, and the Android package-installer handoff |
 | [packages/zf_core](../packages/zf_core) | School/account/session ownership, injected transport contracts, protocol gateways, domain models, codecs, calendar rules, and selection coordination |
 | [Android application](../android/app/src/main/kotlin/dev/zfhelper/app) | Shared Flutter engine, selection foreground-service host, and offline widget host/provider/renderer |
 

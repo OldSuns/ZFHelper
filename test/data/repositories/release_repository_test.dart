@@ -1,3 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zfhelper/data/repositories/release_repository.dart';
 
@@ -29,6 +35,14 @@ void main() {
           'name': 'untrusted.apk',
           'browser_download_url':
               'https://downloads.example.test/untrusted.apk',
+        },
+        {
+          'name': '../escape.apk',
+          'browser_download_url': 'https://github.com/OldSuns/ZFHelper/releases/download/v0.2.0/escape.apk',
+        },
+        {
+          'name': 'nested/path.apk',
+          'browser_download_url': 'https://github.com/OldSuns/ZFHelper/releases/download/v0.2.0/path.apk',
         },
       ],
     });
@@ -89,4 +103,178 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('downloads through the mirror and reports progress', () async {
+    final temporary = Directory.systemTemp.createTempSync('zfhelper-dl-');
+    addTearDown(() => temporary.deleteSync(recursive: true));
+    final asset = ReleaseAsset(
+      name: 'zfhelper-test.apk',
+      url: Uri.parse(
+        'https://github.com/OldSuns/ZFHelper/releases/download/v0.0.0/zfhelper-test.apk',
+      ),
+    );
+    final requests = <Uri>[];
+    final adapter = _RecordingAdapter((options) {
+      requests.add(options.uri);
+      return _responseOf('mirror-bytes');
+    });
+    final repository = ReleaseRepository(
+      client: Dio()..httpClientAdapter = adapter,
+      probe: (_) async => true,
+    );
+    addTearDown(repository.dispose);
+    final progress = <(int, int)>[];
+
+    final path = await repository.downloadAsset(
+      asset,
+      temporary.path,
+      onProgress: (received, total) => progress.add((received, total)),
+    );
+
+    expect(requests, [asset.mirrorUrl]);
+    expect(File(path).readAsStringSync(), 'mirror-bytes');
+    expect(File(path).uri.pathSegments.last, 'zfhelper-test.apk');
+    expect(
+      temporary.listSync().map((entry) => entry.uri.pathSegments.last).single,
+      'zfhelper-test.apk',
+    );
+    expect(progress, isNotEmpty);
+    expect(progress.last.$1, 'mirror-bytes'.length);
+  });
+
+  test(
+    'falls back to the official url when the mirror download fails',
+    () async {
+      final temporary = Directory.systemTemp.createTempSync('zfhelper-dl-');
+      addTearDown(() => temporary.deleteSync(recursive: true));
+      final asset = ReleaseAsset(
+        name: 'zfhelper-test.apk',
+        url: Uri.parse(
+          'https://github.com/OldSuns/ZFHelper/releases/download/v0.0.0/zfhelper-test.apk',
+        ),
+      );
+      final requests = <Uri>[];
+      final adapter = _RecordingAdapter((options) {
+        requests.add(options.uri);
+        if (options.uri == asset.mirrorUrl) {
+          throw DioException.connectionError(
+            requestOptions: options,
+            reason: 'mirror unavailable',
+          );
+        }
+        return _responseOf('github-bytes');
+      });
+      final repository = ReleaseRepository(
+        client: Dio()..httpClientAdapter = adapter,
+        probe: (_) async => true,
+      );
+      addTearDown(repository.dispose);
+
+      final path = await repository.downloadAsset(asset, temporary.path);
+
+      expect(requests, [asset.mirrorUrl, asset.url]);
+      expect(File(path).readAsStringSync(), 'github-bytes');
+    },
+  );
+
+  test(
+    'cleans up partial files and reports failure when all urls fail',
+    () async {
+      final temporary = Directory.systemTemp.createTempSync('zfhelper-dl-');
+      addTearDown(() => temporary.deleteSync(recursive: true));
+      final asset = ReleaseAsset(
+        name: 'zfhelper-test.apk',
+        url: Uri.parse(
+          'https://github.com/OldSuns/ZFHelper/releases/download/v0.0.0/zfhelper-test.apk',
+        ),
+      );
+      final adapter = _RecordingAdapter((options) {
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'network down',
+        );
+      });
+      final repository = ReleaseRepository(
+        client: Dio()..httpClientAdapter = adapter,
+        probe: (_) async => false,
+      );
+      addTearDown(repository.dispose);
+
+      await expectLater(
+        repository.downloadAsset(asset, temporary.path),
+        throwsA(
+          isA<ReleaseException>().having(
+            (error) => error.message,
+            'message',
+            contains('无法连接下载服务器'),
+          ),
+        ),
+      );
+      expect(temporary.listSync(), isEmpty);
+    },
+  );
+
+  test(
+    'rejects mirror HTML error pages and falls back to the official url',
+    () async {
+      final temporary = Directory.systemTemp.createTempSync('zfhelper-dl-');
+      addTearDown(() => temporary.deleteSync(recursive: true));
+      final asset = ReleaseAsset(
+        name: 'zfhelper-test.apk',
+        url: Uri.parse(
+          'https://github.com/OldSuns/ZFHelper/releases/download/v0.0.0/zfhelper-test.apk',
+        ),
+      );
+      final requests = <Uri>[];
+      final adapter = _RecordingAdapter((options) {
+        requests.add(options.uri);
+        if (options.uri == asset.mirrorUrl) {
+          return ResponseBody.fromString(
+            '<html>rate limited</html>',
+            200,
+            headers: {
+              'content-type': ['text/html'],
+            },
+          );
+        }
+        return _responseOf('github-bytes');
+      });
+      final repository = ReleaseRepository(
+        client: Dio()..httpClientAdapter = adapter,
+        probe: (_) async => true,
+      );
+      addTearDown(repository.dispose);
+
+      final path = await repository.downloadAsset(asset, temporary.path);
+
+      expect(requests, [asset.mirrorUrl, asset.url]);
+      expect(File(path).readAsStringSync(), 'github-bytes');
+    },
+  );
 }
+
+typedef _Responder = FutureOr<ResponseBody> Function(RequestOptions options);
+
+final class _RecordingAdapter implements HttpClientAdapter {
+  _RecordingAdapter(this.respond);
+
+  final _Responder respond;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => respond(options);
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody _responseOf(String text) => ResponseBody.fromBytes(
+  utf8.encode(text),
+  200,
+  headers: {
+    'content-type': ['application/octet-stream'],
+  },
+);

@@ -73,13 +73,17 @@ class AppSettingsPage extends StatelessWidget {
               ),
             ),
           ),
-          SettingsEntry(
-            icon: Icons.system_update_alt_rounded,
-            title: '检查更新',
-            subtitle: '查看 GitHub Release 与更新说明',
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (context) => UpdateCheckPage(viewModel: updateCheck),
+          ListenableBuilder(
+            listenable: updateCheck,
+            builder: (context, _) => SettingsEntry(
+              icon: Icons.system_update_alt_rounded,
+              title: '检查更新',
+              subtitle: '查看 GitHub Release 与更新说明',
+              showBadge: updateCheck.updateAvailable == true,
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (context) => UpdateCheckPage(viewModel: updateCheck),
+                ),
               ),
             ),
           ),

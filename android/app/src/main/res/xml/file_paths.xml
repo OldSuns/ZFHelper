@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In-app update APKs are downloaded into the cache directory's
+     `updates` subdirectory before being handed to the system installer. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>
