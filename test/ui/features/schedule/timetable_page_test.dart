@@ -4,6 +4,7 @@ import 'package:zf_core/zf_core.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/data/storage/schedule_store.dart';
+import 'package:zfhelper/ui/features/auth/views/school_connection_page.dart';
 import 'package:zfhelper/ui/core/app_theme.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/schedule_agenda.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
@@ -154,7 +155,17 @@ void main() {
       await tester.ensureVisible(name);
       await tester.enterText(name, '用户填写的学校');
       final submit = find.byKey(const ValueKey('school-save'));
-      await tester.ensureVisible(submit);
+      final schoolScrollable = find
+          .descendant(
+            of: find.byType(SchoolConnectionPage),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        submit,
+        180,
+        scrollable: schoolScrollable,
+      );
       await tester.pumpAndSettle();
       await tester.tap(submit);
       await tester.pumpAndSettle();
