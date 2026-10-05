@@ -1,0 +1,453 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:zfhelper/app/app.dart';
+import 'package:zfhelper/app/app_configuration.dart';
+import 'package:zfhelper/data/repositories/release_repository.dart';
+import 'package:zfhelper/data/storage/appearance_store.dart';
+import 'package:zfhelper/data/storage/update_preferences_store.dart';
+import 'package:zfhelper/platform/secure_appearance_store.dart';
+import 'package:zfhelper/platform/schedule_widget_platform.dart';
+import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
+import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
+import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
+import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/app_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/display_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/update_check_page.dart';
+
+import 'support/auth_fakes.dart';
+import 'support/schedule_fakes.dart';
+import 'support/grade_fakes.dart';
+import 'support/course_fakes.dart';
+import 'support/settings_fakes.dart';
+import 'support/update_fakes.dart';
+
+void main() {
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    Size size = const Size(390, 844),
+    double textScale = 1,
+    Brightness brightness = Brightness.light,
+    AppClock? clock,
+    AppearanceStore? appearanceStore,
+    ScheduleWidgetPlatform? scheduleWidgetPlatform,
+    ReleaseRepository? releases,
+    UpdatePreferencesStore? updatePreferences,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.platformBrightnessTestValue = brightness;
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
+    await tester.pumpWidget(
+      ZfHelperApp(
+        configuration: AppConfiguration(
+          appearance: testAppearance(store: appearanceStore),
+          scheduleWidgetPlatform: scheduleWidgetPlatform,
+          releases: releases,
+          updatePreferences: updatePreferences,
+          courses: testCourseRepository(),
+          grades: testGradeRepository(),
+          auth: testAuth(),
+          schedule: testScheduleRepository(),
+          clock: clock ?? () => DateTime(2026, 9, 12, 13),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Finder navigationLabel(String label) => find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.text(label),
+  );
+
+  testWidgets('widget launches open their date and dismiss nested settings', (
+    tester,
+  ) async {
+    const channel = MethodChannel('zfhelper/schedule_widget');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      channel,
+      (call) async => switch (call.method) {
+        'consumeLaunch' => '2027-01-18',
+        'capabilities' => {'supported': true, 'canPin': true, 'count': 1},
+        'publish' => null,
+        _ => throw StateError('Unexpected widget method: ${call.method}'),
+      },
+    );
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    await pumpApp(
+      tester,
+      scheduleWidgetPlatform: AndroidScheduleWidgetPlatform(),
+    );
+    final model = tester
+        .widget<TimetablePage>(find.byType(TimetablePage))
+        .viewModel;
+    expect(model.section, ScheduleSection.agenda);
+    expect(model.agendaDate, DateTime(2027, 1, 18));
+
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '显示'));
+    await tester.pumpAndSettle();
+    await messenger.handlePlatformMessage(
+      channel.name,
+      channel.codec.encodeMethodCall(
+        const MethodCall('openSchedule', '2026-10-12'),
+      ),
+      null,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(DisplaySettingsPage), findsNothing);
+    expect(find.byType(TimetablePage), findsOneWidget);
+    expect(model.section, ScheduleSection.agenda);
+    expect(model.agendaDate, DateTime(2026, 10, 12));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('appearance choices apply globally and survive app recreation', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+
+    Future<void> choose(String label) async {
+      if (find.byType(DisplaySettingsPage).evaluate().isEmpty) {
+        await tester.tap(find.widgetWithText(ListTile, '显示'));
+        await tester.pumpAndSettle();
+      }
+      final choice = find.text(label);
+      await tester.scrollUntilVisible(choice, 150);
+      await tester.tap(choice);
+      await tester.pumpAndSettle();
+    }
+
+    await choose('深色');
+    expect(
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Brightness.dark,
+    );
+    expect(await SecureAppearanceStore().read(), AppAppearance.dark);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    expect(
+      Theme.of(tester.element(find.byType(TimetablePage))).brightness,
+      Brightness.dark,
+    );
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+    await choose('浅色');
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Brightness.light,
+    );
+
+    await choose('跟随系统');
+    expect(
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Brightness.dark,
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Brightness.light,
+    );
+    expect(await SecureAppearanceStore().read(), AppAppearance.system);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Android-sized startup opens timetable for the target school', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    expect(find.byType(TimetablePage), findsOneWidget);
+    expect(find.text('示例大学'), findsOneWidget);
+    expect(find.text('未连接教务账号'), findsOneWidget);
+    expect(find.text('课表还没有同步'), findsOneWidget);
+    expect(find.text('9月7日 — 9月13日'), findsOneWidget);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.text('第1周'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('week navigation changes dates and returns to current week', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    await tester.tap(find.byTooltip('下一周'));
+    await tester.pump();
+    expect(find.text('9月14日 — 9月20日'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('上一周'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('上一周'));
+    await tester.pump();
+    expect(find.text('8月31日 — 9月6日'), findsOneWidget);
+
+    await tester.tap(find.text('回到本周'));
+    await tester.pump();
+    expect(find.text('9月7日 — 9月13日'), findsOneWidget);
+  });
+
+  testWidgets('switching destinations preserves the browsed timetable week', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('下一周'));
+    await tester.pump();
+
+    await tester.tap(navigationLabel('成绩'));
+    await tester.pumpAndSettle();
+    expect(find.text('登录后查询成绩'), findsOneWidget);
+
+    await tester.tap(navigationLabel('课表'));
+    await tester.pumpAndSettle();
+    expect(find.text('9月14日 — 9月20日'), findsOneWidget);
+  });
+
+  testWidgets(
+    'settings opens account management and returns through both pages',
+    (tester) async {
+      await pumpApp(tester);
+      await tester.tap(navigationLabel('设置'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.byType(ListTile), findsNWidgets(4));
+      await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AccountSettingsPage), findsOneWidget);
+      expect(find.text('这所学校还没有账号'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('add-account')))
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(TimetablePage), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'four destinations include courses and Android back returns home',
+    (tester) async {
+      await pumpApp(tester);
+      expect(navigationLabel('任务'), findsNothing);
+      expect(
+        tester
+            .widget<NavigationBar>(find.byType(NavigationBar))
+            .destinations
+            .cast<NavigationDestination>()
+            .map((destination) => destination.label),
+        ['课表', '选课', '成绩', '设置'],
+      );
+      await tester.tap(navigationLabel('选课'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoursesPage), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(TimetablePage), findsOneWidget);
+    },
+  );
+
+  testWidgets('wide window uses side navigation with the same default page', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(1280, 800));
+
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(TimetablePage), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationRail),
+        matching: find.text('选课'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CoursesPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'small phone supports 200% text with system ${brightness.name}',
+      (tester) async {
+        await pumpApp(
+          tester,
+          size: const Size(320, 640),
+          textScale: 2,
+          brightness: brightness,
+        );
+        expect(
+          Theme.of(tester.element(find.byType(TimetablePage))).brightness,
+          brightness,
+        );
+        expect(tester.takeException(), isNull);
+
+        final action = find.widgetWithText(FilledButton, '前往设置');
+        await tester.scrollUntilVisible(action, 200);
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(find.byType(SettingsPage), findsOneWidget);
+        final appSettings = find.widgetWithText(ListTile, '数据与应用');
+        await tester.scrollUntilVisible(appSettings, 200);
+        await tester.pumpAndSettle();
+        await tester.tap(appSettings);
+        await tester.pumpAndSettle();
+        expect(find.byType(AppSettingsPage), findsOneWidget);
+        final about = find.widgetWithText(ListTile, '关于应用');
+        await tester.scrollUntilVisible(about, 200);
+        await tester.pumpAndSettle();
+        await tester.tap(about);
+        await tester.pumpAndSettle();
+        expect(find.text('Github'), findsOneWidget);
+        expect(find.text('查看许可'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('landscape content remains scrollable above the navigation', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(780, 360));
+    final action = find.widgetWithText(FilledButton, '前往设置');
+    await tester.scrollUntilVisible(action, 200);
+    await tester.pumpAndSettle();
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('short wide windows allow scrolling the side destinations', (
+    tester,
+  ) async {
+    await pumpApp(tester, size: const Size(900, 360), textScale: 2);
+    final settings = find.descendant(
+      of: find.byType(NavigationRail),
+      matching: find.text('设置'),
+    );
+    await tester.ensureVisible(settings);
+    await tester.pumpAndSettle();
+    await tester.tap(settings);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('home controls are accessible in ${brightness.name} theme', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await pumpApp(tester, brightness: brightness);
+        await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(textContrastGuideline));
+        expect(find.bySemanticsLabel('9月12日，星期六，今天'), findsOneWidget);
+      } finally {
+        semantics.dispose();
+      }
+    });
+  }
+
+  testWidgets(
+    'foreground midnight advances the current week and today marker',
+    (tester) async {
+      var now = DateTime(2026, 9, 13, 23, 59);
+      await pumpApp(tester, clock: () => now);
+      expect(find.text('9月7日 — 9月13日'), findsOneWidget);
+
+      now = DateTime(2026, 9, 14);
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pump();
+
+      expect(find.text('9月14日 — 9月20日'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('returning from settings after midnight shows the new week', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 9, 13, 23, 59);
+    await pumpApp(tester, clock: () => now);
+    await tester.tap(navigationLabel('设置'));
+    await tester.pumpAndSettle();
+
+    now = DateTime(2026, 9, 14);
+    await tester.pump(const Duration(minutes: 1));
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('9月14日 — 9月20日'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the startup auto-check announces a new release once', (
+    tester,
+  ) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'ZFHelper',
+      packageName: 'dev.zfhelper.app',
+      version: '0.1.7',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+    final harness = ReleaseRepositoryHarness(
+      respond: (options) => releaseJsonResponse(
+        releaseJson(tag: 'v0.2.0', assets: [apkAssetJson('0.2.0')]),
+      ),
+    );
+    addTearDown(harness.dispose);
+    final preferences = TestUpdatePreferencesStore();
+
+    await pumpApp(
+      tester,
+      releases: harness.repository,
+      updatePreferences: preferences,
+    );
+
+    expect(find.text('发现新版本 v0.2.0'), findsOneWidget);
+    expect(preferences.value.lastNotifiedTag, 'v0.2.0');
+
+    await tester.tap(find.text('查看'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UpdateCheckPage), findsOneWidget);
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('发现新版本 v0.2.0'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}

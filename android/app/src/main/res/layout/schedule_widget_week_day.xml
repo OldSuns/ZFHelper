@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/schedule_widget_week_day_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="28dp"
+    android:orientation="horizontal"
+    android:paddingBottom="3dp"
+    android:paddingTop="3dp">
+
+    <TextView
+        android:id="@+id/schedule_widget_week_day_label"
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textSize="@dimen/schedule_widget_body_text"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/schedule_widget_week_day_courses"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textSize="@dimen/schedule_widget_body_text" />
+
+    <TextView
+        android:id="@+id/schedule_widget_week_day_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textSize="@dimen/schedule_widget_caption_text" />
+</LinearLayout>

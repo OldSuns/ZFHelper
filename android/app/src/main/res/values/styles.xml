@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <bool name="light_system_bars">true</bool>
+    <style name="BaseTheme" parent="@android:style/Theme.Light.NoTitleBar" />
+    <style name="NormalTheme" parent="BaseTheme">
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:colorBackground">@color/app_base</item>
+        <item name="android:windowBackground">@color/app_base</item>
+        <item name="android:statusBarColor">@color/app_base</item>
+        <item name="android:navigationBarColor">@color/app_base</item>
+        <item name="android:windowLightStatusBar">@bool/light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/light_system_bars</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="LaunchTheme" parent="NormalTheme">
+        <!-- Show a splash screen on the activity. Automatically removed when
+             the Flutter engine draws its first frame -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+</resources>

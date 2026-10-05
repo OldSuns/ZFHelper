@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "https://github.com/flutter/agent-plugins",
+  "commit": "7cdb7d3c33679ef14a7a7584cec1d5ecb8752586",
+  "installedAtUtc": "2026-09-12T04:09:13.5702734Z",
+  "installationMethod": "OpenAI skill-installer install-skill-from-github.py --method download --ref <commit> --dest .agents/skills",
+  "skillCount": 24,
+  "flutterSkillCount": 10,
+  "dartSkillCount": 14,
+  "bundledDartSource": {
+    "repository": "https://github.com/dart-lang/skills",
+    "commit": "c530d2c728b0e6c37a4cbbe032e65b824799b37d"
+  },
+  "notices": [
+    ".agents/vendor/flutter-agent-plugins/LICENSE",
+    ".agents/vendor/flutter-agent-plugins/DART-LICENSE"
+  ],
+  "skills": [
+    {
+      "name": "dart-add-unit-test",
+      "sourcePath": "skills/dart-add-unit-test",
+      "installedPath": ".agents/skills/dart-add-unit-test",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "02428fa20c2cb90afcaf17a52c559641b85eb04f2765a54da2bc72ca858c1fce"
+        }
+      ]
+    },
+    {
+      "name": "dart-build-cli-app",
+      "sourcePath": "skills/dart-build-cli-app",
+      "installedPath": ".agents/skills/dart-build-cli-app",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "39c82e4ca39fadc8d065bad8c39a08cd719a3fc481b6a74ed6175f33ee3fb412"
+        }
+      ]
+    },
+    {
+      "name": "dart-collect-coverage",
+      "sourcePath": "skills/dart-collect-coverage",
+      "installedPath": ".agents/skills/dart-collect-coverage",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "229035193bfd785368c48e3dd8ee059df43fcbdfe227dfd8a9a0178b995ee6c6"
+        }
+      ]
+    },
+    {
+      "name": "dart-fix-runtime-errors",
+      "sourcePath": "skills/dart-fix-runtime-errors",
+      "installedPath": ".agents/skills/dart-fix-runtime-errors",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "0c18be0cbda925cb1322c2c47a52c288cce1dc34218705a20c4c071eed1b066d"
+        }
+      ]
+    },
+    {
+      "name": "dart-generate-test-mocks",
+      "sourcePath": "skills/dart-generate-test-mocks",
+      "installedPath": ".agents/skills/dart-generate-test-mocks",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "ca58b0e0d045595aa99990715bbf48fc75b1c5dca4053bc1940ef289cbcf2f00"
+        }
+      ]
+    },
+    {
+      "name": "dart-migrate-to-checks-package",
+      "sourcePath": "skills/dart-migrate-to-checks-package",
+      "installedPath": ".agents/skills/dart-migrate-to-checks-package",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "005dbd697fcfb314e069a9954e46005f18b9333282057bad238b5e5a65976e77"
+        }
+      ]
+    },
+    {
+      "name": "dart-resolve-package-conflicts",
+      "sourcePath": "skills/dart-resolve-package-conflicts",
+      "installedPath": ".agents/skills/dart-resolve-package-conflicts",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "967093ae2bca2784ba6a104dba3821ad809b399ca22071e9afc512915f60fa0a"
+        }
+      ]
+    },
+    {
+      "name": "dart-run-static-analysis",
+      "sourcePath": "skills/dart-run-static-analysis",
+      "installedPath": ".agents/skills/dart-run-static-analysis",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "5e41a03011647bcaee182ddc5d4471122f45f93fec6570480c237077e7f9438c"
+        }
+      ]
+    },
+    {
+      "name": "dart-setup-ffi-assets",
+      "sourcePath": "skills/dart-setup-ffi-assets",
+      "installedPath": ".agents/skills/dart-setup-ffi-assets",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "361b38a74d11abe5ba95aa9a6f0ad51e4850e5daf03acd7e1ab419bf0dfae0a8"
+        }
+      ]
+    },
+    {
+      "name": "dart-use-doc-examples",
+      "sourcePath": "skills/dart-use-doc-examples",
+      "installedPath": ".agents/skills/dart-use-doc-examples",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "30b456ce311ca15b7b18bcda9008f379bf76f0a6a1d49ad97dce965c461fd4c7"
+        }
+      ]
+    },
+    {
+      "name": "dart-use-ffigen",
+      "sourcePath": "skills/dart-use-ffigen",
+      "installedPath": ".agents/skills/dart-use-ffigen",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "129ae526e854ea73e829dfa0f4f90fa5cb6e9b80a86aefd1bdd5d761afa4b676"
+        }
+      ]
+    },
+    {
+      "name": "dart-use-pattern-matching",
+      "sourcePath": "skills/dart-use-pattern-matching",
+      "installedPath": ".agents/skills/dart-use-pattern-matching",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "39d71b585417a2cca7958d41e19916303053c654a4de5aade8564addfaba1968"
+        }
+      ]
+    },
+    {
+      "name": "dart-use-primary-constructors",
+      "sourcePath": "skills/dart-use-primary-constructors",
+      "installedPath": ".agents/skills/dart-use-primary-constructors",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "598d2fcb7641f6715861827840698450c3e8d077b4e92326e8bffe87e5b23c0c"
+        }
+      ]
+    },
+    {
+      "name": "dart-write-documentation",
+      "sourcePath": "skills/dart-write-documentation",
+      "installedPath": ".agents/skills/dart-write-documentation",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "0629abbb9e0c0bb9aee2237b6617600a01499015bb4484a20b81ee96857d67ef"
+        }
+      ]
+    },
+    {
+      "name": "flutter-add-integration-test",
+      "sourcePath": "skills/flutter-add-integration-test",
+      "installedPath": ".agents/skills/flutter-add-integration-test",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "8d81b053c5fdf5b61aa7d0165cbc35e7a9a1c5bdcd7a301b8293a108771e6bab"
+        }
+      ]
+    },
+    {
+      "name": "flutter-add-widget-preview",
+      "sourcePath": "skills/flutter-add-widget-preview",
+      "installedPath": ".agents/skills/flutter-add-widget-preview",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "88cfeb7084e798714f5ac59cff62e5441759bcbe096c0fdc37abd21111b20212"
+        }
+      ]
+    },
+    {
+      "name": "flutter-add-widget-test",
+      "sourcePath": "skills/flutter-add-widget-test",
+      "installedPath": ".agents/skills/flutter-add-widget-test",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "6c449ebd844e331e661b12630b6ad2a218e84d1bd8ea8377ba9dbd62ffe2798a"
+        }
+      ]
+    },
+    {
+      "name": "flutter-apply-architecture-best-practices",
+      "sourcePath": "skills/flutter-apply-architecture-best-practices",
+      "installedPath": ".agents/skills/flutter-apply-architecture-best-practices",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "00497869976a903c83f509a59d4b6a501d409fa711eb8e1f89945921e1983b65"
+        }
+      ]
+    },
+    {
+      "name": "flutter-build-responsive-layout",
+      "sourcePath": "skills/flutter-build-responsive-layout",
+      "installedPath": ".agents/skills/flutter-build-responsive-layout",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "c7a5d18071c625137cad2def9b13f3579d9bdf0aae29621a1825f12b560394c0"
+        }
+      ]
+    },
+    {
+      "name": "flutter-fix-layout-issues",
+      "sourcePath": "skills/flutter-fix-layout-issues",
+      "installedPath": ".agents/skills/flutter-fix-layout-issues",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "e82c82b4245ef502bd93bc543d4f5968f4ee8043fa7556ffebcb34f30651fc9b"
+        }
+      ]
+    },
+    {
+      "name": "flutter-implement-json-serialization",
+      "sourcePath": "skills/flutter-implement-json-serialization",
+      "installedPath": ".agents/skills/flutter-implement-json-serialization",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "05a4478e0a3d119f26ae6e6983da3d5c2ea134763aeff59a06cef346bef391b1"
+        }
+      ]
+    },
+    {
+      "name": "flutter-setup-declarative-routing",
+      "sourcePath": "skills/flutter-setup-declarative-routing",
+      "installedPath": ".agents/skills/flutter-setup-declarative-routing",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "3a52fc5663cf37d68b6e096ef3e59f5056a01e9151b64cdf0728672a13398953"
+        }
+      ]
+    },
+    {
+      "name": "flutter-setup-localization",
+      "sourcePath": "skills/flutter-setup-localization",
+      "installedPath": ".agents/skills/flutter-setup-localization",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "dda4ef8b74976a3e51faa43d7ad00f03eab64d6d5ed0ef89cf4184a04196da17"
+        }
+      ]
+    },
+    {
+      "name": "flutter-use-http-package",
+      "sourcePath": "skills/flutter-use-http-package",
+      "installedPath": ".agents/skills/flutter-use-http-package",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "439fec047f07e9ec7cd387bf506801bb11b2b9037e5d2c5c03602360532980c4"
+        }
+      ]
+    }
+  ]
+}
