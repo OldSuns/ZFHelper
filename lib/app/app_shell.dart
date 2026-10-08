@@ -123,6 +123,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _timetable.setCountdownVisible(
+      state == AppLifecycleState.resumed &&
+          _destination == AppDestination.timetable,
+    );
     if (state == AppLifecycleState.resumed) {
       _timetable.refreshToday();
       unawaited(_scheduleWidget?.refreshStatus());
@@ -174,6 +178,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _selectDestination(int index, {bool resetTimetableSection = true}) {
     _timetable.refreshToday();
     final destination = AppDestination.values[index];
+    _timetable.setCountdownVisible(
+      destination == AppDestination.timetable &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed),
+    );
     if (resetTimetableSection && destination == AppDestination.timetable) {
       _timetable.showSection(ScheduleSection.timetable);
     }

@@ -20,6 +20,7 @@ final class ScheduleEntry {
     Map<String, String> metadata = const {},
     this.origin = ScheduleEntryOrigin.imported,
     this.kind = ScheduleEntryKind.lesson,
+    this.sourceEntryId,
   }) : weeks = Set.unmodifiable(weeks.toList()..sort()),
        metadata = Map.unmodifiable(metadata) {
     if (id.trim().isEmpty || name.trim().isEmpty) {
@@ -36,6 +37,12 @@ final class ScheduleEntry {
     }
     if (this.weeks.any((week) => week < 1)) {
       throw ArgumentError('Teaching weeks must be positive.');
+    }
+    if (sourceEntryId != null &&
+        (sourceEntryId!.trim().isEmpty || sourceEntryId == id)) {
+      throw ArgumentError(
+        'A projected source identity must name another entry.',
+      );
     }
   }
 
@@ -55,6 +62,11 @@ final class ScheduleEntry {
   final ScheduleEntryOrigin origin;
   final ScheduleEntryKind kind;
 
+  /// The root arrangement used for grouping a projected occurrence.
+  ///
+  /// Ownership is persisted by the occurrence override, not by this field.
+  final String? sourceEntryId;
+
   bool hasSameArrangement(ScheduleEntry other) =>
       teachingClassId == other.teachingClassId &&
       courseCode == other.courseCode &&
@@ -72,27 +84,65 @@ final class ScheduleEntry {
       weeks.length == other.weeks.length &&
       weeks.containsAll(other.weeks);
 
-  ScheduleEntry withMetadata(Map<String, String> values) => ScheduleEntry(
-    id: id,
-    name: name,
-    teachingClassId: teachingClassId,
-    courseCode: courseCode,
-    teacher: teacher,
-    location: location,
-    campus: campus,
-    weekday: weekday,
-    startPeriod: startPeriod,
-    endPeriod: endPeriod,
-    weeks: weeks,
-    rawWeeks: rawWeeks,
-    metadata: values,
-    origin: origin,
-    kind: kind,
+  /// Whether persisted fields match, ignoring projection-only grouping.
+  bool hasSameValue(ScheduleEntry other) =>
+      id == other.id &&
+      origin == other.origin &&
+      rawWeeks == other.rawWeeks &&
+      hasSameArrangement(other) &&
+      metadata.length == other.metadata.length &&
+      metadata.entries.every((item) => other.metadata[item.key] == item.value);
+
+  ScheduleEntry copyWith({
+    String? id,
+    String? name,
+    String? teachingClassId,
+    String? courseCode,
+    String? teacher,
+    String? location,
+    bool clearLocation = false,
+    String? campus,
+    int? weekday,
+    bool clearWeekday = false,
+    int? startPeriod,
+    int? endPeriod,
+    bool clearPeriods = false,
+    Iterable<int>? weeks,
+    String? rawWeeks,
+    bool clearRawWeeks = false,
+    Map<String, String>? metadata,
+    ScheduleEntryOrigin? origin,
+    ScheduleEntryKind? kind,
+    String? sourceEntryId,
+    bool clearSourceEntryId = false,
+  }) => ScheduleEntry(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    teachingClassId: teachingClassId ?? this.teachingClassId,
+    courseCode: courseCode ?? this.courseCode,
+    teacher: teacher ?? this.teacher,
+    location: clearLocation ? null : location ?? this.location,
+    campus: campus ?? this.campus,
+    weekday: clearWeekday ? null : weekday ?? this.weekday,
+    startPeriod: clearPeriods ? null : startPeriod ?? this.startPeriod,
+    endPeriod: clearPeriods ? null : endPeriod ?? this.endPeriod,
+    weeks: weeks ?? this.weeks,
+    rawWeeks: clearRawWeeks ? null : rawWeeks ?? this.rawWeeks,
+    metadata: metadata ?? this.metadata,
+    origin: origin ?? this.origin,
+    kind: kind ?? this.kind,
+    sourceEntryId: clearSourceEntryId
+        ? null
+        : sourceEntryId ?? this.sourceEntryId,
   );
 
+  ScheduleEntry withMetadata(Map<String, String> values) =>
+      copyWith(metadata: values);
+
   /// A grouping key that never merges unrelated teaching classes by name.
-  String get groupKey =>
-      teachingClassId == null ? 'arrangement:$id' : 'class:$teachingClassId';
+  String get groupKey => teachingClassId == null
+      ? 'arrangement:${sourceEntryId ?? id}'
+      : 'class:$teachingClassId';
 
   /// Whether enough information is available to place this on a weekly grid.
   bool get isPlaced =>

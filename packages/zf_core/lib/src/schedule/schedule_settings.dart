@@ -1,5 +1,6 @@
 import 'period_time_plan.dart';
 import 'schedule_entry.dart';
+import 'schedule_occurrence.dart';
 import 'schedule_snapshot.dart';
 import 'teaching_calendar.dart';
 
@@ -13,12 +14,14 @@ final class ScheduleSettings {
     this.periodCampus,
     List<ScheduleEntry> localEntries = const [],
     Iterable<String> hiddenEntryIds = const [],
+    List<ScheduleOccurrenceOverride> occurrenceOverrides = const [],
     this.preferAgenda = false,
   }) : periodTimes = List.unmodifiable(periodTimes),
        periodSections = List.unmodifiable(periodSections),
        useCustomPeriodTimes = useCustomPeriodTimes ?? periodTimes.isNotEmpty,
        localEntries = List.unmodifiable(localEntries),
-       hiddenEntryIds = Set.unmodifiable(hiddenEntryIds) {
+       hiddenEntryIds = Set.unmodifiable(hiddenEntryIds),
+       occurrenceOverrides = List.unmodifiable(occurrenceOverrides) {
     validatePeriodTimeSections(this.periodTimes, this.periodSections);
     if (calendarOverride != null &&
         calendarOverride!.source != TeachingCalendarSource.user) {
@@ -27,7 +30,9 @@ final class ScheduleSettings {
       );
     }
     if (localEntries.any(
-      (entry) => entry.origin != ScheduleEntryOrigin.local,
+      (entry) =>
+          entry.origin != ScheduleEntryOrigin.local ||
+          entry.sourceEntryId != null,
     )) {
       throw ArgumentError('Local arrangements must identify the local origin.');
     }
@@ -35,6 +40,10 @@ final class ScheduleSettings {
         localEntries.length) {
       throw ArgumentError('Local arrangements contain duplicate IDs.');
     }
+    validateScheduleOccurrenceOverrides(
+      this.occurrenceOverrides,
+      baseline: this.localEntries,
+    );
   }
 
   final TeachingCalendar? calendarOverride;
@@ -46,10 +55,11 @@ final class ScheduleSettings {
   final String? periodCampus;
   final List<ScheduleEntry> localEntries;
   final Set<String> hiddenEntryIds;
+  final List<ScheduleOccurrenceOverride> occurrenceOverrides;
   final bool preferAgenda;
 
-  /// Combines saved preferences with a snapshot without changing import data.
-  ScheduleSnapshot applyTo(ScheduleSnapshot snapshot) => snapshot.copyWith(
+  /// Combines imported data and legacy settings before occurrence adjustments.
+  ScheduleSnapshot baseSnapshot(ScheduleSnapshot snapshot) => snapshot.copyWith(
     entries: [
       ...snapshot.entries.where((entry) => !hiddenEntryIds.contains(entry.id)),
       ...localEntries,
@@ -62,18 +72,35 @@ final class ScheduleSettings {
     ),
   );
 
+  /// Projects saved settings without changing the school's original evidence.
+  ScheduleSnapshot applyTo(ScheduleSnapshot snapshot) =>
+      applyScheduleOccurrenceOverrides(
+        baseline: baseSnapshot(snapshot),
+        overrides: occurrenceOverrides,
+      );
+
   /// Keeps adjustments linked when an import changes descriptive metadata.
   /// Changed teaching times/places are retained separately for user review.
   ScheduleSettings reconcileImport(
     ScheduleSnapshot previous,
     ScheduleSnapshot next,
   ) {
-    final nextIds = next.entries.map((entry) => entry.id).toSet();
+    final previousById = {
+      for (final entry in previous.entries) entry.id: entry,
+    };
+    final nextById = {for (final entry in next.entries) entry.id: entry};
+    final nextIds = nextById.keys.toSet();
     final replacements = <String, String>{};
     for (final entry in previous.entries) {
       if (nextIds.contains(entry.id)) continue;
       final matches = next.entries.where(entry.hasSameArrangement).toList();
-      if (matches.length == 1) replacements[entry.id] = matches.single.id;
+      if (matches.length != 1 || previousById.containsKey(matches.single.id)) {
+        continue;
+      }
+      final matched = matches.single;
+      if (previous.entries.where(matched.hasSameArrangement).length == 1) {
+        replacements[entry.id] = matched.id;
+      }
     }
     return copyWith(
       hiddenEntryIds: hiddenEntryIds.map((id) => replacements[id] ?? id),
@@ -86,6 +113,21 @@ final class ScheduleSettings {
           'replacesImportedId': updated,
           'schoolArrangementChanged': (!nextIds.contains(updated)).toString(),
         });
+      }).toList(),
+      occurrenceOverrides: occurrenceOverrides.map((value) {
+        final nextId = replacements[value.source.id];
+        final previousSource = previousById[value.source.id];
+        if (value.source.origin != ScheduleEntryOrigin.imported ||
+            nextId == null ||
+            previousSource == null ||
+            !value.source.hasSameArrangement(previousSource)) {
+          return value;
+        }
+        return ScheduleOccurrenceOverride(
+          source: nextById[nextId]!,
+          sourceWeek: value.sourceWeek,
+          parts: value.parts,
+        );
       }).toList(),
     );
   }
@@ -100,6 +142,7 @@ final class ScheduleSettings {
     bool clearPeriodCampus = false,
     List<ScheduleEntry>? localEntries,
     Iterable<String>? hiddenEntryIds,
+    List<ScheduleOccurrenceOverride>? occurrenceOverrides,
     bool? preferAgenda,
   }) => ScheduleSettings(
     calendarOverride: clearCalendarOverride
@@ -111,6 +154,7 @@ final class ScheduleSettings {
     periodCampus: clearPeriodCampus ? null : periodCampus ?? this.periodCampus,
     localEntries: localEntries ?? this.localEntries,
     hiddenEntryIds: hiddenEntryIds ?? this.hiddenEntryIds,
+    occurrenceOverrides: occurrenceOverrides ?? this.occurrenceOverrides,
     preferAgenda: preferAgenda ?? this.preferAgenda,
   );
 }
