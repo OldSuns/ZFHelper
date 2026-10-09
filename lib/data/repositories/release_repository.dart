@@ -104,28 +104,68 @@ final class ReleaseAsset {
   Uri get mirrorUrl => Uri.parse('$_downloadMirrorPrefix$url');
 }
 
-/// Returns a negative, zero, or positive value according to semantic version order.
+/// Returns a negative, zero, or positive value according to semantic
+/// version order. A pre-release sorts before the stable release with the
+/// same X.Y.Z core; two pre-releases order by stage (dev < beta < rc) and
+/// then by stage number.
 int compareVersions(String left, String right) {
-  final a = _versionParts(left);
-  final b = _versionParts(right);
-  for (var index = 0; index < a.length; index++) {
-    final comparison = a[index].compareTo(b[index]);
+  final a = _parseVersion(left);
+  final b = _parseVersion(right);
+  for (var index = 0; index < a.core.length; index++) {
+    final comparison = a.core[index].compareTo(b.core[index]);
     if (comparison != 0) return comparison;
   }
-  return 0;
+  final aStage = a.stage;
+  final bStage = b.stage;
+  if (aStage == null && bStage == null) return 0;
+  if (aStage == null) return 1;
+  if (bStage == null) return -1;
+  final rank = _prereleaseStageRanks[aStage]!.compareTo(
+    _prereleaseStageRanks[bStage]!,
+  );
+  if (rank != 0) return rank;
+  return a.stageNumber!.compareTo(b.stageNumber!);
 }
+
+const _prereleaseStageRanks = {'dev': 0, 'beta': 1, 'rc': 2};
+
+final _versionPattern = RegExp(
+  r'^v?(\d+)\.(\d+)\.(\d+)(?:-(dev|beta|rc)\.(\d+))?(?:\+\d+)?$',
+);
+
+/// Whether [value] carries a `-dev.N`, `-beta.N`, or `-rc.N` pre-release
+/// suffix. Throws [FormatException] for values that are not a supported
+/// version format.
+bool isPrereleaseVersion(String value) => _parseVersion(value).stage != null;
 
 String releaseTagForVersion(String value) {
-  final match = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:\+\d+)?$')
-      .firstMatch(value.trim());
-  if (match == null) throw FormatException('版本号格式无效：$value');
-  return 'v${match.group(1)}.${match.group(2)}.${match.group(3)}';
+  final parsed = _parseVersion(value);
+  final tag = 'v${parsed.core.join('.')}';
+  return parsed.stage == null
+      ? tag
+      : '$tag-${parsed.stage}.${parsed.stageNumber}';
 }
 
-List<int> _versionParts(String value) {
-  final tag = releaseTagForVersion(value);
-  final parts = tag.substring(1).split('.');
-  return [for (final part in parts) int.parse(part)];
+_ParsedVersion _parseVersion(String value) {
+  final match = _versionPattern.firstMatch(value.trim());
+  if (match == null) throw FormatException('版本号格式无效：$value');
+  return _ParsedVersion(
+    core: [
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    ],
+    stage: match.group(4),
+    stageNumber: match.group(5) == null ? null : int.parse(match.group(5)!),
+  );
+}
+
+final class _ParsedVersion {
+  const _ParsedVersion({required this.core, this.stage, this.stageNumber});
+
+  final List<int> core;
+  final String? stage;
+  final int? stageNumber;
 }
 
 final class ReleaseRepository {

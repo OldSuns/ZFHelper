@@ -117,6 +117,22 @@ final class UpdateCheckViewModel extends ChangeNotifier {
 
   Future<void> check() => _runCheck(silent: false);
 
+  /// Resolves the release page for the installed version. A pre-release
+  /// build that was never published (for example a local build) has no
+  /// release page; a 404 then means "no current release" instead of a
+  /// failed check. Other errors still fail the check.
+  Future<ReleaseInfo?> _fetchCurrentRelease(String tag, String version) async {
+    if (!isPrereleaseVersion(version)) {
+      return repository.fetchByTag(tag);
+    }
+    try {
+      return await repository.fetchByTag(tag);
+    } on ReleaseException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   Future<void> _runCheck({required bool silent}) async {
     if (isBusy) return;
     isBusy = true;
@@ -131,7 +147,7 @@ final class UpdateCheckViewModel extends ChangeNotifier {
         final currentTag = releaseTagForVersion(version);
         releaseForCurrentVersion = release.tagName == currentTag
             ? release
-            : await repository.fetchByTag(currentTag);
+            : await _fetchCurrentRelease(currentTag, version);
       }
       currentVersion = version;
       latest = release;

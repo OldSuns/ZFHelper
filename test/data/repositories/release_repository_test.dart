@@ -11,12 +11,33 @@ void main() {
   test('normalizes application versions to release tags', () {
     expect(releaseTagForVersion('0.1.1+1'), 'v0.1.1');
     expect(releaseTagForVersion('v2.0.0'), 'v2.0.0');
+    expect(releaseTagForVersion('0.2.0-beta.1+2'), 'v0.2.0-beta.1');
+    expect(releaseTagForVersion('v0.3.0-rc.3'), 'v0.3.0-rc.3');
+    expect(releaseTagForVersion('1.2.3-dev.4+9'), 'v1.2.3-dev.4');
+  });
+
+  test('detects pre-release versions', () {
+    expect(isPrereleaseVersion('0.2.0-beta.1+2'), isTrue);
+    expect(isPrereleaseVersion('v0.3.0-rc.1'), isTrue);
+    expect(isPrereleaseVersion('0.2.0'), isFalse);
+    expect(isPrereleaseVersion('0.2.0+5'), isFalse);
   });
 
   test('compares release versions without build metadata', () {
     expect(compareVersions('v0.1.1', '0.1.1+1'), 0);
     expect(compareVersions('v0.2.0', '0.1.1'), greaterThan(0));
     expect(compareVersions('0.1.0', 'v0.1.1'), lessThan(0));
+  });
+
+  test('orders pre-release versions against stable releases', () {
+    expect(compareVersions('0.2.0-beta.1', '0.2.0'), lessThan(0));
+    expect(compareVersions('v0.2.0', '0.2.0-beta.1+3'), greaterThan(0));
+    expect(compareVersions('v0.2.0-beta.1', 'v0.2.0-beta.2'), lessThan(0));
+    expect(compareVersions('v0.2.0-beta.2', 'v0.2.0-rc.1'), lessThan(0));
+    expect(compareVersions('v0.2.0-dev.3', 'v0.2.0-beta.1'), lessThan(0));
+    expect(compareVersions('v0.2.0-rc.1', 'v0.2.0-beta.9'), greaterThan(0));
+    expect(compareVersions('v0.2.0-beta.2+4', '0.2.0-beta.2'), 0);
+    expect(compareVersions('v0.2.1-beta.1', '0.2.0'), greaterThan(0));
   });
 
   test('parses a GitHub release response', () {
@@ -98,6 +119,8 @@ void main() {
 
   test('rejects malformed version and release data', () {
     expect(() => compareVersions('latest', '0.1.0'), throwsFormatException);
+    expect(() => releaseTagForVersion('0.2.0-alpha.1'), throwsFormatException);
+    expect(() => releaseTagForVersion('0.2.0-beta'), throwsFormatException);
     expect(
       () => ReleaseInfo.fromJson({'tag_name': 'v0.2.0'}),
       throwsFormatException,

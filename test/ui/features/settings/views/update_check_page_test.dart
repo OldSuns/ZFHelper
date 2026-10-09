@@ -33,10 +33,11 @@ void main() {
   UpdateCheckViewModel buildModel(
     ReleaseRepositoryHarness harness, {
     TargetPlatform platform = TargetPlatform.android,
+    String version = '0.1.7+1',
   }) {
     final model = UpdateCheckViewModel(
       repository: harness.repository,
-      readVersion: () async => '0.1.7+1',
+      readVersion: () async => version,
       installer: installer,
       resolveDownloadDirectory: () async => downloadDirectory.path,
     );
@@ -97,6 +98,26 @@ void main() {
 
     expect(find.text('当前已是最新版本'), findsOneWidget);
     expect(find.textContaining('当前版本 0.1.7+1'), findsOneWidget);
+  });
+
+  testWidgets('explains when an unpublished pre-release has no release page', (
+    tester,
+  ) async {
+    final harness = ReleaseRepositoryHarness(
+      respond: (options) => options.uri.path.endsWith('/latest')
+          ? releaseJsonResponse(
+              releaseJson(tag: 'v0.1.8', assets: [apkAssetJson('0.1.8')]),
+            )
+          : notFoundResponse(),
+    );
+    addTearDown(harness.dispose);
+    final model = buildModel(harness, version: '0.2.0-beta.1+2');
+    await pumpPage(tester, model);
+
+    expect(find.text('准备检查更新…'), findsNothing);
+    expect(find.textContaining('当前已是最新版本'), findsOneWidget);
+    expect(find.textContaining('没有对应的发布页'), findsOneWidget);
+    expect(find.text('重新检查'), findsOneWidget);
   });
 
   testWidgets('downloads and installs the Android APK in-app', (tester) async {
