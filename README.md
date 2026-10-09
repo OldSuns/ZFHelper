@@ -6,7 +6,7 @@ A Flutter/Dart client for the newer Zhengfang academic administration system. An
 
 ## Status
 
-The project is under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and `main`; version releases are built from `vX.Y.Z` tags. School compatibility and release readiness still require real-school and device acceptance.
+The project is under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and the `main`/`dev` branches; stable releases are built from `vX.Y.Z` tags on `main`, and pre-releases from `vX.Y.Z-beta.N`-style tags on `dev` are published as GitHub pre-releases. School compatibility and release readiness still require real-school and device acceptance.
 
 ## Features
 
@@ -62,7 +62,7 @@ For Android, use `flutter run -d <device-id>` with an ID from `flutter devices`.
 ## Limitations
 
 - School variants are not universally compatible. Real-school login, timetable, grades, and enrollment-result comparisons remain acceptance work.
-- Update checking reads the latest GitHub Release, shows its notes, and can open the release or repository page in the system browser.
+- Update checking reads the latest stable GitHub Release (pre-releases never qualify as "latest"), shows its notes, and can open the release or repository page in the system browser. Pre-release builds are not offered updates through this channel; their users download newer builds from the Releases page.
 - ICS export, school examination-schedule retrieval, system course reminders, Live Updates, and couple timetables are not implemented. Manually entered examination events are supported.
 - Scheduled auto-enrollment, cloud enrollment delegation, automatic withdrawal, and cross-device synchronization are outside the current scope.
 - Production-device background behavior, signed-package installation, and upgrade flows still require acceptance. GitHub CI and unsigned release assets do not establish those results.

@@ -7,6 +7,9 @@ Read [requirements](docs/requirements.md) for product scope, [architecture](docs
 - Communicate in Chinese by default; English is also acceptable. Maintain documentation and commit messages in English, except the translated root README.
 - Target Android 13+ (API 33) first and Windows second. Adapt layout to window width rather than assuming a device category.
 - Inspect the affected implementation and its callers before editing. Reuse existing code and dependencies; choose the smallest correct change and leave unrelated files alone.
+- Branch flow: feature branches merge into `dev` via pull request; `dev` merges into `main` via pull request. Stable release tags point only at commits reachable from `main`; pre-release tags point only at commits reachable from `dev`. Both rules are enforced by the release workflows' guards.
+- Stable releases use tag `vX.Y.Z` with `pubspec.yaml` version `X.Y.Z+build`; pre-releases from `dev` use tag `vX.Y.Z-beta.N` (also `rc.N`/`dev.N`) with the identical `X.Y.Z-stage.N+build` in `pubspec.yaml`. The build number after `+` must strictly increase for every published tag, stable or pre-release, so Android can install upgrades over earlier builds; continue incrementing from the latest release commit merged into `dev`.
+- Prepare release commits (version bump plus RELEASE_NOTES.md) on `dev` and merge them to `main`, so `dev` never falls behind the stable version commit.
 - Preserve user changes, staged content, and existing formatting. Do not commit, push, publish, or perform destructive operations without authorization.
 - Before every commit, run formatting and the relevant validation checks; do not commit while those checks fail.
 - Before a version patch or pushing a release tag, update [RELEASE_NOTES.md](RELEASE_NOTES.md) with only the latest release notes and include that update in the version commit; do not append a `Previous release` section.
