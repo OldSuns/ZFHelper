@@ -45,7 +45,7 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
     if (model == null) {
       return const SettingsPageScaffold(
         title: '课程实况与超级岛',
-        children: [Text('课程实况通知需要 Android 16 或更新版本。')],
+        children: [Text('课程实况通知仅支持 Android 16 或更新版本的设备。')],
       );
     }
     return ListenableBuilder(
