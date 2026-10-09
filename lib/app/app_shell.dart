@@ -4,6 +4,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../platform/schedule_widget_platform.dart';
 import '../ui/core/app_theme.dart';
 import '../ui/features/auth/view_models/auth_view_model.dart';
 import '../ui/features/auth/views/school_connection_page.dart';
@@ -16,6 +17,7 @@ import '../ui/features/schedule/view_models/timetable_view_model.dart';
 import '../ui/features/schedule/views/timetable_page.dart';
 import '../ui/features/settings/views/settings_page.dart';
 import '../ui/features/settings/views/update_check_page.dart';
+import '../ui/features/settings/view_models/schedule_island_view_model.dart';
 import '../ui/features/settings/view_models/schedule_widget_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
 import 'app_configuration.dart';
@@ -50,7 +52,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final CoursesViewModel _courses;
   late final UpdateCheckViewModel _updateCheck;
   ScheduleWidgetViewModel? _scheduleWidget;
-  StreamSubscription<DateTime>? _widgetLaunches;
+  ScheduleIslandViewModel? _scheduleIsland;
+  StreamSubscription<ScheduleWidgetLaunch>? _widgetLaunches;
   bool _checkingExit = false;
 
   @override
@@ -89,8 +92,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         platform: widgetPlatform,
         clock: widget.configuration.clock,
       );
-      _widgetLaunches = _scheduleWidget!.launches.listen(_openWidgetDate);
+      _widgetLaunches = _scheduleWidget!.launches.listen(_openScheduleLaunch);
       unawaited(_initializeWidget());
+    }
+    final islandPlatform = widget.configuration.scheduleIslandPlatform;
+    if (islandPlatform != null) {
+      _scheduleIsland = ScheduleIslandViewModel(platform: islandPlatform);
+      unawaited(_scheduleIsland!.refreshStatus());
     }
     unawaited(_timetable.initialize());
     unawaited(_grades.initialize());
@@ -112,6 +120,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _auth.dispose();
     unawaited(_widgetLaunches?.cancel());
     _scheduleWidget?.dispose();
+    _scheduleIsland?.dispose();
     widget.configuration.appearance.dispose();
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
@@ -230,16 +239,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _initializeWidget() async {
     await _timetable.initialize();
     if (!mounted) return;
-    final date = await _scheduleWidget!.consumeLaunch();
-    if (date != null) _openWidgetDate(date);
+    final launch = await _scheduleWidget!.consumeLaunch();
+    if (launch != null) _openScheduleLaunch(launch);
     await _scheduleWidget?.refreshStatus();
   }
 
-  void _openWidgetDate(DateTime date) {
+  void _openScheduleLaunch(ScheduleWidgetLaunch launch) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final source = launch.source;
+      final state = widget.configuration.schedule.state;
+      final scope = state.account?.account.scope;
+      if (source != null &&
+          (source.schoolId != scope?.schoolId ||
+              source.accountId != scope?.accountId ||
+              source.termKey != state.selectedTerm?.key)) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('课程提醒已过期，请查看当前课表')));
+        return;
+      }
       Navigator.of(context).popUntil((route) => route.isFirst);
-      _timetable.selectAgendaDate(date);
+      _timetable.selectAgendaDate(launch.date);
       _timetable.showSection(ScheduleSection.agenda);
       _selectDestination(
         AppDestination.timetable.index,
@@ -358,6 +378,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         courses: _courses,
         updateCheck: _updateCheck,
         scheduleWidget: _scheduleWidget,
+        scheduleIsland: _scheduleIsland,
       ),
     };
   }

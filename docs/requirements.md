@@ -77,12 +77,23 @@ It adapts across four information densities as size and font scale allow: a curr
 
 System periodic updates and inexact course-boundary alarms can be delayed by power management. The widget is not a precise reminder service and is not available on Windows.
 
+### Android course Live Updates
+
+Settings > Timetable > Course Live Updates and Super Island controls offline course reminders, disabled by default. The selected account and term use the same effective dated snapshot as the widget. Only courses with a configured calendar and complete period times participate. The lead time is configurable; notifications count down to class start, the current period's end, or the end of a break. Overlapping courses retain separate notifications. A dismissed course stays hidden until that occurrence ends, with an explicit restore action in settings.
+
+Course notifications use Android 16 Live Updates exclusively and do not require a Xiaomi App ID. Supported HyperOS versions can present them as a system island. Countdowns are updated by the system rather than per-second application updates. Notification icons use a neutral tint independent of the application's accent color. Settings distinguishes notification permission, channel importance, Android promotion permission, posted notifications, and the actual Android promotion flag. A minimum-importance channel has an actionable warning and a link to its system settings; the application does not raise user-selected importance. These signals do not prove that HyperOS visibly rendered an island. A separate two-minute example can be posted and cleared without importing or changing a timetable. Its native expiry triggers a one-time status read so the settings page updates without manual refresh or polling. Android versions below 16 cannot enable reminders or post examples; disabling reminders and clearing notifications remain available.
+
+Upgrading from the earlier selectable-template implementation removes the saved display mode and its active course/example notifications before using Live Updates. Reminder enablement, lead time, and dismissed-course records are retained.
+
+Notifications are removed at phase expiry and recomputed from the current snapshot on phase boundaries, application resume, boot, package replacement, and clock/timezone changes. Re-enabling app or course-channel notifications also rebuilds reminders, including while Flutter is stopped. A notification display failure is reported and retains the next course boundary for recovery. Disabling reminders, blocking notifications, or losing a valid snapshot cancels course notifications and their boundary alarm. Account/term changes remove obsolete course notifications. Exact-alarm access is optional and its status is shown; without it, transitions use inexact alarms. Revoking this access removes scheduled exact alarms, so settings directs users to reopen the app afterward. Even exact alarms are subject to idle throttling and manufacturer background restrictions. HyperOS can reject recovery broadcasts while app auto-start is disabled; settings directs users to check auto-start and battery restrictions in application information. Force-stopping the app suspends reminders until it is reopened. Windows has no notification adapter.
+
 ## Planned or awaiting acceptance
 
 | Item | Status |
 | --- | --- |
 | ICS export and school examination-schedule retrieval | Not implemented; manually entered examination events already work |
-| System course reminders, Live Updates/status-bar enhancements, and couple timetables | Not implemented; no cloud-sharing guarantee or acceptance claim |
+| Couple timetables | Not implemented; no cloud-sharing guarantee |
+| HyperOS Super Island rendering and long-running course-reminder delivery | Firmware-specific device acceptance is separate from posting notifications and Android promotion status |
 | Real-school login, timetable, grades, and enrollment results | Need comparison against actual school records |
 | Android multi-account persistence, process recovery, background behavior, widget launchers, and restart behavior | Need production-device acceptance |
 | Windows minimize/sleep behavior during selection | Needs acceptance beyond source inspection |

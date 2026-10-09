@@ -38,7 +38,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool get busy => _sync != null || _pinning;
   bool get canSync => _repository.state.initialized && _appearance.initialized;
   String? get failure => _failure ?? _capabilities?.failure;
-  Stream<DateTime> get launches => _platform.launches;
+  Stream<ScheduleWidgetLaunch> get launches => _platform.launches;
 
   String get sourceLabel {
     final state = _repository.state;
@@ -86,7 +86,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<DateTime?> consumeLaunch() async {
+  Future<ScheduleWidgetLaunch?> consumeLaunch() async {
     try {
       return await _platform.consumeLaunch();
     } on ScheduleWidgetException catch (error) {

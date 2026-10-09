@@ -3,6 +3,25 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+final class ScheduleWidgetLaunchSource {
+  const ScheduleWidgetLaunchSource({
+    required this.schoolId,
+    required this.accountId,
+    required this.termKey,
+  });
+
+  final String schoolId;
+  final String accountId;
+  final String termKey;
+}
+
+final class ScheduleWidgetLaunch {
+  const ScheduleWidgetLaunch({required this.date, this.source});
+
+  final DateTime date;
+  final ScheduleWidgetLaunchSource? source;
+}
+
 final class ScheduleWidgetCapabilities {
   const ScheduleWidgetCapabilities({
     required this.canPin,
@@ -23,11 +42,11 @@ final class ScheduleWidgetException implements Exception {
 }
 
 abstract interface class ScheduleWidgetPlatform {
-  Stream<DateTime> get launches;
+  Stream<ScheduleWidgetLaunch> get launches;
   Future<ScheduleWidgetCapabilities> capabilities();
   Future<void> publish(String payload);
   Future<bool> requestPin();
-  Future<DateTime?> consumeLaunch();
+  Future<ScheduleWidgetLaunch?> consumeLaunch();
   Future<void> dispose();
 }
 
@@ -42,15 +61,17 @@ final class AndroidScheduleWidgetPlatform implements ScheduleWidgetPlatform {
   }) {
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'openSchedule') throw MissingPluginException();
-      _launches.add(_readDate(call.arguments));
+      _launches.add(_readLaunch(call.arguments));
     });
   }
 
   final MethodChannel _channel;
-  final _launches = StreamController<DateTime>.broadcast(sync: true);
+  final _launches = StreamController<ScheduleWidgetLaunch>.broadcast(
+    sync: true,
+  );
 
   @override
-  Stream<DateTime> get launches => _launches.stream;
+  Stream<ScheduleWidgetLaunch> get launches => _launches.stream;
 
   Future<Object?> _invoke(String method, [Object? arguments]) async {
     try {
@@ -104,18 +125,48 @@ final class AndroidScheduleWidgetPlatform implements ScheduleWidgetPlatform {
   }
 
   @override
-  Future<DateTime?> consumeLaunch() async {
+  Future<ScheduleWidgetLaunch?> consumeLaunch() async {
     final value = await _invoke('consumeLaunch');
-    return value == null ? null : _readDate(value);
+    return value == null ? null : _readLaunch(value);
+  }
+
+  static ScheduleWidgetLaunch _readLaunch(Object? value) {
+    if (value is String) {
+      return ScheduleWidgetLaunch(date: _readDate(value));
+    }
+    if (value is! Map<Object?, Object?> || value.length != 2) {
+      throw const ScheduleWidgetException('系统传来的课表入口无效');
+    }
+    final source = value['source'];
+    if (source
+        case {
+          'schoolId': final String schoolId,
+          'accountId': final String accountId,
+          'termKey': final String termKey,
+        }
+        when source.length == 3 &&
+            schoolId.trim().isNotEmpty &&
+            accountId.trim().isNotEmpty &&
+            termKey.trim().isNotEmpty) {
+      return ScheduleWidgetLaunch(
+        date: _readDate(value['date']),
+        source: ScheduleWidgetLaunchSource(
+          schoolId: schoolId,
+          accountId: accountId,
+          termKey: termKey,
+        ),
+      );
+    }
+    throw const ScheduleWidgetException('课程提醒来源信息无效');
   }
 
   static DateTime _readDate(Object? value) {
     if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
-      throw const ScheduleWidgetException('小组件传来的课表日期无效');
+      throw const ScheduleWidgetException('系统传来的课表日期无效');
     }
     final date = DateTime.tryParse(value);
     if (date == null || date.toIso8601String().split('T').first != value) {
-      throw const ScheduleWidgetException('小组件传来的课表日期无效');
+      throw const ScheduleWidgetException('系统传来的课表日期无效');
     }
     return date;
   }
