@@ -1,10 +1,9 @@
-name: Release
+name: Pre-release
 
 on:
   push:
     tags:
-      - 'v*.*.*'
-      - '!v*.*.*-*'
+      - 'v*.*.*-*'
 
 permissions:
   contents: write
@@ -13,12 +12,12 @@ env:
   FLUTTER_VERSION: 3.47.4
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-dev-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
-    name: Build release artifacts
+    name: Build pre-release artifacts
     runs-on: windows-2022
     environment: release
     timeout-minutes: 45
@@ -28,13 +27,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 'Guard: stable tags must point at commits reachable from main'
+      - name: 'Guard: pre-release tags must point at commits reachable from dev'
         shell: pwsh
         run: |
-          git fetch origin main --tags
-          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          git fetch origin dev --tags
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/dev
           if ($LASTEXITCODE -ne 0) {
-            throw "Stable release tag $env:GITHUB_REF_NAME must point at a commit reachable from origin/main."
+            throw "Pre-release tag $env:GITHUB_REF_NAME must point at a commit reachable from origin/dev."
           }
 
       - name: Set up Flutter
@@ -58,9 +57,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $pubspec = Get-Content -Raw -Encoding UTF8 pubspec.yaml
-          $match = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\+([0-9]+))?\s*$')
+          $match = [regex]::Match($pubspec, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+-(?:beta|rc|dev)\.[0-9]+)(?:\+([0-9]+))?\s*$')
           if (-not $match.Success) {
-            throw 'pubspec.yaml must declare version as X.Y.Z or X.Y.Z+build.'
+            throw 'pubspec.yaml must declare a pre-release version as X.Y.Z-beta.N, X.Y.Z-rc.N, or X.Y.Z-dev.N (optionally +build).'
           }
 
           $version = $match.Groups[1].Value
@@ -136,7 +135,7 @@ jobs:
               Out-File -Encoding ascii "$($file.FullName).sha256"
           }
 
-      - name: Create GitHub Release
+      - name: Create GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
@@ -157,12 +156,14 @@ jobs:
           $body = @(
             $releaseNotes.Trim()
             ''
+            'This is a pre-release from the dev branch. It may be unstable, change without notice, and is intended for testing only.'
+            ''
             $signingNote
             ''
             'SHA-256 files are provided next to each artifact.'
           ) -join [Environment]::NewLine
           $assetPaths = Get-ChildItem artifacts -File | ForEach-Object { $_.FullName }
-          gh release create $env:RELEASE_TAG $assetPaths --title "ZFHelper $env:RELEASE_VERSION" --generate-notes --notes $body
+          gh release create $env:RELEASE_TAG $assetPaths --prerelease --title "ZFHelper $env:RELEASE_VERSION (pre-release)" --generate-notes --notes $body
 
       - name: Clean up Android signing material
         if: always()
