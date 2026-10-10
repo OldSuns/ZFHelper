@@ -5,6 +5,7 @@ import '../../../core/app_theme.dart';
 import '../view_models/schedule_agenda.dart';
 import '../view_models/timetable_view_model.dart';
 import 'schedule_day_widgets.dart';
+import 'today_course_countdown.dart';
 
 class AgendaScheduleView extends StatefulWidget {
   const AgendaScheduleView({
@@ -95,6 +96,11 @@ class _AgendaScheduleViewState extends State<AgendaScheduleView> {
           ].join(' · '),
           style: theme.textTheme.bodySmall,
         ),
+        if (model.isToday(day.date) && model.hasSchedule)
+          TodayCourseCountdown(
+            countdown: model.todayCountdown,
+            onCourse: widget.onCourse,
+          ),
         if (!day.calendarKnown)
           ScheduleCalendarNotice(
             model: model,

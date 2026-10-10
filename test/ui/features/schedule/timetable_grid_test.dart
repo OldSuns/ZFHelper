@@ -225,18 +225,18 @@ void main() {
         find.byKey(const ValueKey('schedule-current-time')),
         findsOneWidget,
       );
-      expect(find.text('上课'), findsOneWidget);
+      expect(find.byTooltip(RegExp('正在上课')), findsOneWidget);
 
       await _pumpGrid(tester, snapshot, today: DateTime(2026, 9, 14, 8, 50));
       expect(find.byKey(const ValueKey('schedule-current-time')), findsNothing);
-      expect(find.text('上课'), findsNothing);
+      expect(find.byTooltip(RegExp('正在上课')), findsNothing);
 
       await _pumpGrid(tester, snapshot, today: DateTime(2026, 9, 14, 9, 15));
       expect(
         find.byKey(const ValueKey('schedule-current-time')),
         findsOneWidget,
       );
-      expect(find.text('上课'), findsOneWidget);
+      expect(find.byTooltip(RegExp('正在上课')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

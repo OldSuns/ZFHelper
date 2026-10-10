@@ -7,6 +7,7 @@ import 'package:zf_core/zf_core.dart';
 import '../../../../data/repositories/schedule_repository.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/timetable_view_model.dart';
+import 'teaching_week_selector.dart';
 
 Future<bool> showScheduleCourseEditor(
   BuildContext context,
@@ -14,22 +15,44 @@ Future<bool> showScheduleCourseEditor(
   ScheduleEntry? entry,
   ScheduleTarget? target,
   ScheduleSnapshot? snapshot,
+  int? week,
+  List<ScheduleOccurrenceOverride>? expectedOverrides,
 }) async {
-  final destination = target ?? viewModel.editTarget;
-  final original = snapshot ?? viewModel.schedule;
+  final editing = viewModel.adjustmentContext;
+  final destination = target ?? editing?.target;
+  final original = snapshot ?? editing?.baseline;
   if (destination == null || original == null) return false;
+  final root = entry == null
+      ? null
+      : original.entries
+            .where((item) => item.id == (entry.sourceEntryId ?? entry.id))
+            .firstOrNull;
+  if (entry != null && root == null) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('原始课程已更新，请重新打开课程详情')));
+    return false;
+  }
+  final changes = List<ScheduleOccurrenceOverride>.unmodifiable(
+    expectedOverrides ?? (root == null ? const [] : editing!.changesFor(root)),
+  );
+  final initialWeek = week ?? viewModel.selectedWeek;
   final value = await Navigator.of(context).push<ScheduleEntry>(
     MaterialPageRoute(
       builder: (context) => CourseEditorPage(
-        entry: entry,
-        initialWeek: viewModel.selectedWeek,
-        visibleWeekCount: viewModel.weekCount,
+        entry: root,
+        initialWeek: initialWeek,
+        visibleWeekCount: max(
+          original.navigationWeekLimit ?? original.observedMaxWeek,
+          initialWeek,
+        ),
         periodCount: original.maxPeriod,
+        occurrenceChangeCount: changes.length,
         onSave: (value) async =>
             await viewModel.saveLocalEntry(
               value,
               target: destination,
-              replacing: entry,
+              replacing: root,
+              expectedOverrides: changes,
             )
             ? null
             : viewModel.data.failure?.message ?? '保存未完成，请重试',
@@ -46,6 +69,7 @@ class CourseEditorPage extends StatefulWidget {
     required this.initialWeek,
     required this.visibleWeekCount,
     required this.periodCount,
+    this.occurrenceChangeCount = 0,
     this.onSave,
   }) : assert(initialWeek > 0),
        assert(visibleWeekCount > 0),
@@ -55,6 +79,7 @@ class CourseEditorPage extends StatefulWidget {
   final int initialWeek;
   final int visibleWeekCount;
   final int periodCount;
+  final int occurrenceChangeCount;
   final Future<String?> Function(ScheduleEntry)? onSave;
 
   @override
@@ -122,6 +147,7 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
   @override
   Widget build(BuildContext context) {
     final imported = widget.entry?.origin == ScheduleEntryOrigin.imported;
+    final weekDraft = _parseWeekDraft(_weeks.text);
     return PopScope(
       canPop: !_saving,
       child: Scaffold(
@@ -170,6 +196,17 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
                                 : '保存到当前学期的本地课表。',
                             style: Theme.of(context).textTheme.bodyLarge,
                           ),
+                          if (widget.occurrenceChangeCount > 0) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              '此处编辑整学期的原始安排。保存会撤销这条安排已有的 '
+                              '${widget.occurrenceChangeCount} 项调课、停课或补课记录。'
+                              '只改某一次课程，请返回使用“调课 / 停课 / 补课”。',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: AppLayout.sectionGap),
                           _textField(
                             'course-name',
@@ -266,7 +303,7 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
                             'course-weeks',
                             '上课周次',
                             _weeks,
-                            validator: _validateWeeks,
+                            validator: (value) => _parseWeekDraft(value).error,
                             helperText: '支持 1-16、1-16(单)、2,5,8；也可填写更大的周次。',
                             onChanged: (_) => setState(() {}),
                           ),
@@ -274,43 +311,20 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
                           if (widget.entry == null)
                             Text('新课程已预选第 ${widget.initialWeek} 周，请按实际安排调整。'),
                           const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton(
-                                key: const ValueKey('course-current-week'),
-                                onPressed: () =>
-                                    _setWeeks('${widget.initialWeek}'),
-                                child: const Text('当前周'),
-                              ),
-                              OutlinedButton(
-                                key: const ValueKey('course-all-weeks'),
-                                onPressed: () =>
-                                    _setWeeks('1-${widget.visibleWeekCount}'),
-                                child: Text('1–${widget.visibleWeekCount} 周'),
-                              ),
-                              OutlinedButton(
-                                key: const ValueKey('course-odd-weeks'),
-                                onPressed: () => _setWeeks(
-                                  '1-${widget.visibleWeekCount}(单)',
-                                ),
-                                child: const Text('单周'),
-                              ),
-                              OutlinedButton(
-                                key: const ValueKey('course-even-weeks'),
-                                onPressed: widget.visibleWeekCount < 2
-                                    ? null
-                                    : () => _setWeeks(
-                                        '1-${widget.visibleWeekCount}(双)',
-                                      ),
-                                child: const Text('双周'),
-                              ),
-                            ],
+                          TeachingWeekSelector(
+                            value: weekDraft.weeks,
+                            weekCount: widget.visibleWeekCount,
+                            currentWeek: widget.initialWeek,
+                            onChanged: _setWeeks,
+                            enabled: !_saving,
+                            semanticLabel: '选择上课周次',
+                            keyPrefix: 'course',
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _weeksSummary,
+                            weekDraft.error == null
+                                ? '共 ${weekDraft.weeks.length} 个教学周'
+                                : '请填写明确的上课周次，不会自动按每周排课。',
                             key: const ValueKey('course-weeks-summary'),
                           ),
                           const SizedBox(height: AppLayout.sectionGap),
@@ -392,29 +406,24 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
     },
   );
 
-  String? _validateWeeks(String? value) {
-    if (value == null || value.trim().isEmpty) return '请填写上课周次';
+  ({Set<int> weeks, String? error}) _parseWeekDraft(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return (weeks: const {}, error: '请填写上课周次');
+    }
     try {
-      parseTeachingWeeks(value);
-      return null;
+      return (weeks: parseTeachingWeeks(value), error: null);
     } on ScheduleParseException catch (error) {
-      return error.code == ScheduleParseCode.unsupported
-          ? '周次范围过大，请缩短一次填写的区间'
-          : '周次无法识别，请核对区间、逗号和单双周标记';
+      return (
+        weeks: const {},
+        error: error.code == ScheduleParseCode.unsupported
+            ? '周次范围过大，请缩短一次填写的区间'
+            : '周次无法识别，请核对区间、逗号和单双周标记',
+      );
     }
   }
 
-  String get _weeksSummary {
-    try {
-      final weeks = parseTeachingWeeks(_weeks.text);
-      return '共 ${weeks.length} 个教学周';
-    } on ScheduleParseException {
-      return '请填写明确的上课周次，不会自动按每周排课。';
-    }
-  }
-
-  void _setWeeks(String expression) {
-    _weeks.text = expression;
+  void _setWeeks(Set<int> weeks) {
+    _weeks.text = _weekExpression(weeks, rangeEnd: widget.visibleWeekCount);
     setState(() {});
   }
 
@@ -487,9 +496,16 @@ String _newLocalId() {
   return 'local-$entropy';
 }
 
-String _weekExpression(Set<int> weeks) {
+String _weekExpression(Set<int> weeks, {int? rangeEnd}) {
   if (weeks.isEmpty) return '';
   final sorted = weeks.toList()..sort();
+  if (rangeEnd != null && sorted.length > 1 && sorted.last <= rangeEnd) {
+    final parity = sorted.first % 2;
+    if (sorted.length == (rangeEnd + parity) ~/ 2 &&
+        sorted.every((week) => week % 2 == parity)) {
+      return '1-$rangeEnd(${parity == 1 ? '单' : '双'})';
+    }
+  }
   final ranges = <String>[];
   var start = sorted.first;
   var end = start;
