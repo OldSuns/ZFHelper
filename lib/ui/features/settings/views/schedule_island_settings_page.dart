@@ -74,13 +74,11 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
             else ...[
               _reminderSettings(model, status),
               const SizedBox(height: AppLayout.sectionGap),
-              _leadSettings(model, status),
-              const SizedBox(height: AppLayout.sectionGap),
-              _preview(model, status),
+              _displaySettings(model, status),
               const SizedBox(height: AppLayout.sectionGap),
               _systemSettings(model, status),
               const SizedBox(height: AppLayout.sectionGap),
-              _notificationStatus(model, status),
+              _statusOverview(model, status),
             ],
             const SizedBox(height: 12),
             Align(
@@ -103,7 +101,7 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
     ScheduleIslandViewModel model,
     ScheduleIslandStatus status,
   ) => SettingsSection(
-    title: 'Android 实况通知',
+    title: '课程提醒',
     children: [
       SwitchListTile.adaptive(
         value: status.enabled,
@@ -119,28 +117,13 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
         ),
         contentPadding: _tilePadding,
       ),
-      ListTile(
-        leading: const Icon(Icons.calendar_month_outlined),
-        title: const Text('课表来源'),
-        subtitle: Text(status.sourceLabel ?? '尚未选择可提醒的课表'),
-        contentPadding: _tilePadding,
-      ),
-      if (status.sourceNotice case final notice?)
-        Padding(padding: const EdgeInsets.all(20), child: Text(notice)),
-    ],
-  );
-
-  Widget _leadSettings(
-    ScheduleIslandViewModel model,
-    ScheduleIslandStatus status,
-  ) => SettingsSection(
-    title: '提前提醒',
-    children: [
       Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text('提前提醒'),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -167,47 +150,87 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
           ],
         ),
       ),
+      ListTile(
+        leading: const Icon(Icons.calendar_month_outlined),
+        title: const Text('课表来源'),
+        subtitle: Text(status.sourceLabel ?? '尚未选择可提醒的课表'),
+        contentPadding: _tilePadding,
+      ),
+      if (status.sourceNotice case final notice?)
+        Padding(padding: const EdgeInsets.all(20), child: Text(notice)),
     ],
   );
 
-  Widget _preview(ScheduleIslandViewModel model, ScheduleIslandStatus status) =>
-      SettingsSection(
-        title: '预览展示',
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _displaySettings(
+    ScheduleIslandViewModel model,
+    ScheduleIslandStatus status,
+  ) => SettingsSection(
+    title: '显示样式与预览',
+    children: [
+      Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('胶囊内容'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                const Text('发送一条持续 2 分钟的示例通知；关闭提醒或尚未导入课表时也可预览。'),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: model.busy || !status.liveUpdatesSupported
-                          ? null
-                          : () => _perform(model.preview),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('预览 2 分钟'),
+                for (final style in ScheduleIslandCapsuleStyle.values)
+                  ChoiceChip(
+                    label: Text(
+                      style == ScheduleIslandCapsuleStyle.courseNameLocation
+                          ? '课程名 + 地点'
+                          : '仅课程名',
                     ),
-                    OutlinedButton.icon(
-                      onPressed: model.busy || !status.previewVisible
-                          ? null
-                          : () => _perform(model.stopPreview),
-                      icon: const Icon(Icons.clear),
-                      label: const Text('清除预览'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('超级岛是否展示、采用哪种样式，由系统决定，请以预览的实际效果为准。'),
+                    selected: status.capsuleStyle == style,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                    onSelected: model.busy
+                        ? null
+                        : (selected) {
+                            if (selected) {
+                              unawaited(
+                                _perform(() => model.setCapsuleStyle(style)),
+                              );
+                            }
+                          },
+                  ),
               ],
             ),
-          ),
-        ],
-      );
+            const SizedBox(height: 12),
+            const Text('「课程名 + 地点」在胶囊左侧绘制课程名、右侧显示地点；「仅课程名」只在右侧显示课程名。'),
+            const SizedBox(height: 12),
+            const Text('发送一条持续 2 分钟的示例通知；关闭提醒或尚未导入课表时也可预览。'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: model.busy || !status.liveUpdatesSupported
+                      ? null
+                      : () => _perform(model.preview),
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('预览 2 分钟'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: model.busy || !status.previewVisible
+                      ? null
+                      : () => _perform(model.stopPreview),
+                  icon: const Icon(Icons.clear),
+                  label: const Text('清除预览'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text('超级岛是否展示、采用哪种样式，由系统决定，请以预览的实际效果为准。'),
+          ],
+        ),
+      ),
+    ],
+  );
 
   Widget _systemSettings(
     ScheduleIslandViewModel model,
@@ -267,11 +290,11 @@ class _ScheduleIslandSettingsPageState extends State<ScheduleIslandSettingsPage>
     ],
   );
 
-  Widget _notificationStatus(
+  Widget _statusOverview(
     ScheduleIslandViewModel model,
     ScheduleIslandStatus status,
   ) => SettingsSection(
-    title: '当前通知状态',
+    title: '当前状态',
     children: [
       _statusTile(
         '课程通知',

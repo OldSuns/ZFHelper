@@ -32,14 +32,15 @@ internal object ScheduleIslandNotification {
     // HyperOS tints the expanded badge with this color; keep system cards neutral.
     private const val ICON_COLOR = Color.DKGRAY
 
-    fun signature(reminder: ScheduleIslandReminder): String =
-        scheduleIslandKey(reminder.token, reminder.title, reminder.detail, reminder.location, ICON_COLOR.toString())
+    fun signature(reminder: ScheduleIslandReminder, capsuleStyle: String): String =
+        scheduleIslandKey(reminder.token, reminder.title, reminder.detail, reminder.location, capsuleStyle, ICON_COLOR.toString())
 
     fun build(
         context: Context,
         reminder: ScheduleIslandReminder,
         now: Long,
         preview: Boolean = false,
+        capsuleStyle: String = "courseNameLocation",
     ): Notification {
         val content = listOf(reminder.phase.label, reminder.location).filter(String::isNotBlank).joinToString(" · ")
         val elapsedDeadline = SystemClock.elapsedRealtime() + reminder.deadline - now
@@ -48,15 +49,21 @@ internal object ScheduleIslandNotification {
             putString(ISLAND_TOKEN, reminder.token)
             putLong(ISLAND_DEADLINE, reminder.deadline)
             putLong(ISLAND_ELAPSED_DEADLINE, elapsedDeadline)
-            putString(ISLAND_SIGNATURE, signature(reminder))
+            putString(ISLAND_SIGNATURE, signature(reminder, capsuleStyle))
         }
         val builder = Notification.Builder(context, ISLAND_CHANNEL_ID)
-            .setSmallIcon(textIcon(context, reminder.title)
-                ?: Icon.createWithResource(context, R.drawable.ic_schedule_notification))
             .setContentTitle(reminder.title)
             .setContentText(content)
             .setSubText(reminder.phase.countdown)
-            .setShortCriticalText(reminder.location)
+        if (capsuleStyle == "courseNameLocation") {
+            builder.setSmallIcon(textIcon(context, reminder.title)
+                ?: Icon.createWithResource(context, R.drawable.ic_schedule_notification))
+            builder.setShortCriticalText(reminder.location)
+        } else {
+            builder.setSmallIcon(R.drawable.ic_schedule_notification)
+            builder.setShortCriticalText(reminder.title)
+        }
+        builder
             .setStyle(Notification.BigTextStyle().bigText("$content\n${reminder.detail}"))
             .setContentIntent(contentIntent(context, reminder, preview))
             .setCategory(Notification.CATEGORY_EVENT)

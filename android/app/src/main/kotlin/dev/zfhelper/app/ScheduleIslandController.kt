@@ -16,6 +16,9 @@ import java.time.ZonedDateTime
 private const val PREVIEW_DURATION_MILLIS = 120_000L
 private val LEAD_MINUTES = setOf(0, 5, 10, 15, 30)
 
+/** Capsule content: course name+location on both sides, or course name only. */
+private val CAPSULE_STYLES = setOf("courseNameLocation", "courseNameOnly")
+
 /** A second consumer of the widget snapshot; never owns another timetable cache. */
 internal class ScheduleIslandController(private val context: Context) {
     private val preferences = context.getSharedPreferences("schedule_island", Context.MODE_PRIVATE)
@@ -28,6 +31,10 @@ internal class ScheduleIslandController(private val context: Context) {
         get() = preferences.getInt("leadMinutes", 10).also {
             if (it !in LEAD_MINUTES) throw ScheduleIslandException("island_settings_invalid", "课前提醒时间无效，请重新设置")
         }
+    private val capsuleStyle: String
+        get() = preferences.getString("capsuleStyle", "courseNameLocation")!!.also {
+            if (it !in CAPSULE_STYLES) throw ScheduleIslandException("island_settings_invalid", "胶囊显示样式无效，请重新设置")
+        }
 
     fun configure(arguments: Any?, snapshot: ScheduleWidgetSnapshot?) {
         val settings = arguments as? Map<*, *>
@@ -36,10 +43,12 @@ internal class ScheduleIslandController(private val context: Context) {
             ?: throw ScheduleIslandException("island_settings_invalid", "课程实况开关无效")
         val nextLead = settings["leadMinutes"] as? Int
         if (nextLead !in LEAD_MINUTES) throw ScheduleIslandException("island_settings_invalid", "课前提醒时间无效")
+        val nextStyle = settings["capsuleStyle"] as? String
+        if (nextStyle !in CAPSULE_STYLES) throw ScheduleIslandException("island_settings_invalid", "胶囊显示样式无效")
         removeLegacyMode()
         if (nextEnabled) requireLiveUpdates()
         save(preferences.edit().putBoolean("enabled", nextEnabled)
-            .putInt("leadMinutes", nextLead!!).commit())
+            .putInt("leadMinutes", nextLead!!).putString("capsuleStyle", nextStyle!!).commit())
         if (!nextEnabled) stopPreview()
         reconcile(snapshot)
     }
@@ -69,9 +78,9 @@ internal class ScheduleIslandController(private val context: Context) {
         for (reminder in plan.reminders) {
             val tag = ISLAND_TAG_PREFIX + reminder.key
             val previous = active.firstOrNull { it.tag == tag }?.notification
-            val signature = ScheduleIslandNotification.signature(reminder)
+            val signature = ScheduleIslandNotification.signature(reminder, capsuleStyle)
             if (!forceTimers && previous?.extras?.getString(ISLAND_SIGNATURE) == signature) continue
-            val notification = ScheduleIslandNotification.build(context, reminder, now.toInstant().toEpochMilli())
+            val notification = ScheduleIslandNotification.build(context, reminder, now.toInstant().toEpochMilli(), capsuleStyle = capsuleStyle)
             notifications.notify(tag, ISLAND_NOTIFICATION_ID, notification)
         }
         clearFailure()
@@ -111,7 +120,7 @@ internal class ScheduleIslandController(private val context: Context) {
             "教学楼 A101", ScheduleIslandPhase.IN_CLASS, deadline, deadline,
         )
         notifications.notify(ISLAND_PREVIEW_ID,
-            ScheduleIslandNotification.build(context, reminder, nowMillis, preview = true))
+            ScheduleIslandNotification.build(context, reminder, nowMillis, preview = true, capsuleStyle = capsuleStyle))
         clearFailure()
     }
 
@@ -143,6 +152,7 @@ internal class ScheduleIslandController(private val context: Context) {
         val labels = plan.reminders.filter { it.key in activeKeys }.map { it.label }
         return mapOf(
             "enabled" to enabled, "leadMinutes" to leadMinutes,
+            "capsuleStyle" to capsuleStyle,
             "androidVersion" to Build.VERSION.SDK_INT,
             "notificationsAllowed" to notificationsAllowed(),
             "channelSupportsLiveUpdates" to (notifications.getNotificationChannel(ISLAND_CHANNEL_ID).importance >

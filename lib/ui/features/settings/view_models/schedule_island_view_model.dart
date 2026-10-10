@@ -29,7 +29,14 @@ final class ScheduleIslandViewModel extends ChangeNotifier {
 
   Future<void> setLeadMinutes(int minutes) => _configure(leadMinutes: minutes);
 
-  Future<void> _configure({bool? enabled, int? leadMinutes}) => _run(() {
+  Future<void> setCapsuleStyle(ScheduleIslandCapsuleStyle style) =>
+      _configure(capsuleStyle: style);
+
+  Future<void> _configure({
+    bool? enabled,
+    int? leadMinutes,
+    ScheduleIslandCapsuleStyle? capsuleStyle,
+  }) => _run(() {
     final current = _status;
     if (current == null) {
       throw const ScheduleIslandException('请先读取课程实况设置，再进行修改');
@@ -37,6 +44,7 @@ final class ScheduleIslandViewModel extends ChangeNotifier {
     return _platform.configure(
       enabled: enabled ?? current.enabled,
       leadMinutes: leadMinutes ?? current.leadMinutes,
+      capsuleStyle: capsuleStyle ?? current.capsuleStyle,
     );
   });
 
