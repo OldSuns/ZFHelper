@@ -12,9 +12,13 @@ import '../view_models/timetable_view_model.dart';
 import 'agenda_schedule_view.dart';
 import 'course_detail_sheet.dart';
 import 'course_editor_page.dart';
+import 'course_occurrences_sheet.dart';
 import 'course_search_sheet.dart';
+import 'schedule_adjustment_editor.dart';
+import 'schedule_adjustments_page.dart';
 import 'schedule_picker_sheets.dart';
 import 'schedule_event_editor.dart';
+import 'timetable_course_status_button.dart';
 import 'timetable_grid.dart';
 
 class TimetablePage extends StatefulWidget {
@@ -66,33 +70,80 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Future<void> _edit({
     required ScheduleEntry entry,
-    required ScheduleTarget target,
-    required ScheduleSnapshot snapshot,
+    required ScheduleAdjustmentContext editing,
+    required int week,
   }) async {
     final saved = await showScheduleCourseEditor(
       context,
       model,
       entry: entry,
-      target: target,
-      snapshot: snapshot,
+      target: editing.target,
+      snapshot: editing.baseline,
+      week: week,
+      expectedOverrides: editing.changesFor(entry),
     );
     if (!mounted || !saved) return;
     _message('课程已保存到本机');
   }
 
   Future<void> _details(ScheduleEntry entry, {int? week}) async {
-    final snapshot = model.schedule;
-    final target = model.editTarget;
-    if (snapshot == null || target == null) return;
+    final editing = model.adjustmentContext;
+    if (editing == null) return;
+    final selectedWeek = week ?? model.selectedWeek;
+    final root = editing.rootFor(entry);
     await showScheduleCourseDetails(
       context,
       entry: entry,
-      snapshot: snapshot,
-      week: week ?? model.selectedWeek,
-      onEdit: () =>
-          unawaited(_edit(entry: entry, target: target, snapshot: snapshot)),
-      onDelete: () => unawaited(_removeEntry(entry, target)),
+      snapshot: editing.effective,
+      week: selectedWeek,
+      rootEntry: root,
+      needsOccurrenceReview: editing.overrides.any(
+        (change) =>
+            (change.key == (entry.id, selectedWeek) ||
+                change.parts.any((part) => part.entry.id == entry.id)) &&
+            change.needsReview(editing.baseline.entries),
+      ),
+      onEdit: root == null
+          ? null
+          : () => unawaited(
+              _edit(entry: root, editing: editing, week: selectedWeek),
+            ),
+      onDelete: root == null
+          ? null
+          : () => unawaited(_removeEntry(root, editing)),
+      onAdjustment: entry.occursInWeek(selectedWeek)
+          ? (kind) {
+              if (!_canUseDetails(editing)) return;
+              unawaited(
+                showScheduleAdjustmentEditor(
+                  context,
+                  model,
+                  entry: entry,
+                  week: selectedWeek,
+                  weekday: entry.weekday,
+                  initialKind: kind,
+                ),
+              );
+            }
+          : null,
+      onOccurrences: () {
+        if (!_canUseDetails(editing)) return;
+        unawaited(
+          showScheduleCourseOccurrences(
+            context,
+            model,
+            entry: entry,
+            week: selectedWeek,
+          ),
+        );
+      },
     );
+  }
+
+  bool _canUseDetails(ScheduleAdjustmentContext editing) {
+    if (model.editTarget == editing.target) return true;
+    _message('当前账号或学期已改变，请重新打开课程详情');
+    return false;
   }
 
   Future<void> _search() async {
@@ -158,19 +209,31 @@ class _TimetablePageState extends State<TimetablePage> {
       ) ??
       false;
 
-  Future<void> _removeEntry(ScheduleEntry entry, ScheduleTarget target) async {
+  Future<void> _removeEntry(
+    ScheduleEntry entry,
+    ScheduleAdjustmentContext editing,
+  ) async {
     final imported = entry.origin == ScheduleEntryOrigin.imported;
+    final changes = editing.changesFor(entry);
     if (!await _confirm(
           title: imported ? '隐藏这条上课安排？' : '删除本地课程？',
-          message: imported
-              ? '只从本机课表隐藏「${entry.name}」的这条安排，学校选课记录不受影响。'
-              : '删除「${entry.name}」的本地安排。若它是对导入课程的调整，将恢复学校原安排。',
+          message:
+              (imported
+                  ? '只从本机课表隐藏「${entry.name}」的这条安排，学校选课记录不受影响。'
+                  : '删除「${entry.name}」的本地安排。若它是对导入课程的调整，将恢复学校原安排。') +
+              (changes.isEmpty
+                  ? ''
+                  : '\n同时撤销这条安排的 ${changes.length} 项调课、停课或补课记录。'),
           action: imported ? '隐藏' : '删除',
         ) ||
         !mounted) {
       return;
     }
-    if (await model.removeEntry(entry, target: target)) {
+    if (await model.removeEntry(
+      entry,
+      target: editing.target,
+      expectedOverrides: changes,
+    )) {
       _message(imported ? '已隐藏，可在“设置 → 课表”中恢复学校安排' : '本地课程已删除');
     }
   }
@@ -235,10 +298,17 @@ class _TimetablePageState extends State<TimetablePage> {
     ],
   );
 
-  Widget _termButton({bool iconOnly = false}) {
+  Widget _termButton({bool iconOnly = false, ScheduleCountdown? countdown}) {
     final onPressed = model.account == null || model.data.loading
         ? null
         : () => selectScheduleTerm(context, model);
+    if (countdown != null) {
+      return TimetableCourseStatusButton(
+        key: const ValueKey('schedule-term-picker'),
+        countdown: countdown,
+        onPressed: onPressed,
+      );
+    }
     if (iconOnly) {
       return IconButton(
         key: const ValueKey('schedule-term-picker'),
@@ -307,6 +377,21 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
+  Widget _sourceReview(int count) => Material(
+    color: Theme.of(context).colorScheme.errorContainer,
+    borderRadius: BorderRadius.circular(12),
+    child: TextButton.icon(
+      key: const ValueKey('schedule-review-adjustments'),
+      onPressed: () => Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (context) => ScheduleAdjustmentsPage(viewModel: model),
+        ),
+      ),
+      icon: const Icon(Icons.event_note_outlined),
+      label: Text('$count 项调停补课的原始安排已变化。学校新课表与本地结果均已保留，点此核对。'),
+    ),
+  );
+
   Widget _schedule() => SafeArea(
     bottom: false,
     child: Center(
@@ -322,6 +407,8 @@ class _TimetablePageState extends State<TimetablePage> {
             final wide = effectiveWidth >= AppLayout.workspaceMinWidth;
             final cramped = effectiveWidth < 360;
             final theme = Theme.of(context);
+            final reviewCount = model.adjustmentsNeedingReview;
+            final headerCountdown = model.headerCountdown;
             return Column(
               children: [
                 Padding(
@@ -330,14 +417,14 @@ class _TimetablePageState extends State<TimetablePage> {
                       : const EdgeInsets.fromLTRB(8, 4, 8, 0),
                   child: Row(
                     children: [
-                      if (cramped) ...[
+                      if (cramped && headerCountdown == null) ...[
                         _termButton(iconOnly: true),
                         const Spacer(),
                       ] else
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerLeft,
-                            child: _termButton(),
+                            child: _termButton(countdown: headerCountdown),
                           ),
                         ),
                       const SizedBox(width: 8),
@@ -356,7 +443,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 ),
                 if (model.data.loading || model.data.refreshing)
                   const LinearProgressIndicator(minHeight: 2),
-                if (model.data.failure != null)
+                if (model.data.failure != null || reviewCount > 0)
                   Flexible(
                     flex: 0,
                     child: ConstrainedBox(
@@ -365,7 +452,15 @@ class _TimetablePageState extends State<TimetablePage> {
                       ),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(8),
-                        child: _failure(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (model.data.failure != null) _failure(),
+                            if (model.data.failure != null && reviewCount > 0)
+                              const SizedBox(height: 8),
+                            if (reviewCount > 0) _sourceReview(reviewCount),
+                          ],
+                        ),
                       ),
                     ),
                   ),

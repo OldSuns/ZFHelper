@@ -72,11 +72,21 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
     }
     if (model.latest == null ||
         model.currentVersion == null ||
-        model.updateAvailable == null ||
-        (model.updateAvailable == false && model.currentRelease == null)) {
+        model.updateAvailable == null) {
       return const _MessageCard(
         icon: Icons.system_update_alt_rounded,
         message: '准备检查更新…',
+      );
+    }
+    if (model.updateAvailable == false && model.currentRelease == null) {
+      return _MessageCard(
+        icon: Icons.check_circle,
+        message: '当前已是最新版本。当前安装的版本没有对应的发布页（例如本地构建或未发布的预发布版本）。',
+        action: FilledButton.icon(
+          onPressed: model.check,
+          icon: const Icon(Icons.refresh),
+          label: const Text('重新检查'),
+        ),
       );
     }
 

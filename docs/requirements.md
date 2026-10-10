@@ -8,7 +8,7 @@ ZFHelper is an Android-first Zhengfang academic-system client with Windows suppo
 
 The main destinations are Timetable, Courses, Grades, and Settings, with Timetable as the default. Timetable contains timetable and agenda views. Narrow windows use bottom navigation; wider windows use a sidebar and, where appropriate, split panes.
 
-Settings has four subsections: Schools and accounts, Appearance, Timetable, and Data and application. Timetable import/update, term selection, local courses, calendar/period times, view preferences, hidden-entry restoration, saved timetables, and widget management are centralized in timetable settings. Personal events are managed in agenda. There is no separate import-information screen or selection-task destination.
+Settings has four subsections: Schools and accounts, Appearance, Timetable, and Data and application. Timetable import/update, term selection, local courses, calendar/period times, reschedule/cancellation/makeup history, view preferences, hidden-entry restoration, saved timetables, and widget management are centralized in timetable settings. Personal events are managed in agenda. There is no separate import-information screen or selection-task destination.
 
 ### Schools and authentication
 
@@ -23,6 +23,11 @@ Settings has four subsections: Schools and accounts, Appearance, Timetable, and 
 - Prefer actual school term options; allow manual academic-year/term selection when recognition is unavailable. Teaching dates require the first week's Monday or a current-week correction supplied by the user.
 - Preserve odd/even and discontinuous weeks, multiple time/location segments, and courses without fixed periods. School restrictions and malformed responses are not empty timetables.
 - The weekly grid supports week browsing, search, details, and local edits. A week with no weekend arrangements uses five columns; otherwise it retains seven.
+- While viewing the current teaching week during a class, its name and end countdown replace the semester control in the existing top row. The control still opens semester selection and returns to its normal label between classes or on other weeks. The final minute shows seconds; large text uses a compact countdown with the full description available to accessibility and long press. Current course cells retain an outline without an in-cell status label.
+- Course details offer rescheduling, cancellation, and makeup for the clicked teaching week. Users can select courses, a continuous subset of their periods, or a whole source day's courses. A batch previews its resulting arrangements and conflicts before one atomic save. Conflicts remain visible rather than overwriting another course. Makeup can explicitly copy the current or original arrangement while retaining existing lessons.
+- Adjustment history retains cancelled occurrences and offers original-source makeup and restoration. Weekly course details show original and effective arrangements, including cancelled weeks and rescheduled/makeup destinations. Dates appear only when the calendar is known. School refreshes preserve local results and flag changed sources for review.
+- Whole-term course editing uses the complete root arrangement, including weeks omitted by occurrence adjustments. Saving an edit, hiding a school arrangement, or deleting a local arrangement explicitly removes that root's occurrence adjustments. Stale edits and restore confirmations cannot overwrite newer changes.
+- Teaching weeks support click selection, mouse dragging, touch long-press dragging, keyboard selection, and current/all/odd/even shortcuts. Text input remains available for sparse or distant weeks. The selectable range follows the calendar and actual arrangements; grid pagination does not impose a semester-length limit.
 - Smart period-time planning generates morning/afternoon/evening sections per campus from start times, period counts, class/break lengths, and optional recurring long breaks. It previews and edits generated times; it is not a standalone grouping-only entry.
 - Editing a period or break can shift later periods within the same section while preserving their existing lengths and gaps. Other sections retain independent start times. Overlaps must be corrected before saving; cross-day overflow is an explicit error rather than wrapping or clamping.
 - Period-time edits are drafts with undo and restoration of school times. Applying a generated preview changes the draft; only saving calendar settings persists it. Timetable, agenda, and the widget consume the same effective times.
@@ -32,6 +37,7 @@ Settings has four subsections: Schools and accounts, Appearance, Timetable, and 
 
 - Courses are projected for the chosen date using teaching weeks and campus period times. Agenda date selection is independent of the browsed timetable week.
 - Complete times support clock-based morning/afternoon/evening grouping and course states. Incomplete times use period ordering and full period ranges rather than guessing time-of-day labels. Courses without periods remain distinguishable; there is no separate pending-arrangements area.
+- Today's agenda shows the next class, current-period end, or return from a class break as a countdown. Remaining minutes round up; the final minute displays seconds. Concurrent classes and incomplete period times stay explicit. The countdown uses the same effective timetable as the grid and widget, refreshes on resume, and does not start a reminder service.
 - Users can create, edit, and delete to-dos, activities, examinations, assignments, and other events with all-day or start/end times, location, and notes. To-dos and assignments support completion state.
 - Events use the timetable database, are isolated by school/account, and persist across terms. They work for an existing account without an imported timetable. Clearing timetable data preserves events; account/school removal deletes them. Stale edits cannot recreate deleted events or overwrite newer versions.
 
@@ -71,12 +77,23 @@ It adapts across four information densities as size and font scale allow: a curr
 
 System periodic updates and inexact course-boundary alarms can be delayed by power management. The widget is not a precise reminder service and is not available on Windows.
 
+### Android course Live Updates
+
+Settings > Timetable > Course Live Updates and Super Island controls offline course reminders, disabled by default. The selected account and term use the same effective dated snapshot as the widget. Only courses with a configured calendar and complete period times participate. The lead time is configurable; notifications count down to class start, the current period's end, or the end of a break. Overlapping courses retain separate notifications. A dismissed course stays hidden until that occurrence ends, with an explicit restore action in settings.
+
+Course notifications use Android 16 Live Updates exclusively and do not require a Xiaomi App ID. Supported HyperOS versions can present them as a system island. Countdowns are updated by the system rather than per-second application updates. Notification icons use a neutral tint independent of the application's accent color. Settings distinguishes notification permission, channel importance, Android promotion permission, posted notifications, and the actual Android promotion flag. A minimum-importance channel has an actionable warning and a link to its system settings; the application does not raise user-selected importance. These signals do not prove that HyperOS visibly rendered an island. A separate two-minute example can be posted and cleared without importing or changing a timetable. Its native expiry triggers a one-time status read so the settings page updates without manual refresh or polling. Android versions below 16 cannot enable reminders or post examples; disabling reminders and clearing notifications remain available.
+
+Upgrading from the earlier selectable-template implementation removes the saved display mode and its active course/example notifications before using Live Updates. Reminder enablement, lead time, and dismissed-course records are retained.
+
+Notifications are removed at phase expiry and recomputed from the current snapshot on phase boundaries, application resume, boot, package replacement, and clock/timezone changes. Re-enabling app or course-channel notifications also rebuilds reminders, including while Flutter is stopped. A notification display failure is reported and retains the next course boundary for recovery. Disabling reminders, blocking notifications, or losing a valid snapshot cancels course notifications and their boundary alarm. Account/term changes remove obsolete course notifications. Exact-alarm access is optional and its status is shown; without it, transitions use inexact alarms. Revoking this access removes scheduled exact alarms, so settings directs users to reopen the app afterward. Even exact alarms are subject to idle throttling and manufacturer background restrictions. HyperOS can reject recovery broadcasts while app auto-start is disabled; settings directs users to check auto-start and battery restrictions in application information. Force-stopping the app suspends reminders until it is reopened. Windows has no notification adapter.
+
 ## Planned or awaiting acceptance
 
 | Item | Status |
 | --- | --- |
 | ICS export and school examination-schedule retrieval | Not implemented; manually entered examination events already work |
-| System course reminders, Live Updates/status-bar enhancements, and couple timetables | Not implemented; no cloud-sharing guarantee or acceptance claim |
+| Couple timetables | Not implemented; no cloud-sharing guarantee |
+| HyperOS Super Island rendering and long-running course-reminder delivery | Firmware-specific device acceptance is separate from posting notifications and Android promotion status |
 | Real-school login, timetable, grades, and enrollment results | Need comparison against actual school records |
 | Android multi-account persistence, process recovery, background behavior, widget launchers, and restart behavior | Need production-device acceptance |
 | Windows minimize/sleep behavior during selection | Needs acceptance beyond source inspection |

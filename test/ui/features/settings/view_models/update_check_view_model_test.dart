@@ -28,10 +28,13 @@ void main() {
     });
   });
 
-  UpdateCheckViewModel buildModel(ReleaseRepositoryHarness harness) {
+  UpdateCheckViewModel buildModel(
+    ReleaseRepositoryHarness harness, {
+    String version = '0.1.7+1',
+  }) {
     final model = UpdateCheckViewModel(
       repository: harness.repository,
-      readVersion: () async => '0.1.7+1',
+      readVersion: () async => version,
       preferences: preferences,
       clock: () => now,
       installer: installer,
@@ -161,6 +164,97 @@ void main() {
     expect(model.failure, contains('无法连接 GitHub'));
     expect(model.isBusy, isFalse);
   });
+
+  test('a pre-release build newer than the latest stable shows its own release notes', () async {
+    final harness = ReleaseRepositoryHarness(
+      respond: (options) => options.uri.path.endsWith('/latest')
+          ? releaseJsonResponse(
+              releaseJson(tag: 'v0.1.8', assets: [apkAssetJson('0.1.8')]),
+            )
+          : releaseJsonResponse(
+              releaseJson(
+                tag: 'v0.2.0-beta.1',
+                assets: [apkAssetJson('0.2.0-beta.1')],
+              ),
+            ),
+    );
+    addTearDown(harness.dispose);
+    final model = buildModel(harness, version: '0.2.0-beta.1+2');
+
+    await model.check();
+
+    expect(model.failure, isNull);
+    expect(model.updateAvailable, isFalse);
+    expect(model.latest?.tagName, 'v0.1.8');
+    expect(model.currentRelease?.tagName, 'v0.2.0-beta.1');
+  });
+
+  test(
+    'an unpublished pre-release version tolerates a 404 for its own tag',
+    () async {
+      final harness = ReleaseRepositoryHarness(
+        respond: (options) => options.uri.path.endsWith('/latest')
+            ? releaseJsonResponse(
+                releaseJson(tag: 'v0.1.8', assets: [apkAssetJson('0.1.8')]),
+              )
+            : notFoundResponse(),
+      );
+      addTearDown(harness.dispose);
+      final model = buildModel(harness, version: '0.2.0-beta.1+2');
+
+      await model.check();
+
+      expect(model.failure, isNull);
+      expect(model.updateAvailable, isFalse);
+      expect(model.latest?.tagName, 'v0.1.8');
+      expect(model.currentRelease, isNull);
+    },
+  );
+
+  test(
+    'a pre-release build is offered the stable release once it overtakes it',
+    () async {
+      final harness = ReleaseRepositoryHarness(
+        respond: (options) => releaseJsonResponse(
+          releaseJson(tag: 'v0.2.0', assets: [apkAssetJson('0.2.0')]),
+        ),
+      );
+      addTearDown(harness.dispose);
+      final model = buildModel(harness, version: '0.2.0-beta.1+2');
+
+      await model.check();
+
+      expect(model.failure, isNull);
+      expect(model.updateAvailable, isTrue);
+      expect(model.latest?.tagName, 'v0.2.0');
+      expect(model.currentRelease, isNull);
+      expect(
+        harness.adapter.requests.map((uri) => uri.path).single,
+        endsWith('/latest'),
+      );
+    },
+  );
+
+  test(
+    'a stable version still fails the check when its tag is missing',
+    () async {
+      final harness = ReleaseRepositoryHarness(
+        respond: (options) => options.uri.path.endsWith('/latest')
+            ? releaseJsonResponse(
+                releaseJson(tag: 'v0.1.8', assets: [apkAssetJson('0.1.8')]),
+              )
+            : notFoundResponse(),
+      );
+      addTearDown(harness.dispose);
+      final model = buildModel(harness, version: '0.9.9+1');
+
+      await model.check();
+
+      expect(model.failure, contains('404'));
+      expect(model.updateAvailable, isNull);
+      expect(model.currentRelease, isNull);
+    },
+  );
 
   test('download stores the APK and triggers the installer', () async {
     final harness = ReleaseRepositoryHarness(

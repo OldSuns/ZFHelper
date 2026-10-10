@@ -5,6 +5,7 @@ import '../../courses/view_models/courses_view_model.dart';
 import '../../grades/view_models/grades_view_model.dart';
 import '../../schedule/view_models/timetable_view_model.dart';
 import '../view_models/appearance_view_model.dart';
+import '../view_models/schedule_island_view_model.dart';
 import '../view_models/schedule_widget_view_model.dart';
 import '../view_models/update_check_view_model.dart';
 import '../widgets/settings_section.dart';
@@ -22,6 +23,7 @@ class SettingsPage extends StatelessWidget {
     required this.courses,
     required this.updateCheck,
     this.scheduleWidget,
+    this.scheduleIsland,
     super.key,
   });
 
@@ -32,6 +34,7 @@ class SettingsPage extends StatelessWidget {
   final CoursesViewModel courses;
   final UpdateCheckViewModel updateCheck;
   final ScheduleWidgetViewModel? scheduleWidget;
+  final ScheduleIslandViewModel? scheduleIsland;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -74,12 +77,13 @@ class SettingsPage extends StatelessWidget {
               SettingsEntry(
                 icon: Icons.calendar_view_week_outlined,
                 title: '课表',
-                subtitle: '导入与管理课表、校历作息、桌面小组件',
+                subtitle: '导入与管理课表、校历作息、小组件与课程实况',
                 onTap: () => Navigator.of(context).push<void>(
                   MaterialPageRoute(
                     builder: (context) => ScheduleSettingsPage(
                       viewModel: timetable,
                       scheduleWidget: scheduleWidget,
+                      scheduleIsland: scheduleIsland,
                     ),
                   ),
                 ),

@@ -27,16 +27,39 @@ Ship the complete `build/windows/x64/runner/Release/` directory, not just its ex
 
 ## GitHub CI and releases
 
-Pull requests and pushes to `main` run [.github/workflows/ci.yml](../.github/workflows/ci.yml). It restores both Dart packages, checks formatting, analyzes the application and core package, and runs their tests. It does not build or upload platform release artifacts.
+Pull requests and pushes to `main` and `dev` run [.github/workflows/ci.yml](../.github/workflows/ci.yml). It restores both Dart packages, checks formatting, analyzes the application and core package, and runs their tests. It does not build or upload platform release artifacts.
 
-A version release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. The build number after `+` stays in `pubspec.yaml` and is passed to Android; for example, `0.1.1+1` is released with tag `v0.1.1`.
+### Branch flow
 
-Before creating a release:
+Feature branches merge into `dev` via pull request; `dev` merges into `main` via pull request. Stable release tags point only at commits reachable from `main`; pre-release tags point only at commits reachable from `dev`. Both workflows guard this: a stable tag that is not an ancestor of `origin/main` fails, and a pre-release tag that is not an ancestor of `origin/dev` fails.
 
-1. Update `pubspec.yaml` to `X.Y.Z+build`, synchronize the displayed version in both READMEs, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
-2. Commit and push the version change; wait for CI to pass.
-3. Push `vX.Y.Z` from that commit.
+Prepare release commits on `dev` (version bump plus [RELEASE_NOTES.md](../RELEASE_NOTES.md)) and merge them into `main`, so `dev` never falls behind the stable version commit. The build number after `+` must strictly increase for every published tag, stable or pre-release; continue incrementing from the latest release commit on `dev`. In-app update checks read the GitHub `latest` release endpoint, which never returns pre-releases, so stable-channel users are never offered a pre-release.
+
+### Stable releases
+
+A stable release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. For example, `0.1.1+4` is released with tag `v0.1.1`.
+
+Before creating a stable release:
+
+1. On `dev`, update `pubspec.yaml` to `X.Y.Z+build` with a build number greater than every previously published tag, synchronize the displayed version in both READMEs, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
+2. Commit the version change, merge `dev` into `main` via pull request, and wait for CI to pass.
+3. Push `vX.Y.Z` from that release commit on `main`.
 4. Check the GitHub Release body, assets, and their `.sha256` files. The body starts with `RELEASE_NOTES.md`, followed by signing information, artifact checksums, and GitHub's generated Full Changelog.
+
+### Pre-releases
+
+A pre-release is created only by pushing a `vX.Y.Z-beta.N`, `vX.Y.Z-rc.N`, or `vX.Y.Z-dev.N` tag from a `dev` commit. The workflow in [.github/workflows/release-dev.yml](../.github/workflows/release-dev.yml) requires the tag to match the full `pubspec.yaml` version including the pre-release suffix; for example, `0.2.0-beta.1+5` is released with tag `v0.2.0-beta.1`.
+
+Before creating a pre-release:
+
+1. On `dev`, update `pubspec.yaml` to `X.Y.Z-stage.N+build` with a build number greater than every previously published tag, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
+2. Commit the version change and wait for CI to pass.
+3. Push `vX.Y.Z-stage.N` from that commit.
+4. Check the GitHub pre-release body, assets, and their `.sha256` files. The body adds a pre-release notice stating that the build comes from `dev`, may be unstable, and is intended for testing only.
+
+After the stable `vX.Y.Z` is released from `main`, the next pre-release on `dev` starts from the next version core, for example `vX.Y.(Z+1)-beta.1`, with the build number continued from the stable release's build number. Pre-releases are not offered through in-app update checks; pre-release users download new builds from the GitHub Releases page until a stable release overtakes their version.
+
+In-app version ordering uses a project-defined stage order `dev < beta < rc < stable`, and accepts only these three stages; it is intentionally simpler than the full SemVer pre-release lexical ordering and rejects other suffixes such as `-alpha.1`. Do not publish tags with other pre-release suffixes.
 
 The release workflow builds an Android AAB, Android APK, and a ZIP containing the complete Windows release directory. Android signing uses the protected `release` Environment secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. If all four are configured, Android assets are signed; if none are configured, the workflow publishes assets marked `unsigned` for testing only. Partial configuration fails. Unsigned assets are not official distribution or upgrade evidence. The workflow never stores signing material in the repository and cleans temporary signing files after the build.
 

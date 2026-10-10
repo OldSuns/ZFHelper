@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - '!v*.*.*-*'
 
 permissions:
   contents: write
@@ -24,6 +25,17 @@ jobs:
     steps:
       - name: Check out tag
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 'Guard: stable tags must point at commits reachable from main'
+        shell: pwsh
+        run: |
+          git fetch origin main --tags
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "Stable release tag $env:GITHUB_REF_NAME must point at a commit reachable from origin/main."
+          }
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2

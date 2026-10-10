@@ -6,6 +6,7 @@ import '../../../core/adaptive_sheet.dart';
 import '../../schedule/view_models/timetable_view_model.dart';
 import '../../schedule/views/course_editor_page.dart';
 import '../../schedule/views/schedule_calendar_page.dart';
+import '../../schedule/views/schedule_adjustments_page.dart';
 import '../../schedule/views/schedule_picker_sheets.dart';
 import '../widgets/settings_section.dart';
 
@@ -105,6 +106,7 @@ class ScheduleSettingsSection extends StatelessWidget {
 
   Future<void> _restore(BuildContext context) async {
     final target = viewModel.editTarget;
+    final expected = viewModel.settings;
     if (target == null ||
         !await _confirm(
           context,
@@ -115,7 +117,10 @@ class ScheduleSettingsSection extends StatelessWidget {
         !context.mounted) {
       return;
     }
-    final saved = await viewModel.restoreHiddenEntries(target: target);
+    final saved = await viewModel.restoreHiddenEntries(
+      target: target,
+      expected: expected,
+    );
     if (saved && context.mounted) _message(context, '学校上课安排已恢复');
   }
 
@@ -269,6 +274,19 @@ class ScheduleSettingsSection extends StatelessWidget {
             subtitle: '向当前学期添加本地课程',
             onTap: canEdit && !busy ? () => _addCourse(context) : null,
           ),
+          SettingsEntry(
+            icon: Icons.event_repeat_outlined,
+            title: '调课、停课与补课',
+            subtitle: '调整部分节次或整天课程，查看记录与恢复安排',
+            onTap: canEdit && !busy
+                ? () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ScheduleAdjustmentsPage(viewModel: viewModel),
+                    ),
+                  )
+                : null,
+          ),
           SwitchListTile.adaptive(
             secondary: const Icon(Icons.view_agenda_outlined),
             contentPadding: const EdgeInsets.symmetric(
@@ -280,7 +298,7 @@ class ScheduleSettingsSection extends StatelessWidget {
             value: viewModel.agenda,
             onChanged: canEdit && !busy ? (_) => _toggleAgenda(context) : null,
           ),
-          if (viewModel.settings.hiddenEntryIds.isNotEmpty)
+          if (viewModel.hasSchoolAdjustments)
             SettingsEntry(
               icon: Icons.restore_rounded,
               title: '恢复学校安排',

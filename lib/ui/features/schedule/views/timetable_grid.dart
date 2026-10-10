@@ -643,8 +643,9 @@ class _GridCourseCard extends StatelessWidget {
           child: _GridTileSurface(
             color: accent,
             emphasized: current,
+            outlineColor: current ? theme.colorScheme.primary : null,
             onTap: onTap,
-            child: _CourseCardText(entry: entry, current: current),
+            child: _CourseCardText(entry: entry),
           ),
         ),
       ),
@@ -653,10 +654,9 @@ class _GridCourseCard extends StatelessWidget {
 }
 
 class _CourseCardText extends StatelessWidget {
-  const _CourseCardText({required this.entry, required this.current});
+  const _CourseCardText({required this.entry});
 
   final ScheduleEntry entry;
-  final bool current;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -669,11 +669,7 @@ class _CourseCardText extends StatelessWidget {
       );
       final titleStyle = style?.copyWith(fontWeight: FontWeight.w700);
       final lineHeight = MediaQuery.textScalerOf(context).scale(fontSize) * 1.2;
-      final currentHeight = current ? lineHeight + 2 : 0;
-      final lines = math.max(
-        1,
-        ((constraints.maxHeight - currentHeight) / lineHeight).floor(),
-      );
+      final lines = math.max(1, (constraints.maxHeight / lineHeight).floor());
 
       int measureLines(String text, TextStyle? textStyle, int limit) {
         final painter = TextPainter(
@@ -700,10 +696,6 @@ class _CourseCardText extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (current) ...[
-            Text('上课', style: titleStyle, maxLines: 1),
-            const SizedBox(height: 2),
-          ],
           Text(
             entry.name,
             maxLines: titleLines,
@@ -766,12 +758,14 @@ class _GridTileSurface extends StatelessWidget {
     required this.onTap,
     required this.child,
     this.emphasized = false,
+    this.outlineColor,
   });
 
   final Color color;
   final VoidCallback onTap;
   final Widget child;
   final bool emphasized;
+  final Color? outlineColor;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -788,7 +782,9 @@ class _GridTileSurface extends StatelessWidget {
               Theme.of(context).colorScheme.surface,
             ),
             border: Border.all(
-              color: color.withValues(alpha: emphasized ? 0.9 : 0.45),
+              color:
+                  outlineColor ??
+                  color.withValues(alpha: emphasized ? 0.9 : 0.45),
               width: emphasized ? 2 : 1,
             ),
             borderRadius: BorderRadius.circular(8),

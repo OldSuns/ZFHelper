@@ -16,7 +16,7 @@ Use `flutter devices` and `flutter run -d <device-id>` for Android. Detailed bui
 
 ## Changes and pull requests
 
-- Start a focused branch from the base you intend to target. Keep each change tied to a concrete bug, agreed requirement, or documentation correction; discuss substantial product/architecture changes before implementing them.
+- Start a focused branch from the base you intend to target. Feature branches target `dev`; `dev` merges into `main` via pull request. Keep each change tied to a concrete bug, agreed requirement, or documentation correction; discuss substantial product/architecture changes before implementing them.
 - Follow existing View/ViewModel/Repository/core boundaries and constructor injection. Reuse existing helpers and installed dependencies; avoid unrelated refactors or generated-file churn.
 - Use concise English commit messages. Do not include unrelated changes in a commit or pull request.
 - Describe the problem, affected behavior, validation commands/results, and remaining limitations. Include screenshots when changing visible UI, but keep temporary captures/logs outside the repository.
@@ -28,7 +28,7 @@ Run the smallest relevant existing application or pure-Dart test. Use the non-wr
 
 For documentation-only changes, verify facts, Markdown structure, and relative links; tests and application builds are unnecessary solely for prose. Do not claim real-school or device success based on mocks, HTTP status, source inspection, or local builds. Report the revision, command, sample/device, result, and unverified scope.
 
-Pull requests and pushes to `main` are checked by [.github/workflows/ci.yml](.github/workflows/ci.yml). Version releases are built and published only from `vX.Y.Z` tags by [.github/workflows/release.yml](.github/workflows/release.yml). See [the development guide](docs/development.md) for the exact checks, release assets, signing secrets, and unsigned-build limitations. No integration-test runner is assumed by this guide.
+Pull requests and pushes to `main` and `dev` are checked by [.github/workflows/ci.yml](.github/workflows/ci.yml). Stable releases are built and published only from `vX.Y.Z` tags on `main` commits by [.github/workflows/release.yml](.github/workflows/release.yml); pre-releases are built and published only from `vX.Y.Z-beta.N`-style tags on `dev` commits by [.github/workflows/release-dev.yml](.github/workflows/release-dev.yml). See [the development guide](docs/development.md) for the exact checks, branch and tag rules, release assets, signing secrets, and unsigned-build limitations. No integration-test runner is assumed by this guide.
 
 ## Security, privacy, and protocol changes
 

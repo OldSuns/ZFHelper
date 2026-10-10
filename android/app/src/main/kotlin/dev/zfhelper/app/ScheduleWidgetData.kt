@@ -33,6 +33,8 @@ internal data class ScheduleWidgetColors(
 
 internal data class ScheduleWidgetPeriod(val start: Int, val end: Int)
 
+internal data class ScheduleWidgetSource(val schoolId: String, val accountId: String, val termKey: String)
+
 internal enum class ScheduleWidgetPhase(val label: String) {
     IN_CLASS("上课中"),
     BREAK("课间"),
@@ -117,6 +119,7 @@ internal data class ScheduleWidgetSnapshot(
     val status: String,
     val accountLabel: String?,
     val termLabel: String?,
+    val source: ScheduleWidgetSource?,
     val light: ScheduleWidgetColors,
     val dark: ScheduleWidgetColors,
     val days: List<ScheduleWidgetDay>,
@@ -169,6 +172,10 @@ internal data class ScheduleWidgetSnapshot(
                 widgetPayloadCheck(status != "noAccount" || term == null, "term 状态")
                 return ScheduleWidgetSnapshot(
                     generatedAt, appearance, status, accountLabel, termLabel,
+                    if (account != null && term != null) ScheduleWidgetSource(
+                        account.nonEmptyString("schoolId"), account.nonEmptyString("accountId"),
+                        term.nonEmptyString("key"),
+                    ) else null,
                     parseColors(palette.objectValue("light")),
                     parseColors(palette.objectValue("dark")), days,
                 )

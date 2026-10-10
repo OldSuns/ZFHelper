@@ -70,6 +70,14 @@ ResponseBody downloadResponseOf(String text) => ResponseBody.fromBytes(
   },
 );
 
+ResponseBody notFoundResponse() => ResponseBody.fromString(
+  '{"message":"Not Found"}',
+  404,
+  headers: {
+    'content-type': ['application/json'],
+  },
+);
+
 Map<String, Object?> releaseJson({
   required String tag,
   String body = '修复课表显示问题',

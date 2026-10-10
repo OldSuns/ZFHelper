@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'academic_term.dart';
 import 'period_time_plan.dart';
 import 'schedule_entry.dart';
+import 'schedule_occurrence.dart';
 import 'schedule_settings.dart';
 import 'schedule_snapshot.dart';
 import 'teaching_calendar.dart';
@@ -55,6 +56,9 @@ abstract final class ScheduleSettingsCodec {
     'useCustomPeriodTimes': settings.useCustomPeriodTimes,
     'localEntries': settings.localEntries.map(_writeEntry).toList(),
     'hiddenEntryIds': settings.hiddenEntryIds.toList()..sort(),
+    'occurrenceOverrides': settings.occurrenceOverrides
+        .map(_writeOccurrenceOverride)
+        .toList(),
     'preferAgenda': settings.preferAgenda,
   });
 
@@ -75,6 +79,12 @@ abstract final class ScheduleSettingsCodec {
           ? _boolean(data, 'preferAgenda')
           : false,
       localEntries: _list(data, 'localEntries').map(_readEntry).toList(),
+      occurrenceOverrides: data.containsKey('occurrenceOverrides')
+          ? _list(
+              data,
+              'occurrenceOverrides',
+            ).map(_readOccurrenceOverride).toList()
+          : const [],
       hiddenEntryIds: _list(data, 'hiddenEntryIds').map((value) {
         if (value is! String || value.trim().isEmpty) {
           _invalid('hiddenEntryIds');
@@ -158,6 +168,7 @@ Map<String, Object?> _writeEntry(ScheduleEntry entry) => {
 
 ScheduleEntry _readEntry(Object? value) {
   final data = _map(value);
+  if (data['sourceEntryId'] != null) _invalid('sourceEntryId');
   final metadata = _map(data['metadata']);
   return ScheduleEntry(
     id: _string(data, 'id'),
@@ -181,6 +192,35 @@ ScheduleEntry _readEntry(Object? value) {
     },
     origin: _enum(data, 'origin', ScheduleEntryOrigin.values),
     kind: _enum(data, 'kind', ScheduleEntryKind.values),
+  );
+}
+
+Map<String, Object?> _writeOccurrenceOverride(
+  ScheduleOccurrenceOverride value,
+) => {
+  'source': _writeEntry(value.source),
+  'sourceWeek': value.sourceWeek,
+  'parts': [
+    for (final part in value.parts)
+      {'entry': _writeEntry(part.entry), 'kind': part.kind.name},
+  ],
+};
+
+ScheduleOccurrenceOverride _readOccurrenceOverride(Object? value) {
+  final data = _map(value);
+  return ScheduleOccurrenceOverride(
+    source: _readEntry(data['source']),
+    sourceWeek: _integer(data, 'sourceWeek'),
+    parts: _list(data, 'parts').map((value) {
+      final part = _map(value);
+      if (_list(_map(part['entry']), 'weeks').length != 1) {
+        _invalid('occurrenceOverrides.parts.weeks');
+      }
+      return ScheduleOccurrencePart(
+        entry: _readEntry(part['entry']),
+        kind: _enum(part, 'kind', ScheduleOccurrencePartKind.values),
+      );
+    }).toList(),
   );
 }
 

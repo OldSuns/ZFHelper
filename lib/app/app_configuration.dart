@@ -19,6 +19,7 @@ import '../platform/app_installer_platform.dart';
 import '../platform/secure_login_vault.dart';
 import '../platform/secure_appearance_store.dart';
 import '../platform/selection_runtime.dart';
+import '../platform/schedule_island_platform.dart';
 import '../platform/schedule_widget_platform.dart';
 import '../ui/features/settings/view_models/appearance_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
@@ -34,6 +35,7 @@ final class AppConfiguration {
     required this.courses,
     required this.appearance,
     this.scheduleWidgetPlatform,
+    this.scheduleIslandPlatform,
     ReleaseRepository? releases,
     UpdatePreferencesStore? updatePreferences,
     this.appInstaller,
@@ -70,6 +72,7 @@ final class AppConfiguration {
     );
     return AppConfiguration(
       scheduleWidgetPlatform: createScheduleWidgetPlatform(),
+      scheduleIslandPlatform: createScheduleIslandPlatform(),
       releases: ReleaseRepository(),
       updatePreferences: JsonFileUpdatePreferencesStore(
         resolvePath: () async {
@@ -135,6 +138,7 @@ final class AppConfiguration {
   final DownloadDirectoryResolver? updateDownloadDirectory;
   final AppearanceViewModel appearance;
   final ScheduleWidgetPlatform? scheduleWidgetPlatform;
+  final ScheduleIslandPlatform? scheduleIslandPlatform;
 
   Future<void> removeSchoolData(String schoolId) async {
     await Future.wait([

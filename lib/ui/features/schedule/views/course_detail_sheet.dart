@@ -5,7 +5,7 @@ import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/schedule_labels.dart';
 
-enum _DetailAction { edit, delete }
+enum _DetailAction { edit, delete, reschedule, cancel, makeup, occurrences }
 
 Future<void> showScheduleCourseDetails(
   BuildContext context, {
@@ -14,6 +14,10 @@ Future<void> showScheduleCourseDetails(
   required int week,
   VoidCallback? onEdit,
   VoidCallback? onDelete,
+  ValueChanged<ScheduleChangeKind>? onAdjustment,
+  VoidCallback? onOccurrences,
+  ScheduleEntry? rootEntry,
+  bool needsOccurrenceReview = false,
 }) async {
   final size = MediaQuery.sizeOf(context);
   Widget panel(BuildContext context) => ConstrainedBox(
@@ -24,6 +28,10 @@ Future<void> showScheduleCourseDetails(
       week: week,
       canEdit: onEdit != null,
       canDelete: onDelete != null,
+      canAdjust: onAdjustment != null,
+      canShowOccurrences: onOccurrences != null,
+      rootEntry: rootEntry,
+      needsOccurrenceReview: needsOccurrenceReview,
     ),
   );
   final action = await showAdaptiveSheet<_DetailAction>(
@@ -37,6 +45,14 @@ Future<void> showScheduleCourseDetails(
       onEdit?.call();
     case _DetailAction.delete:
       onDelete?.call();
+    case _DetailAction.reschedule:
+      onAdjustment?.call(ScheduleChangeKind.reschedule);
+    case _DetailAction.cancel:
+      onAdjustment?.call(ScheduleChangeKind.cancel);
+    case _DetailAction.makeup:
+      onAdjustment?.call(ScheduleChangeKind.makeup);
+    case _DetailAction.occurrences:
+      onOccurrences?.call();
     case null:
       break;
   }
@@ -49,6 +65,10 @@ class _CourseDetails extends StatelessWidget {
     required this.week,
     required this.canEdit,
     required this.canDelete,
+    required this.canAdjust,
+    required this.canShowOccurrences,
+    this.rootEntry,
+    required this.needsOccurrenceReview,
   });
 
   final ScheduleEntry entry;
@@ -56,12 +76,17 @@ class _CourseDetails extends StatelessWidget {
   final int week;
   final bool canEdit;
   final bool canDelete;
+  final bool canAdjust;
+  final bool canShowOccurrences;
+  final ScheduleEntry? rootEntry;
+  final bool needsOccurrenceReview;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
+    final localRoot = (rootEntry ?? entry).origin == ScheduleEntryOrigin.local;
     final arrangements =
         snapshot.entries
             .where((candidate) => candidate.groupKey == entry.groupKey)
@@ -133,14 +158,15 @@ class _CourseDetails extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _DetailBadge(
-                      label: entry.origin == ScheduleEntryOrigin.local
-                          ? '本地课程'
-                          : '教务导入',
+                      label: localRoot ? '本地课程' : '教务导入',
                       color: accent,
                     ),
+                    if (entry.sourceEntryId != null)
+                      _DetailBadge(label: '本次安排已调整', color: accent),
                     if (entry.kind == ScheduleEntryKind.practice)
                       _DetailBadge(label: '实践安排', color: accent),
-                    if (entry.metadata['schoolArrangementChanged'] == 'true')
+                    if (needsOccurrenceReview ||
+                        entry.metadata['schoolArrangementChanged'] == 'true')
                       _DetailBadge(
                         label: '学校原安排已变更，请核对本地调整',
                         color: colors.error,
@@ -160,6 +186,49 @@ class _CourseDetails extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+                if (canAdjust) ...[
+                  _SectionTitle('第 $week 周的这次课程'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final action in [
+                        (
+                          action: _DetailAction.reschedule,
+                          label: '调课',
+                          icon: Icons.swap_horiz,
+                        ),
+                        (
+                          action: _DetailAction.cancel,
+                          label: '停课',
+                          icon: Icons.event_busy_outlined,
+                        ),
+                        (
+                          action: _DetailAction.makeup,
+                          label: '补课',
+                          icon: Icons.event_available_outlined,
+                        ),
+                      ])
+                        FilledButton.tonalIcon(
+                          onPressed: () =>
+                              Navigator.of(context).pop(action.action),
+                          icon: Icon(action.icon),
+                          label: Text(action.label),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (canShowOccurrences) ...[
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        Navigator.of(context).pop(_DetailAction.occurrences),
+                    icon: const Icon(Icons.view_timeline_outlined),
+                    label: const Text('查看逐周明细'),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 _DetailField(label: '授课教师', value: entry.teacher ?? '未提供'),
                 _DetailField(label: '校区', value: entry.campus ?? '未提供'),
                 _DetailField(label: '上课地点', value: entry.location ?? '地点待安排'),
@@ -206,6 +275,8 @@ class _CourseDetails extends StatelessWidget {
                 ],
                 if (canEdit || canDelete) ...[
                   const SizedBox(height: 24),
+                  const _SectionTitle('整学期的这条安排'),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -215,26 +286,18 @@ class _CourseDetails extends StatelessWidget {
                           onPressed: () =>
                               Navigator.of(context).pop(_DetailAction.edit),
                           icon: const Icon(Icons.edit_outlined),
-                          label: Text(
-                            entry.origin == ScheduleEntryOrigin.local
-                                ? '编辑课程'
-                                : '本地调整',
-                          ),
+                          label: Text(localRoot ? '编辑课程' : '本地调整'),
                         ),
                       if (canDelete)
                         OutlinedButton.icon(
                           onPressed: () =>
                               Navigator.of(context).pop(_DetailAction.delete),
                           icon: Icon(
-                            entry.origin == ScheduleEntryOrigin.local
+                            localRoot
                                 ? Icons.delete_outline_rounded
                                 : Icons.visibility_off_outlined,
                           ),
-                          label: Text(
-                            entry.origin == ScheduleEntryOrigin.local
-                                ? '删除课程'
-                                : '隐藏此安排',
-                          ),
+                          label: Text(localRoot ? '删除课程' : '隐藏此安排'),
                         ),
                     ],
                   ),
