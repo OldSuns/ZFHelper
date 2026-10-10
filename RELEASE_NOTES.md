@@ -1,7 +1,8 @@
 ## Highlights
 
-- Added silent startup update checks against GitHub releases, throttled to once every 24 hours, with a non-blocking notice for each new version and a badge on the Data-and-application settings entry until a manual check confirms the app is current.
-- Added in-app updates on Android: the release APK downloads with progress through the GitHub mirror with automatic fallback to the official URL, then hands off to the system installer, including the "install unknown apps" permission flow. Download and installer failures are explicit and retryable, and the release page remains a fallback. Windows keeps browser-based downloads.
+- Added course adjustments: partial (per-session) and whole-day rescheduling, cancellation, and makeup lessons, with a restoration history. Course details now show each week's occurrence and support click-and-drag week editing with odd/even-week shortcuts.
+- Added live course countdowns: today's agenda shows the countdown for the ongoing or next course, and the active class countdown reuses the semester control while preserving semester selection.
+- Added Android Live Updates: Dynamic Island-style live course reminders with a dedicated settings page; platform support is now clarified in settings.
 
 ## Installation
 
