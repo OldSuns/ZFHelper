@@ -4,7 +4,12 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -46,10 +51,12 @@ internal object ScheduleIslandNotification {
             putString(ISLAND_SIGNATURE, signature(reminder))
         }
         val builder = Notification.Builder(context, ISLAND_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_schedule_notification)
+            .setSmallIcon(textIcon(context, reminder.title)
+                ?: Icon.createWithResource(context, R.drawable.ic_schedule_notification))
             .setContentTitle(reminder.title)
             .setContentText(content)
             .setSubText(reminder.phase.countdown)
+            .setShortCriticalText(reminder.location)
             .setStyle(Notification.BigTextStyle().bigText("$content\n${reminder.detail}"))
             .setContentIntent(contentIntent(context, reminder, preview))
             .setCategory(Notification.CATEGORY_EVENT)
@@ -77,6 +84,45 @@ internal object ScheduleIslandNotification {
         val initialAndroid16 = builder.setColorized(true).build()
         if (initialAndroid16.hasPromotableCharacteristics()) return initialAndroid16
         throw ScheduleIslandException("island_not_promotable", "系统未接受实况通知格式，请检查系统更新后重试")
+    }
+
+    // HyperOS 岛的左侧槽位只展示通知图标；把课程名渲染成位图图标，左侧即可显示文字。
+    private fun textIcon(context: Context, text: String): Icon? {
+        if (text.isBlank()) return null
+        return try {
+            val density = context.resources.displayMetrics.density
+            val densityDpi = context.resources.displayMetrics.densityDpi
+            // 3 倍渲染后按 setDensity 缩显示尺寸，下采样保证清晰
+            val oversample = 3f
+            val fontPx = 16f * density
+            val maxTextPx = 96f * density
+            val padH = 6f * density
+            val padV = 4f * density
+            val measure = android.text.TextPaint().apply { isAntiAlias = true; textSize = fontPx }
+            // 超出左侧可用宽度时尾部省略
+            val label = android.text.TextUtils.ellipsize(
+                text, measure, maxTextPx, android.text.TextUtils.TruncateAt.END,
+            ).toString()
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = fontPx * oversample
+                color = Color.WHITE
+                // 中文字形不随 DEFAULT_BOLD 加粗，需要合成假粗体
+                flags = flags or Paint.FAKE_BOLD_TEXT_FLAG
+                isSubpixelText = true
+                isLinearText = true
+            }
+            val metrics = paint.fontMetrics
+            val width = (paint.measureText(label) + padH * 2 * oversample).toInt()
+            val height = ((metrics.descent - metrics.ascent) + padV * 2 * oversample).toInt()
+            if (width <= 0 || height <= 0) return null
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            bitmap.density = (densityDpi * oversample).toInt()
+            // 文字视觉中心对齐画布中心：baseline = (height - ascent - descent) / 2
+            Canvas(bitmap).drawText(label, padH * oversample, (height - metrics.ascent - metrics.descent) / 2, paint)
+            Icon.createWithBitmap(bitmap)
+        } catch (_: RuntimeException) {
+            null
+        }
     }
 
     private fun contentIntent(context: Context, reminder: ScheduleIslandReminder, preview: Boolean): PendingIntent {
