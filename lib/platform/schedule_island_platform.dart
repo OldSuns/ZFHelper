@@ -11,10 +11,21 @@ enum ScheduleIslandSettingsTarget {
 
 const scheduleIslandLeadMinutes = [0, 5, 10, 15, 30];
 
+/// Capsule content layout, mirrored by the native `capsuleStyle` preference.
+enum ScheduleIslandCapsuleStyle {
+  courseNameLocation,
+  courseNameOnly;
+
+  static ScheduleIslandCapsuleStyle parse(Object? value) =>
+      ScheduleIslandCapsuleStyle.values.asNameMap()[value] ??
+      (throw ScheduleIslandException('课程实况返回了无效状态（capsuleStyle）'));
+}
+
 final class ScheduleIslandStatus {
   const ScheduleIslandStatus({
     required this.enabled,
     required this.leadMinutes,
+    required this.capsuleStyle,
     required this.androidVersion,
     required this.notificationsAllowed,
     required this.channelSupportsLiveUpdates,
@@ -35,6 +46,7 @@ final class ScheduleIslandStatus {
 
   final bool enabled;
   final int leadMinutes;
+  final ScheduleIslandCapsuleStyle capsuleStyle;
   final int androidVersion;
   final bool notificationsAllowed;
   final bool channelSupportsLiveUpdates;
@@ -63,6 +75,9 @@ final class ScheduleIslandStatus {
     return ScheduleIslandStatus(
       enabled: _required<bool>(value, 'enabled'),
       leadMinutes: leadMinutes,
+      capsuleStyle: ScheduleIslandCapsuleStyle.parse(
+        _required<String>(value, 'capsuleStyle'),
+      ),
       androidVersion: androidVersion,
       notificationsAllowed: _required<bool>(value, 'notificationsAllowed'),
       channelSupportsLiveUpdates: _required<bool>(
@@ -115,6 +130,7 @@ abstract interface class ScheduleIslandPlatform {
   Future<ScheduleIslandStatus> configure({
     required bool enabled,
     required int leadMinutes,
+    required ScheduleIslandCapsuleStyle capsuleStyle,
   });
   Future<ScheduleIslandStatus> preview();
   Future<ScheduleIslandStatus> stopPreview();
@@ -158,7 +174,12 @@ final class AndroidScheduleIslandPlatform implements ScheduleIslandPlatform {
   Future<ScheduleIslandStatus> configure({
     required bool enabled,
     required int leadMinutes,
-  }) => _status('configure', {'enabled': enabled, 'leadMinutes': leadMinutes});
+    required ScheduleIslandCapsuleStyle capsuleStyle,
+  }) => _status('configure', {
+    'enabled': enabled,
+    'leadMinutes': leadMinutes,
+    'capsuleStyle': capsuleStyle.name,
+  });
 
   @override
   Future<ScheduleIslandStatus> preview() => _status('preview');
