@@ -133,6 +133,10 @@ class _TimetableGridState extends State<TimetableGrid> {
       final hasWeekend = placed
           .followedBy(pending)
           .any((entry) => (entry.weekday ?? 0) >= DateTime.saturday);
+      final courseColors = scheduleCourseColors(
+        Theme.of(context).brightness,
+        widget.snapshot,
+      );
       final metrics = _GridMetrics(
         wide: constraints.maxWidth >= AppLayout.navigationRailMinWidth,
         textScale: textScale,
@@ -168,7 +172,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                         ),
                       )
                     else if (widget.agenda)
-                      ..._agendaSlivers(placed, dates)
+                      ..._agendaSlivers(placed, dates, courseColors)
                     else
                       SliverToBoxAdapter(
                         child: _buildGrid(
@@ -177,6 +181,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           placed,
                           dates,
                           metrics,
+                          courseColors,
                         ),
                       ),
                     if (pending.isNotEmpty) ...[
@@ -187,6 +192,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                         itemCount: pending.length,
                         itemBuilder: (context, index) => _AgendaCourseTile(
                           entry: pending[index],
+                          accent: courseColors[pending[index].name]!,
                           pending: true,
                           onTap: () => widget.onCourseTap(pending[index]),
                         ),
@@ -206,6 +212,7 @@ class _TimetableGridState extends State<TimetableGrid> {
   List<Widget> _agendaSlivers(
     List<ScheduleEntry> entries,
     CalendarWeek? dates,
+    Map<String, Color> courseColors,
   ) {
     final slivers = <Widget>[];
     for (var day = DateTime.monday; day <= DateTime.sunday; day++) {
@@ -242,6 +249,7 @@ class _TimetableGridState extends State<TimetableGrid> {
             final entry = lessons[index];
             return _AgendaCourseTile(
               entry: entry,
+              accent: courseColors[entry.name]!,
               onTap: () => widget.onCourseTap(entry),
               current: _isCurrentLesson(entry),
               conflict: lessons.any(
@@ -263,6 +271,7 @@ class _TimetableGridState extends State<TimetableGrid> {
     List<ScheduleEntry> placed,
     CalendarWeek? dates,
     _GridMetrics metrics,
+    Map<String, Color> courseColors,
   ) {
     final colors = Theme.of(context).colorScheme;
     final dayWidth = metrics.dayWidth(width);
@@ -312,6 +321,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           'schedule-course-${group.entries.single.id}',
                         ),
                         entry: group.entries.single,
+                        accent: courseColors[group.entries.single.name]!,
                         current: _isCurrentLesson(group.entries.single),
                         onTap: () => widget.onCourseTap(group.entries.single),
                       )
@@ -426,6 +436,10 @@ class _TimetableGridState extends State<TimetableGrid> {
               itemCount: entries.length,
               itemBuilder: (context, index) => _AgendaCourseTile(
                 entry: entries[index],
+                accent: scheduleCourseColors(
+                  Theme.of(context).brightness,
+                  widget.snapshot,
+                )[entries[index].name]!,
                 onTap: () => Navigator.of(context).pop(entries[index]),
               ),
             ),
@@ -612,19 +626,20 @@ class _PeriodLabel extends StatelessWidget {
 class _GridCourseCard extends StatelessWidget {
   const _GridCourseCard({
     required this.entry,
+    required this.accent,
     required this.onTap,
     required this.current,
     super.key,
   });
 
   final ScheduleEntry entry;
+  final Color accent;
   final VoidCallback onTap;
   final bool current;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
     final description = [
       entry.name,
       scheduleWeekdayText(entry.weekday),
@@ -800,6 +815,7 @@ class _GridTileSurface extends StatelessWidget {
 class _AgendaCourseTile extends StatelessWidget {
   const _AgendaCourseTile({
     required this.entry,
+    required this.accent,
     required this.onTap,
     this.pending = false,
     this.current = false,
@@ -807,6 +823,7 @@ class _AgendaCourseTile extends StatelessWidget {
   });
 
   final ScheduleEntry entry;
+  final Color accent;
   final VoidCallback onTap;
   final bool pending;
   final bool current;
@@ -815,7 +832,6 @@ class _AgendaCourseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Card(

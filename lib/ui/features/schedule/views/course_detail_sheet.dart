@@ -85,7 +85,10 @@ class _CourseDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
+    final accent = scheduleCourseColors(
+      theme.brightness,
+      snapshot,
+    )[entry.name]!;
     final localRoot = (rootEntry ?? entry).origin == ScheduleEntryOrigin.local;
     final arrangements =
         snapshot.entries
@@ -477,4 +480,19 @@ int compareScheduleEntries(ScheduleEntry left, ScheduleEntry right) {
   final period = (left.startPeriod ?? 0).compareTo(right.startPeriod ?? 0);
   if (period != 0) return period;
   return left.name.compareTo(right.name);
+}
+
+/// Stable per-course accents shared by every schedule surface so one course
+/// keeps the same color in the grid, agenda and details. Names are ordered
+/// by their first grid appearance, then assigned palette colors in a
+/// round-robin so distinct courses exhaust the palette before reuse.
+Map<String, Color> scheduleCourseColors(
+  Brightness brightness,
+  ScheduleSnapshot snapshot,
+) {
+  final ordered = snapshot.entries.toList()..sort(compareScheduleEntries);
+  return AppTheme.courseColorAssignments(
+    brightness,
+    ordered.map((entry) => entry.name),
+  );
 }

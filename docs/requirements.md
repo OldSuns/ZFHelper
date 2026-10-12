@@ -61,7 +61,7 @@ Android seat watching uses notification permission and a foreground service; Win
 
 Timetables, grades, course snapshots, selected records, and operations are isolated by school/account with term/round scope where appropriate. Viewing saved data does not implicitly re-import it. Explicit updates preserve old data and timestamps when they fail. Newly selected rounds without a cache may need a query.
 
-Appearance supports system, light, and dark modes across restarts, with Catppuccin Latte/Mocha colors and a Mauve accent. Local data settings show actual saved content and read failures.
+Appearance supports system, light, and dark modes across restarts, with Catppuccin Latte/Mocha colors and a Mauve accent. Course accents are assigned deterministically by course name in first grid-appearance order, so as long as the semester course set is unchanged a course keeps the same color in the week grid, agenda, and details, and distinct courses exhaust the twelve-color palette before any color repeats. Local data settings show actual saved content and read failures.
 
 ### Update checking
 
