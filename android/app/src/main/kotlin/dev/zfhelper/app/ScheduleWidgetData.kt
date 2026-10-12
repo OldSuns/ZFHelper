@@ -228,7 +228,8 @@ internal data class ScheduleWidgetSnapshot(
             }
             return ScheduleWidgetLesson(
                 json.nonEmptyString("id"), json.nonEmptyString("title"), json.string("periodLabel"),
-                json.string("location"), json.string("place"), json.nullableString("teacher"), start, end, periods,
+                // Version-1 snapshots predate "place"; default missing to "".
+                json.string("location"), json.nullableString("place") ?: "", json.nullableString("teacher"), start, end, periods,
             )
         }
     }

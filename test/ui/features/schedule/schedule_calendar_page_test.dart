@@ -113,6 +113,52 @@ void main() {
     expect(_text(tester, 'calendar-first-monday'), isEmpty);
   });
 
+  testWidgets('month bounds clamp the 31st to the shifted month end', (
+    tester,
+  ) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31, 10, 30),
+    );
+    await _tap(tester, 'calendar-pick-date');
+    await tester.tap(find.byKey(const ValueKey('monday-picker-month-header')));
+    await tester.pumpAndSettle();
+
+    // 2026-08-31 ± 6 months must stay in February; an unclamped shift rolls
+    // Feb 31 into March and drops a whole month from each side.
+    expect(find.text('26年2月'), findsOneWidget);
+    expect(find.text('27年2月'), findsOneWidget);
+    expect(find.text('26年1月'), findsNothing);
+    expect(find.text('27年3月'), findsNothing);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('six-row month shows its last week without clipping', (
+    tester,
+  ) async {
+    // August 2026 starts on a Saturday, so its day grid needs 6 rows.
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31),
+    );
+    await _tap(tester, 'calendar-pick-date');
+
+    final dialogGrid = tester.getRect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(GridView),
+      ),
+    );
+    final lastDay = tester.getRect(find.text('31'));
+    expect(lastDay.top >= dialogGrid.top, isTrue);
+    expect(lastDay.bottom <= dialogGrid.bottom, isTrue);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'date selection accepts a Monday and previews the real teaching week',
     (tester) async {
@@ -415,6 +461,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
   Size size = const Size(430, 1000),
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  DateTime? today,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -444,7 +491,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
                     builder: (_) => ScheduleCalendarPage(
                       snapshot: snapshot ?? _snapshot(),
                       settings: settings ?? ScheduleSettings(),
-                      today: DateTime(2026, 9, 13, 10, 30),
+                      today: today ?? DateTime(2026, 9, 13, 10, 30),
                     ),
                   ),
                 ),

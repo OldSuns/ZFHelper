@@ -344,9 +344,19 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     // The stock picker's month pager multiplies the page count by the page
     // extent; an unbounded range (year 1 to 9999) exhausts float precision on
     // narrow layouts. Half a year around today covers any real term start.
-    final today = widget.today;
-    final firstDate = DateTime(today.year, today.month - 6, today.day);
-    final lastDate = DateTime(today.year, today.month + 6, today.day);
+    final rawToday = widget.today;
+    final today = DateTime(rawToday.year, rawToday.month, rawToday.day);
+    // Clamp to the target month's last day: DateTime(2025, 8 - 6, 31) would
+    // otherwise roll into March and shrink the range.
+    DateTime shiftMonths(int offset) {
+      final month = DateTime(today.year, today.month + offset, 1);
+      final lastDay = DateTime(month.year, month.month + 1, 0).day;
+      final day = today.day <= lastDay ? today.day : lastDay;
+      return DateTime(month.year, month.month, day);
+    }
+
+    final firstDate = shiftMonths(-6);
+    final lastDate = shiftMonths(6);
     final inRange =
         validMonday != null &&
         !validMonday.isBefore(firstDate) &&
@@ -639,7 +649,10 @@ class _MondayPickerDialogState extends State<_MondayPickerDialog> {
                 ],
               ),
               const SizedBox(height: 8),
-              if (_pickingMonth) _buildMonthGrid() else _buildDayGrid(),
+              if (_pickingMonth)
+                _buildMonthGrid(width)
+              else
+                _buildDayGrid(width),
             ],
           ),
         ),
@@ -659,7 +672,7 @@ class _MondayPickerDialogState extends State<_MondayPickerDialog> {
     );
   }
 
-  Widget _buildMonthGrid() {
+  Widget _buildMonthGrid(double width) {
     final theme = Theme.of(context);
     final months = <DateTime>[];
     for (
@@ -669,8 +682,11 @@ class _MondayPickerDialogState extends State<_MondayPickerDialog> {
     ) {
       months.add(month);
     }
+    // Height must match the actual tile size, or the grid clips its last row.
+    final tileHeight = width / 3 / 2.2;
+    final rows = (months.length / 3).ceil();
     return SizedBox(
-      height: 240,
+      height: rows * tileHeight,
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
@@ -710,7 +726,7 @@ class _MondayPickerDialogState extends State<_MondayPickerDialog> {
     );
   }
 
-  Widget _buildDayGrid() {
+  Widget _buildDayGrid(double width) {
     final theme = Theme.of(context);
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final leading = DateTime(_month.year, _month.month).weekday - 1;
@@ -732,8 +748,10 @@ class _MondayPickerDialogState extends State<_MondayPickerDialog> {
               ),
           ],
         ),
+        // Tiles are square (aspectRatio 1.0), so the height must match
+        // width / 7 per row, or a 6-row month clips its last row.
         SizedBox(
-          height: rows * 40,
+          height: rows * (width / 7),
           child: GridView.builder(
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
