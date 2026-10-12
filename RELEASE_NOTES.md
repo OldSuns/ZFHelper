@@ -1,8 +1,9 @@
-## Highlights
+# Highlights
 
-- Added course adjustments: partial (per-session) and whole-day rescheduling, cancellation, and makeup lessons, with a restoration history. Course details now show each week's occurrence and support click-and-drag week editing with odd/even-week shortcuts.
-- Added live course countdowns: today's agenda shows the countdown for the ongoing or next course, and the active class countdown reuses the semester control while preserving semester selection.
-- Added Android Live Updates: Dynamic Island-style live course reminders with a dedicated settings page organized into reminders, display style and preview, system permissions, and current status sections. The capsule shows the course name and location, with a style setting to switch layouts; changing it republishes active reminders immediately.
+- Improved course adjustments and course details: rescheduling and makeup lessons support an explicit target end period, switching from whole-day to per-course selection clears preselected courses, and secondary course information (code, class, credits, notes) is folded behind an expansion tile while teacher, campus, place, hours, weeks, time and period clock stay visible.
+- Reworked the calendar and term pickers: term import and update actions moved into the term picker sheet, and the stock date picker was replaced by a bounded Monday picker with month quick selection, a half-year range, and text that scales with window width.
+- Fixed session restoration on Zhengfang systems that answer stale AJAX requests with the non-standard HTTP status 901: the transport now accepts it and the login gateway maps it to session expiration, so a restored session falls back to password re-login instead of failing with a protocol error.
+- Course colors are now stable and consistent: each course keeps the same color across the week grid, agenda, and course details, with distinct courses drawing from an expanded twelve-color palette before any reuse.
 
 ## Installation
 
