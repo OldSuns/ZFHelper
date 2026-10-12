@@ -404,49 +404,56 @@ class _TimetableGridState extends State<TimetableGrid> {
 
   Future<void> _showConflicts(List<ScheduleEntry> entries) async {
     final size = MediaQuery.sizeOf(context);
-    Widget picker(BuildContext context) => ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: 640, maxHeight: size.height * 0.8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '冲突课程（${entries.length}门）',
-                    style: Theme.of(context).textTheme.titleMedium,
+    Widget picker(BuildContext context) {
+      final courseColors = scheduleCourseColors(
+        Theme.of(context).brightness,
+        widget.snapshot,
+      );
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 640,
+          maxHeight: size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '冲突课程（${entries.length}门）',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: '关闭冲突课程',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.only(
-                bottom: 16 + MediaQuery.paddingOf(context).bottom,
-              ),
-              itemCount: entries.length,
-              itemBuilder: (context, index) => _AgendaCourseTile(
-                entry: entries[index],
-                accent: scheduleCourseColors(
-                  Theme.of(context).brightness,
-                  widget.snapshot,
-                )[entries[index].name]!,
-                onTap: () => Navigator.of(context).pop(entries[index]),
+                  IconButton(
+                    tooltip: '关闭冲突课程',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.only(
+                  bottom: 16 + MediaQuery.paddingOf(context).bottom,
+                ),
+                itemCount: entries.length,
+                itemBuilder: (context, index) => _AgendaCourseTile(
+                  entry: entries[index],
+                  accent: courseColors[entries[index].name]!,
+                  onTap: () => Navigator.of(context).pop(entries[index]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final selected = await showAdaptiveSheet<ScheduleEntry>(
       context: context,
       maxWidth: 640,

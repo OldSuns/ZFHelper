@@ -85,10 +85,11 @@ class _CourseDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final accent = scheduleCourseColors(
-      theme.brightness,
-      snapshot,
-    )[entry.name]!;
+    // The entry may come from a staler build than `snapshot`; fall back to a
+    // name-keyed hash if the name is no longer in the effective semester.
+    final accent =
+        scheduleCourseColors(theme.brightness, snapshot)[entry.name] ??
+        AppTheme.courseAccent(theme.brightness, entry.name);
     final localRoot = (rootEntry ?? entry).origin == ScheduleEntryOrigin.local;
     final arrangements =
         snapshot.entries
