@@ -32,7 +32,30 @@ abstract final class AppTheme {
     final colors = brightness == Brightness.dark
         ? _Catppuccin.mochaCourses
         : _Catppuccin.latteCourses;
-    return colors[hash % colors.length];
+    // Keep hashing into the original eight accents so event-category colors
+    // stay unchanged after the course palette grew to twelve; courses use
+    // courseColorAssignments instead.
+    return colors[hash % 8];
+  }
+
+  /// Assigns one Catppuccin accent per course name, spreading the palette in
+  /// iteration order instead of hashing so identical names always share a
+  /// color and distinct names reuse colors only after the palette is
+  /// exhausted. Callers must pass [names] in a deterministic order so every
+  /// schedule surface agrees on the assignment.
+  static Map<String, Color> courseColorAssignments(
+    Brightness brightness,
+    Iterable<String> names,
+  ) {
+    final colors = brightness == Brightness.dark
+        ? _Catppuccin.mochaCourses
+        : _Catppuccin.latteCourses;
+    final assignments = <String, Color>{};
+    var index = 0;
+    for (final name in names) {
+      assignments.putIfAbsent(name, () => colors[index++ % colors.length]);
+    }
+    return assignments;
   }
 
   static SystemUiOverlayStyle systemOverlayStyle(Brightness brightness) {
@@ -229,6 +252,10 @@ abstract final class _Catppuccin {
     Color(0xFF40A02B),
     Color(0xFFD20F39),
     Color(0xFF7287FD),
+    Color(0xFFDF8E1D),
+    Color(0xFF04A5E5),
+    Color(0xFF209FB5),
+    Color(0xFFE64553),
   ];
   static const mochaCourses = [
     Color(0xFFCBA6F7),
@@ -239,6 +266,10 @@ abstract final class _Catppuccin {
     Color(0xFFA6E3A1),
     Color(0xFFF38BA8),
     Color(0xFFB4BEFE),
+    Color(0xFFF9E2AF),
+    Color(0xFF89DCEB),
+    Color(0xFF74C7EC),
+    Color(0xFFEBA0AC),
   ];
 
   static const latte = (
