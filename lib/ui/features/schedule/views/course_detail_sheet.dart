@@ -209,7 +209,7 @@ class _CourseDetails extends StatelessWidget {
                         OutlinedButton.icon(
                           onPressed: showOccurrences,
                           icon: const Icon(Icons.view_timeline_outlined),
-                          label: const Text('查看逐周明细'),
+                          label: const Text('逐周明细'),
                         ),
                     ],
                   ),

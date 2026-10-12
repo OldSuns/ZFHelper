@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
@@ -339,17 +341,24 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
   Future<void> _pickMonday() async {
     final current = _civilDate(_firstMonday.text);
     final validMonday = current?.weekday == DateTime.monday ? current : null;
-    final picked = await showDatePicker(
+    // The stock picker's month pager multiplies the page count by the page
+    // extent; an unbounded range (year 1 to 9999) exhausts float precision on
+    // narrow layouts. Half a year around today covers any real term start.
+    final today = widget.today;
+    final firstDate = DateTime(today.year, today.month - 6, today.day);
+    final lastDate = DateTime(today.year, today.month + 6, today.day);
+    final inRange =
+        validMonday != null &&
+        !validMonday.isBefore(firstDate) &&
+        !validMonday.isAfter(lastDate);
+    final picked = await showDialog<DateTime>(
       context: context,
-      initialDate: validMonday,
-      firstDate: DateTime(1),
-      lastDate: DateTime(9999, 12, 31),
-      currentDate: widget.today,
-      selectableDayPredicate: (date) => date.weekday == DateTime.monday,
-      helpText: '选择第一教学周的周一',
-      cancelText: '取消',
-      confirmText: '选定',
-      errorInvalidText: '请选择周一',
+      builder: (context) => _MondayPickerDialog(
+        initialDate: inRange ? validMonday : null,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        today: today,
+      ),
     );
     if (!mounted || picked == null) return;
     _firstMonday.text = _dateText(picked);
@@ -522,4 +531,249 @@ String? _totalWeeksError(String? value) {
   if (value == null || value.trim().isEmpty) return null;
   final weeks = int.tryParse(value.trim());
   return weeks == null || weeks < 1 ? '总教学周数必须是大于 0 的整数，或留空' : null;
+}
+
+/// A Monday-only date picker bounded to a short range around today.
+///
+/// The stock date picker's quick selector only offers year selection, which is
+/// useless for a 13-month range, and its input-mode toggle takes a full row on
+/// narrow layouts. This picker keeps one compact header: the month label opens
+/// month selection directly, and manual entry stays in the page's text field.
+class _MondayPickerDialog extends StatefulWidget {
+  const _MondayPickerDialog({
+    required this.initialDate,
+    required this.firstDate,
+    required this.lastDate,
+    required this.today,
+  });
+
+  final DateTime? initialDate;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTime today;
+
+  @override
+  State<_MondayPickerDialog> createState() => _MondayPickerDialogState();
+}
+
+class _MondayPickerDialogState extends State<_MondayPickerDialog> {
+  static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  /// The first day of the displayed month.
+  late DateTime _month;
+  DateTime? _selected;
+  bool _pickingMonth = false;
+
+  DateTime get _firstMonth =>
+      DateTime(widget.firstDate.year, widget.firstDate.month);
+  DateTime get _lastMonth =>
+      DateTime(widget.lastDate.year, widget.lastDate.month);
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.initialDate;
+    final base = widget.initialDate ?? widget.today;
+    _month = DateTime(base.year, base.month);
+    if (_month.isBefore(_firstMonth)) _month = _firstMonth;
+    if (_month.isAfter(_lastMonth)) _month = _lastMonth;
+  }
+
+  void _shiftMonth(int offset) => setState(() {
+    _month = DateTime(_month.year, _month.month + offset);
+  });
+
+  bool _selectable(DateTime date) =>
+      date.weekday == DateTime.monday &&
+      !date.isBefore(widget.firstDate) &&
+      !date.isAfter(widget.lastDate);
+
+  @override
+  Widget build(BuildContext context) {
+    // The dialog shrinks with narrow windows and its text scales with the
+    // dialog width, so compact layouts stay balanced instead of overflowing.
+    final width = math.min(320.0, MediaQuery.sizeOf(context).width - 80);
+    final scale = (width / 320).clamp(0.6, 1.0);
+    final textScaler = TextScaler.linear(
+      MediaQuery.textScalerOf(context).scale(1) * scale,
+    );
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: AlertDialog(
+        title: const Text('选择第一教学周的周一'),
+        content: SizedBox(
+          width: width,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      key: const ValueKey('monday-picker-month-header'),
+                      onPressed: () =>
+                          setState(() => _pickingMonth = !_pickingMonth),
+                      iconAlignment: IconAlignment.end,
+                      icon: Icon(
+                        _pickingMonth
+                            ? Icons.arrow_drop_up
+                            : Icons.arrow_drop_down,
+                      ),
+                      label: Text('${_month.year}年${_month.month}月'),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '上一月',
+                    onPressed: _month.isAfter(_firstMonth)
+                        ? () => _shiftMonth(-1)
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  IconButton(
+                    tooltip: '下一月',
+                    onPressed: _month.isBefore(_lastMonth)
+                        ? () => _shiftMonth(1)
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_pickingMonth) _buildMonthGrid() else _buildDayGrid(),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: _selected == null
+                ? null
+                : () => Navigator.of(context).pop(_selected),
+            child: const Text('选定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthGrid() {
+    final theme = Theme.of(context);
+    final months = <DateTime>[];
+    for (
+      var month = _firstMonth;
+      !month.isAfter(_lastMonth);
+      month = DateTime(month.year, month.month + 1)
+    ) {
+      months.add(month);
+    }
+    return SizedBox(
+      height: 240,
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          childAspectRatio: 2.2,
+        ),
+        itemCount: months.length,
+        itemBuilder: (context, index) {
+          final month = months[index];
+          final current = month == _month;
+          return Padding(
+            padding: const EdgeInsets.all(2),
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                backgroundColor: current
+                    ? theme.colorScheme.secondaryContainer
+                    : null,
+                foregroundColor: current
+                    ? theme.colorScheme.onSecondaryContainer
+                    : null,
+                side: current
+                    ? BorderSide(color: theme.colorScheme.primary)
+                    : null,
+              ),
+              onPressed: () => setState(() {
+                _month = month;
+                _pickingMonth = false;
+              }),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('${month.year % 100}年${month.month}月'),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDayGrid() {
+    final theme = Theme.of(context);
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final leading = DateTime(_month.year, _month.month).weekday - 1;
+    final rows = ((leading + daysInMonth) / 7).ceil();
+    final today = DateTime(
+      widget.today.year,
+      widget.today.month,
+      widget.today.day,
+    );
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final label in _weekdayLabels)
+              Expanded(
+                child: Center(
+                  child: Text(label, style: theme.textTheme.bodySmall),
+                ),
+              ),
+          ],
+        ),
+        SizedBox(
+          height: rows * 40,
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+            ),
+            itemCount: rows * 7,
+            itemBuilder: (context, index) {
+              final day = index - leading + 1;
+              if (day < 1 || day > daysInMonth) return const SizedBox.shrink();
+              final date = DateTime(_month.year, _month.month, day);
+              final enabled = _selectable(date);
+              final selected = _selected == date;
+              return InkWell(
+                customBorder: const CircleBorder(),
+                onTap: enabled ? () => setState(() => _selected = date) : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: selected ? theme.colorScheme.primary : null,
+                    border: date == today && !selected
+                        ? Border.all(color: theme.colorScheme.primary)
+                        : null,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$day',
+                    style: TextStyle(
+                      color: selected
+                          ? theme.colorScheme.onPrimary
+                          : enabled
+                          ? null
+                          : theme.disabledColor,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
