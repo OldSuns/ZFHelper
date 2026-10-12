@@ -135,39 +135,51 @@ class ScheduleAdjustmentDayPicker extends StatelessWidget {
     children: [
       Text(label, style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 12),
-      ScheduleAdjustmentFieldRow(
-        first: OutlinedButton.icon(
-          onPressed: () async {
-            final value = await showScheduleWeekPicker(
-              context,
-              snapshot: snapshot,
-              selectedWeek: week,
-              weekCount: weekCount,
-              currentWeek: currentWeek,
-            );
-            if (context.mounted && value != null) onWeekChanged(value);
-          },
-          icon: const Icon(Icons.calendar_view_week_outlined),
-          label: Text('第 $week 周'),
-        ),
-        second: DropdownButtonFormField<int>(
-          key: ValueKey('$label-weekday-$weekday'),
-          initialValue: weekday ?? (allowUnscheduled ? 0 : null),
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: '星期'),
-          items: [
-            if (allowUnscheduled)
-              const DropdownMenuItem(value: 0, child: Text('星期待安排')),
-            for (var day = DateTime.monday; day <= DateTime.sunday; day++)
-              DropdownMenuItem(
-                value: day,
-                child: Text(scheduleWeekdayText(day)),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final value = await showScheduleWeekPicker(
+                  context,
+                  snapshot: snapshot,
+                  selectedWeek: week,
+                  weekCount: weekCount,
+                  currentWeek: currentWeek,
+                );
+                if (context.mounted && value != null) onWeekChanged(value);
+              },
+              icon: const Icon(Icons.calendar_view_week_outlined),
+              label: Text(
+                '第 $week 周',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-          ],
-          onChanged: (value) => onWeekdayChanged(value == 0 ? null : value),
-          validator: (value) =>
-              !allowUnscheduled && value == null ? '请选择目标星期' : null,
-        ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<int>(
+              key: ValueKey('$label-weekday-$weekday'),
+              initialValue: weekday ?? (allowUnscheduled ? 0 : null),
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: '星期'),
+              items: [
+                if (allowUnscheduled)
+                  const DropdownMenuItem(value: 0, child: Text('星期待安排')),
+                for (var day = DateTime.monday; day <= DateTime.sunday; day++)
+                  DropdownMenuItem(
+                    value: day,
+                    child: Text(scheduleWeekdayText(day)),
+                  ),
+              ],
+              onChanged: (value) => onWeekdayChanged(value == 0 ? null : value),
+              validator: (value) =>
+                  !allowUnscheduled && value == null ? '请选择目标星期' : null,
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 8),
       Text(

@@ -273,17 +273,20 @@ class _ScheduleAdjustmentEditorState extends State<_ScheduleAdjustmentEditor> {
       targetWeek: cancel ? null : _targetWeek,
       targetWeekday: cancel ? null : _targetWeekday,
       targetStartPeriod: cancel ? null : draft.targetStart,
+      targetEndPeriod: cancel ? null : draft.targetEnd,
       location: cancel || !draft.changeLocation ? null : draft.location.text,
     );
   }
 
   void _setWholeDay(bool value) => _update(() {
-    if (_wholeDay && !value) {
-      for (final source in _sources) {
-        _drafts[source.key]!.selected = true;
+    _wholeDay = value;
+    // Drafts were created selected while in whole-day mode; clear them so the
+    // user picks courses explicitly after switching to per-course selection.
+    if (!value) {
+      for (final draft in _drafts.values) {
+        draft.selected = false;
       }
     }
-    _wholeDay = value;
   });
 
   Future<void> _save() async {
@@ -432,40 +435,47 @@ class _ScheduleAdjustmentEditorState extends State<_ScheduleAdjustmentEditor> {
     _previewContent(),
   ];
 
-  Widget _kindPicker() => Wrap(
-    spacing: 8,
-    runSpacing: 8,
+  Widget _kindPicker() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      for (final kind in ScheduleChangeKind.values)
-        ChoiceChip(
-          materialTapTargetSize: MaterialTapTargetSize.padded,
-          label: Text(switch (kind) {
-            ScheduleChangeKind.reschedule => '调课',
-            ScheduleChangeKind.cancel => '停课',
-            ScheduleChangeKind.makeup => '补课',
-          }),
-          selected: kind == _kind,
-          onSelected: (_) => _update(() => _kind = kind),
-        ),
+      Text('调整类型', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final kind in ScheduleChangeKind.values)
+            ChoiceChip(
+              materialTapTargetSize: MaterialTapTargetSize.padded,
+              label: Text(switch (kind) {
+                ScheduleChangeKind.reschedule => '调课',
+                ScheduleChangeKind.cancel => '停课',
+                ScheduleChangeKind.makeup => '补课',
+              }),
+              selected: kind == _kind,
+              onSelected: (_) => _update(() => _kind = kind),
+            ),
+        ],
+      ),
     ],
   );
 
   Widget _basisPicker() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text('补课来源', style: Theme.of(context).textTheme.titleMedium),
+      Text('补课的课程来源', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
       Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           ChoiceChip(
-            label: const Text('当前安排'),
+            label: const Text('当前课表'),
             selected: !_originalBasis,
             onSelected: (_) => _update(() => _originalBasis = false),
           ),
           ChoiceChip(
-            label: const Text('原始安排'),
+            label: const Text('原始课表（含已停课）'),
             selected: _originalBasis,
             onSelected: (_) => _update(() => _originalBasis = true),
           ),
@@ -474,25 +484,32 @@ class _ScheduleAdjustmentEditorState extends State<_ScheduleAdjustmentEditor> {
       const SizedBox(height: 8),
       Text(
         _originalBasis
-            ? '按调整前的课程选择要补的节次，已停课的安排也在这里。现有课程会保留。'
-            : '在当前安排之外增加一次课程；现有课程会保留。',
+            ? '从调整前的原始课表选课，已停课、已调课的原安排也在这里；补课不会撤销这些调整。'
+            : '从当前课表选课，在原有安排之外多加一次上课；原有课程会保留。',
       ),
     ],
   );
 
-  Widget _scopePicker() => Wrap(
-    spacing: 8,
-    runSpacing: 8,
+  Widget _scopePicker() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      ChoiceChip(
-        label: Text(_sourceWeekday == null ? '全部课程' : '整天课程'),
-        selected: _wholeDay,
-        onSelected: (_) => _setWholeDay(true),
-      ),
-      ChoiceChip(
-        label: const Text('选择课程 / 节次'),
-        selected: !_wholeDay,
-        onSelected: (_) => _setWholeDay(false),
+      Text('选择课程', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ChoiceChip(
+            label: Text(_sourceWeekday == null ? '全部课程' : '整天课程'),
+            selected: _wholeDay,
+            onSelected: (_) => _setWholeDay(true),
+          ),
+          ChoiceChip(
+            label: const Text('选择课程 / 节次'),
+            selected: !_wholeDay,
+            onSelected: (_) => _setWholeDay(false),
+          ),
+        ],
       ),
     ],
   );
@@ -534,7 +551,7 @@ class _ScheduleAdjustmentEditorState extends State<_ScheduleAdjustmentEditor> {
       return [
         ScheduleAdjustmentNotice(
           message: _kind == ScheduleChangeKind.makeup && !_originalBasis
-              ? '这一天没有当前课程；如需为已停课程补课，可切换到原始安排。'
+              ? '这一天当前课表没有课程；要给已停课或已调课的原安排补课，可切换到原始课表。'
               : '这个教学周和星期没有可选课程。',
         ),
       ];
@@ -543,7 +560,7 @@ class _ScheduleAdjustmentEditorState extends State<_ScheduleAdjustmentEditor> {
       Text(
         _wholeDay
             ? '已选${_sourceWeekday == null ? '全部' : '当天全部'} ${sources.length} 项安排，默认保留各自的节次和地点。'
-            : '选中课程后，可展开设置需要调整的连续节次。',
+            : '勾选需要调整的课程后，可展开设置需要调整的连续节次。',
       ),
       const SizedBox(height: 12),
       for (final source in sources) ...[
