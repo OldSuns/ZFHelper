@@ -26,6 +26,8 @@ final class ZhengfangLoginGateway
 
   static const _maxRedirects = 3;
   static const _redirectCodes = {301, 302, 303, 307, 308};
+  // Non-standard status Zhengfang's session filter uses for stale AJAX requests.
+  static const _sessionExpiredStatus = 901;
 
   final SchoolConnection _profile;
   final AuthTransport _transport;
@@ -111,7 +113,9 @@ final class ZhengfangLoginGateway
       request,
       sessionRejectedBy: _isLoginUri,
     );
-    if (response.statusCode == 401 || _isLoginUri(response.uri)) {
+    if (response.statusCode == _sessionExpiredStatus ||
+        response.statusCode == 401 ||
+        _isLoginUri(response.uri)) {
       throw const LoginFailure(LoginFailureCode.expired, '教务登录状态已失效，请重新登录');
     }
     return response;
@@ -268,7 +272,8 @@ final class ZhengfangLoginGateway
       headers: {'X-Requested-With': 'XMLHttpRequest'},
       verifyingAccount: true,
     );
-    if (response.statusCode == 401 ||
+    if (response.statusCode == _sessionExpiredStatus ||
+        response.statusCode == 401 ||
         response.statusCode == 403 ||
         _isLoginOrFailureUri(response.uri)) {
       throw const LoginFailure(LoginFailureCode.expired, '教务登录状态已失效，请重新登录');

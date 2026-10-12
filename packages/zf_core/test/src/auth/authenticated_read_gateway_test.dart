@@ -238,6 +238,20 @@ void main() {
     expect(transport.requests, hasLength(2));
   });
 
+  test('HTTP 901 reports session expiration to the owner', () async {
+    final transport = ScriptedAuthTransport([
+      accountResponse,
+      (request) => textResponse(request, '', status: 901),
+    ]);
+    final gateway = await _verified(transport);
+
+    await expectLater(
+      gateway.sendRead(_postQuery),
+      throwsA(_failure(LoginFailureCode.expired)),
+    );
+    expect(transport.requests, hasLength(2));
+  });
+
   test(
     'a late expiration cannot revoke a transport already verified again',
     () async {
