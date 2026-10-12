@@ -8,7 +8,9 @@ const _connectTimeout = Duration(seconds: 15);
 const _sendTimeout = Duration(seconds: 30);
 const _receiveTimeout = Duration(seconds: 30);
 const _minimumStatusCode = 100;
-const _maximumStatusCode = 599;
+// Zhengfang answers stale AJAX requests with the non-standard status 901;
+// any three-digit status is a well-formed response for the gateway to classify.
+const _maximumStatusCode = 999;
 const _cancelled = LoginFailure(LoginFailureCode.cancelled, '登录请求已取消');
 const _invalidCookie = LoginFailure(
   LoginFailureCode.protocol,
