@@ -5,7 +5,7 @@ import '../../../core/adaptive_sheet.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/schedule_labels.dart';
 
-enum _DetailAction { edit, delete, reschedule, cancel, makeup, occurrences }
+enum _DetailAction { edit, delete, reschedule, cancel }
 
 Future<void> showScheduleCourseDetails(
   BuildContext context, {
@@ -29,7 +29,7 @@ Future<void> showScheduleCourseDetails(
       canEdit: onEdit != null,
       canDelete: onDelete != null,
       canAdjust: onAdjustment != null,
-      canShowOccurrences: onOccurrences != null,
+      onOccurrences: onOccurrences,
       rootEntry: rootEntry,
       needsOccurrenceReview: needsOccurrenceReview,
     ),
@@ -49,10 +49,6 @@ Future<void> showScheduleCourseDetails(
       onAdjustment?.call(ScheduleChangeKind.reschedule);
     case _DetailAction.cancel:
       onAdjustment?.call(ScheduleChangeKind.cancel);
-    case _DetailAction.makeup:
-      onAdjustment?.call(ScheduleChangeKind.makeup);
-    case _DetailAction.occurrences:
-      onOccurrences?.call();
     case null:
       break;
   }
@@ -66,7 +62,7 @@ class _CourseDetails extends StatelessWidget {
     required this.canEdit,
     required this.canDelete,
     required this.canAdjust,
-    required this.canShowOccurrences,
+    required this.onOccurrences,
     this.rootEntry,
     required this.needsOccurrenceReview,
   });
@@ -77,7 +73,7 @@ class _CourseDetails extends StatelessWidget {
   final bool canEdit;
   final bool canDelete;
   final bool canAdjust;
-  final bool canShowOccurrences;
+  final VoidCallback? onOccurrences;
   final ScheduleEntry? rootEntry;
   final bool needsOccurrenceReview;
 
@@ -186,61 +182,46 @@ class _CourseDetails extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (canAdjust) ...[
+                if (canAdjust || onOccurrences != null) ...[
                   _SectionTitle('第 $week 周的这次课程'),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      for (final action in [
-                        (
-                          action: _DetailAction.reschedule,
-                          label: '调课',
-                          icon: Icons.swap_horiz,
-                        ),
-                        (
-                          action: _DetailAction.cancel,
-                          label: '停课',
-                          icon: Icons.event_busy_outlined,
-                        ),
-                        (
-                          action: _DetailAction.makeup,
-                          label: '补课',
-                          icon: Icons.event_available_outlined,
-                        ),
-                      ])
+                      if (canAdjust) ...[
                         FilledButton.tonalIcon(
                           onPressed: () =>
-                              Navigator.of(context).pop(action.action),
-                          icon: Icon(action.icon),
-                          label: Text(action.label),
+                              Navigator.of(context)
+                                  .pop(_DetailAction.reschedule),
+                          icon: const Icon(Icons.swap_horiz),
+                          label: const Text('调课'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: () =>
+                              Navigator.of(context).pop(_DetailAction.cancel),
+                          icon: const Icon(Icons.event_busy_outlined),
+                          label: const Text('停课'),
+                        ),
+                      ],
+                      if (onOccurrences case final showOccurrences?)
+                        // The weekly detail opens on top so closing it returns here.
+                        OutlinedButton.icon(
+                          onPressed: showOccurrences,
+                          icon: const Icon(Icons.view_timeline_outlined),
+                          label: const Text('逐周明细'),
                         ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (canShowOccurrences) ...[
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).pop(_DetailAction.occurrences),
-                    icon: const Icon(Icons.view_timeline_outlined),
-                    label: const Text('查看逐周明细'),
                   ),
                   const SizedBox(height: 24),
                 ],
                 _DetailField(label: '授课教师', value: entry.teacher ?? '未提供'),
                 _DetailField(label: '校区', value: entry.campus ?? '未提供'),
                 _DetailField(label: '上课地点', value: entry.location ?? '地点待安排'),
-                if (entry.courseCode case final code?)
-                  _DetailField(label: '课程代码', value: code),
                 _DetailField(
-                  label: '教学班',
-                  value: entry.metadata['jxbmc'] ?? '未提供教学班名称',
+                  label: '总学时',
+                  value: entry.metadata['zxs'] ?? '未提供',
                 ),
-                for (final field in _metadataLabels.entries)
-                  if (entry.metadata[field.key] case final value?)
-                    _DetailField(label: field.value, value: value),
                 _DetailField(label: '周次', value: entry.scheduleWeeksText),
                 _DetailField(
                   label: '上课时间',
@@ -250,6 +231,22 @@ class _CourseDetails extends StatelessWidget {
                 _DetailField(
                   label: '作息时间',
                   value: scheduleClockRange(entry, snapshot),
+                ),
+                ExpansionTile(
+                  title: const Text('更多信息（课程代码、教学班等）'),
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
+                  children: [
+                    if (entry.courseCode case final code?)
+                      _DetailField(label: '课程代码', value: code),
+                    _DetailField(
+                      label: '教学班',
+                      value: entry.metadata['jxbmc'] ?? '未提供教学班名称',
+                    ),
+                    for (final field in _metadataLabels.entries)
+                      if (field.key != 'zxs')
+                        if (entry.metadata[field.key] case final value?)
+                          _DetailField(label: field.value, value: value),
+                  ],
                 ),
                 if (arrangements.isNotEmpty) ...[
                   const SizedBox(height: 12),

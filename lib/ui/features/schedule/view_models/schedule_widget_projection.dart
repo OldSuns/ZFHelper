@@ -56,6 +56,8 @@ Map<String, Object?> _projectDay(ScheduleDay day) => {
         'title': lesson.entry.name,
         'periodLabel': lesson.entry.schedulePeriodsText,
         'location': lesson.entry.schedulePlaceText,
+        // Location only, without the campus prefix, for Live Updates capsules.
+        'place': lesson.entry.location?.trim() ?? '',
         'teacher': lesson.entry.teacher,
         'startMinutes': lesson.startMinutes,
         'endMinutes': lesson.endMinutes,

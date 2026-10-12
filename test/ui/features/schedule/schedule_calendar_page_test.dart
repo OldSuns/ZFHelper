@@ -55,15 +55,108 @@ void main() {
     expect(_text(tester, 'calendar-total-weeks'), isEmpty);
     expect(find.text('当前教学周待确认'), findsOneWidget);
     await _tap(tester, 'calendar-pick-date');
-    final picker = tester.widget<DatePickerDialog>(
-      find.byType(DatePickerDialog),
+    expect(find.text('选择第一教学周的周一'), findsOneWidget);
+    // Nothing is preselected, so confirming stays disabled.
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '选定'))
+          .onPressed,
+      isNull,
     );
-    expect(picker.initialDate, isNull);
-    expect(picker.selectableDayPredicate!(DateTime(2026, 9, 7)), isTrue);
-    expect(picker.selectableDayPredicate!(DateTime(2026, 9, 8)), isFalse);
-    await tester.tap(find.text('取消').last);
+    // 2026-09-08 is a Tuesday and must not be selectable.
+    await tester.tap(find.text('8'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '选定'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(_text(tester, 'calendar-first-monday'), isEmpty);
+  });
+
+  testWidgets('monday picker scales with a narrow window', (tester) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      size: const Size(300, 700),
+    );
+    await _tap(tester, 'calendar-pick-date');
+    expect(find.text('选择第一教学周的周一'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('month quick selector lists only the bounded months', (
+    tester,
+  ) async {
+    await _openCalendar(tester, snapshot: _snapshot(unknownCalendar: true));
+    await _tap(tester, 'calendar-pick-date');
+    await tester.tap(find.byKey(const ValueKey('monday-picker-month-header')));
+    await tester.pumpAndSettle();
+
+    // Today is 2026-09-13, so the range spans 2026-03-13 to 2027-03-13.
+    expect(find.text('26年3月'), findsOneWidget);
+    expect(find.text('27年3月'), findsOneWidget);
+    expect(find.text('26年2月'), findsNothing);
+    expect(find.text('27年4月'), findsNothing);
+
+    // Switching to March shows its day grid (March has 31 days, September 30).
+    await tester.tap(find.text('26年3月'));
+    await tester.pumpAndSettle();
+    expect(find.text('31'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(_text(tester, 'calendar-first-monday'), isEmpty);
+  });
+
+  testWidgets('month bounds clamp the 31st to the shifted month end', (
+    tester,
+  ) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31, 10, 30),
+    );
+    await _tap(tester, 'calendar-pick-date');
+    await tester.tap(find.byKey(const ValueKey('monday-picker-month-header')));
+    await tester.pumpAndSettle();
+
+    // 2026-08-31 ± 6 months must stay in February; an unclamped shift rolls
+    // Feb 31 into March and drops a whole month from each side.
+    expect(find.text('26年2月'), findsOneWidget);
+    expect(find.text('27年2月'), findsOneWidget);
+    expect(find.text('26年1月'), findsNothing);
+    expect(find.text('27年3月'), findsNothing);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('six-row month shows its last week without clipping', (
+    tester,
+  ) async {
+    // August 2026 starts on a Saturday, so its day grid needs 6 rows.
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31),
+    );
+    await _tap(tester, 'calendar-pick-date');
+
+    final dialogGrid = tester.getRect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(GridView),
+      ),
+    );
+    final lastDay = tester.getRect(find.text('31'));
+    expect(lastDay.top >= dialogGrid.top, isTrue);
+    expect(lastDay.bottom <= dialogGrid.bottom, isTrue);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -75,6 +168,7 @@ void main() {
       );
       await _tap(tester, 'calendar-pick-date');
       await tester.tap(find.text('7').last);
+      await tester.pump();
       await tester.tap(find.text('选定').last);
       await tester.pumpAndSettle();
 
@@ -367,6 +461,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
   Size size = const Size(430, 1000),
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  DateTime? today,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -396,7 +491,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
                     builder: (_) => ScheduleCalendarPage(
                       snapshot: snapshot ?? _snapshot(),
                       settings: settings ?? ScheduleSettings(),
-                      today: DateTime(2026, 9, 13, 10, 30),
+                      today: today ?? DateTime(2026, 9, 13, 10, 30),
                     ),
                   ),
                 ),

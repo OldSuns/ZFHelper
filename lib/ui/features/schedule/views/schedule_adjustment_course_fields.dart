@@ -23,12 +23,14 @@ final class _AdjustmentDraft {
         text: source.entry.endPeriod?.toString() ?? '',
       ),
       destination = TextEditingController(),
+      destinationEnd = TextEditingController(),
       location = TextEditingController(text: source.entry.location ?? '');
 
   final _AdjustmentSource source;
   final TextEditingController start;
   final TextEditingController end;
   final TextEditingController destination;
+  final TextEditingController destinationEnd;
   final TextEditingController location;
   bool selected;
   bool changeLocation = false;
@@ -39,6 +41,9 @@ final class _AdjustmentDraft {
       source.entry.endPeriod == null ? null : _period(end, '原课结束节次');
   int? get targetStart =>
       destination.text.trim().isEmpty ? null : _period(destination, '目标开始节次');
+  int? get targetEnd => destinationEnd.text.trim().isEmpty
+      ? null
+      : _period(destinationEnd, '目标结束节次');
 
   int _period(TextEditingController controller, String label) {
     final value = int.tryParse(controller.text.trim());
@@ -52,6 +57,7 @@ final class _AdjustmentDraft {
     start.dispose();
     end.dispose();
     destination.dispose();
+    destinationEnd.dispose();
     location.dispose();
   }
 }
@@ -81,7 +87,7 @@ class _AdjustmentCourseFields extends StatelessWidget {
       [
         entry.schedulePeriodsText,
         entry.schedulePlaceText,
-        if (draft.source.owner != null) '按原始安排补课',
+        if (draft.source.owner != null) '补课来源：调整前的原始安排',
       ].join(' · '),
     );
     return Card(
@@ -125,9 +131,21 @@ class _AdjustmentCourseFields extends StatelessWidget {
       const SizedBox(height: 16),
     ],
     if (_hasTarget && _timed) ...[
-      _periodField(draft.destination, '目标开始节次（选填）', optional: true),
+      ScheduleAdjustmentFieldRow(
+        first: _periodField(draft.destination, '目标开始节次', optional: true),
+        second: _periodField(
+          draft.destinationEnd,
+          '目标结束节次',
+          optional: true,
+          requireStart: true,
+        ),
+      ),
       const SizedBox(height: 8),
-      const Text('留空时保留所选节次；填写后会保留相同的节数。'),
+      const Text(
+        '两项都留空时保留所选节次；'
+        '只填开始节次则保持原课节数；'
+        '两项都填时可自行调整节数。',
+      ),
       const SizedBox(height: 16),
     ],
     if (_hasTarget && !_timed) ...[
@@ -163,6 +181,7 @@ class _AdjustmentCourseFields extends StatelessWidget {
     TextEditingController controller,
     String label, {
     bool optional = false,
+    bool requireStart = false,
   }) => TextFormField(
     controller: controller,
     keyboardType: TextInputType.number,
@@ -176,7 +195,13 @@ class _AdjustmentCourseFields extends StatelessWidget {
     validator: (value) {
       if (optional && (value?.trim().isEmpty ?? true)) return null;
       final number = int.tryParse(value?.trim() ?? '');
-      return number == null || number < 1 ? '请输入大于 0 的整数' : null;
+      if (number == null || number < 1) return '请输入大于 0 的整数';
+      if (requireStart) {
+        final start = int.tryParse(draft.destination.text.trim());
+        if (start == null) return '请先填写目标开始节次';
+        if (number < start) return '不能早于目标开始节次';
+      }
+      return null;
     },
     onChanged: (_) => onChanged(),
   );
