@@ -106,6 +106,15 @@ void main() {
       },
     );
 
+    test('rejects other out-of-range status codes', () async {
+      final adapter = _Adapter((_, _) => ResponseBody.fromString('', 700));
+      final transport = _transport(adapter);
+      await expectLater(
+        transport.send(AuthHttpRequest.get(_base)),
+        throwsA(_failure(LoginFailureCode.protocol)),
+      );
+    });
+
     for (final header in ['Cookie', 'cookie', 'cOoKiE']) {
       test('rejects explicit $header before issuing any request', () async {
         final adapter = _Adapter((_, _) => ResponseBody.fromString('', 200));
