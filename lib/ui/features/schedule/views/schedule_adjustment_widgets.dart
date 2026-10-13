@@ -136,8 +136,11 @@ class ScheduleAdjustmentDayPicker extends StatelessWidget {
       Text(label, style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 12),
       ScheduleAdjustmentFieldRow(
-        first: OutlinedButton.icon(
-          onPressed: () async {
+        // Rendered as an input field so it matches the weekday dropdown
+        // in shape, border radius, fill and height.
+        first: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: () async {
             final value = await showScheduleWeekPicker(
               context,
               snapshot: snapshot,
@@ -147,8 +150,17 @@ class ScheduleAdjustmentDayPicker extends StatelessWidget {
             );
             if (context.mounted && value != null) onWeekChanged(value);
           },
-          icon: const Icon(Icons.calendar_view_week_outlined),
-          label: Text('第 $week 周'),
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: '周次',
+              suffixIcon: Icon(Icons.calendar_view_week_outlined),
+            ),
+            child: Text(
+              '第 $week 周',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
         second: DropdownButtonFormField<int>(
           key: ValueKey('$label-weekday-$weekday'),

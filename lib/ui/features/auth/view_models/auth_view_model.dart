@@ -33,6 +33,8 @@ final class AuthViewModel extends ChangeNotifier {
   ];
   Future<void> configureSchool(SchoolConnection profile) =>
       _repository.configureSchool(profile);
+  List<LoginCookie>? storedCookiesFor(AccountScope scope) =>
+      _repository.storedCookiesFor(scope);
   Future<void> restore() => _repository.restore();
   Future<void> checkSession() => _repository.checkSession();
   Future<void> signOut() => _repository.signOut();

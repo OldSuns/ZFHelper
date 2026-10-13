@@ -6,6 +6,7 @@ class PeriodTimesViewModel extends ChangeNotifier {
   PeriodTimesViewModel({
     required List<PeriodTime> schoolTimes,
     required ScheduleSettings settings,
+    Iterable<String?> entryCampuses = const [],
   }) : _school = PeriodTimePlan(periods: schoolTimes),
        _plan = PeriodTimePlan(
          periods: settings.useCustomPeriodTimes
@@ -15,14 +16,17 @@ class PeriodTimesViewModel extends ChangeNotifier {
              ? settings.periodSections
              : const [],
        ),
-       _custom = settings.useCustomPeriodTimes {
-    _campus = normalizePeriodCampus(
-      settings.periodCampus ?? _plan.periods.firstOrNull?.campus,
-    );
+       _custom = settings.useCustomPeriodTimes,
+       _entryCampuses = {
+         for (final name in entryCampuses) ?normalizePeriodCampus(name),
+       } {
+    // 默认始终展示全校区通用的作息；只有用户明确保存过校区才回显。
+    _campus = normalizePeriodCampus(settings.periodCampus);
   }
 
   final PeriodTimePlan _school;
   final _history = <({PeriodTimePlan plan, bool custom})>[];
+  final Set<String> _entryCampuses;
   PeriodTimePlan _plan;
   bool _custom;
   String? _campus;
@@ -37,8 +41,10 @@ class PeriodTimesViewModel extends ChangeNotifier {
   List<PeriodTimeSection> get sections =>
       _plan.sections.where((section) => section.campus == _campus).toList();
 
+  // 课程本身带校区信息时也提供校区切换：作息数据不分校区不代表课表不分校区。
   bool get hasCampusData =>
       _campus != null ||
+      _entryCampuses.isNotEmpty ||
       [
         ..._school.periods,
         ..._plan.periods,
@@ -48,6 +54,7 @@ class PeriodTimesViewModel extends ChangeNotifier {
     final names = {
       for (final period in [..._school.periods, ..._plan.periods])
         normalizePeriodCampus(period.campus),
+      ..._entryCampuses,
       _campus,
     }..remove(null);
     return [null, ...(names.cast<String>().toList()..sort())];

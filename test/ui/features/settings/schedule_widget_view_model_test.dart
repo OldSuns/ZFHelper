@@ -58,6 +58,8 @@ void main() {
               as Map<String, Object?>;
       expect(days.first['byPeriod'], isTrue);
       expect(lesson['periodLabel'], '第 6–7 节');
+      expect(lesson['location'], '地点待安排');
+      expect(lesson['place'], '');
       expect(lesson['startMinutes'], isNull);
       expect(lesson['endMinutes'], isNull);
 

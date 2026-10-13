@@ -303,12 +303,15 @@ class _CourseOccurrencesSheetState extends State<_CourseOccurrencesSheet> {
               runSpacing: 4,
               children: row.isSource
                   ? [
-                      TextButton.icon(
-                        onPressed: enabled && !needsReview
-                            ? () => _change(row, ScheduleChangeKind.makeup)
-                            : null,
-                        icon: const Icon(Icons.add),
-                        label: const Text('按原始安排补课'),
+                      Tooltip(
+                        message: '按这次调整前的安排新增一次补课，已有调整保持不变。',
+                        child: TextButton.icon(
+                          onPressed: enabled && !needsReview
+                              ? () => _change(row, ScheduleChangeKind.makeup)
+                              : null,
+                          icon: const Icon(Icons.add),
+                          label: const Text('按原安排补课'),
+                        ),
                       ),
                       TextButton.icon(
                         onPressed: enabled

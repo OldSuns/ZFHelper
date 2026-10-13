@@ -382,6 +382,21 @@ void main() {
     expect(transport.requests, hasLength(1));
   });
 
+  test(
+    'classifies Zhengfang\'s non-standard 901 status as session expiration',
+    () async {
+      final transport = ScriptedAuthTransport([
+        (request) => textResponse(request, '', status: 901),
+      ]);
+
+      await expectLater(
+        gatewayFor(transport).verifySession(usernameHint: '20260001'),
+        failureCode(LoginFailureCode.expired),
+      );
+      expect(transport.requests, hasLength(1));
+    },
+  );
+
   test('classifies an account redirect to external SSO as expired without following it', () async {
     final transport = ScriptedAuthTransport([
       (request) => textResponse(

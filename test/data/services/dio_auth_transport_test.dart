@@ -96,6 +96,25 @@ void main() {
       },
     );
 
+    test(
+      'delivers non-standard status codes for the gateway to classify',
+      () async {
+        final adapter = _Adapter((_, _) => ResponseBody.fromString('', 901));
+        final transport = _transport(adapter);
+        final response = await transport.send(AuthHttpRequest.get(_base));
+        expect(response.statusCode, 901);
+      },
+    );
+
+    test('rejects other out-of-range status codes', () async {
+      final adapter = _Adapter((_, _) => ResponseBody.fromString('', 700));
+      final transport = _transport(adapter);
+      await expectLater(
+        transport.send(AuthHttpRequest.get(_base)),
+        throwsA(_failure(LoginFailureCode.protocol)),
+      );
+    });
+
     for (final header in ['Cookie', 'cookie', 'cOoKiE']) {
       test('rejects explicit $header before issuing any request', () async {
         final adapter = _Adapter((_, _) => ResponseBody.fromString('', 200));

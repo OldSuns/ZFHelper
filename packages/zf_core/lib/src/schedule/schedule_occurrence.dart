@@ -226,6 +226,7 @@ final class ScheduleOccurrenceChange {
     this.targetWeek,
     this.targetWeekday,
     this.targetStartPeriod,
+    this.targetEndPeriod,
     this.location,
   }) {
     if (selection.fromSource && kind != ScheduleChangeKind.makeup) {
@@ -235,6 +236,7 @@ final class ScheduleOccurrenceChange {
       if (targetWeek != null ||
           targetWeekday != null ||
           targetStartPeriod != null ||
+          targetEndPeriod != null ||
           location != null) {
         throw const ScheduleOccurrenceException('停课不应包含目标时间或地点。');
       }
@@ -251,6 +253,12 @@ final class ScheduleOccurrenceChange {
         (targetStartPeriod! < 1 || selection.startPeriod == null)) {
       throw const ScheduleOccurrenceException('目标节次无效；未排节次的课程请先完善原始安排。');
     }
+    if (targetEndPeriod != null && targetStartPeriod == null) {
+      throw const ScheduleOccurrenceException('填写了目标结束节次时，也需要填写目标开始节次。');
+    }
+    if (targetEndPeriod != null && targetEndPeriod! < targetStartPeriod!) {
+      throw const ScheduleOccurrenceException('目标结束节次不能早于目标开始节次。');
+    }
   }
 
   final ScheduleOccurrenceSelection selection;
@@ -258,6 +266,7 @@ final class ScheduleOccurrenceChange {
   final int? targetWeek;
   final int? targetWeekday;
   final int? targetStartPeriod;
+  final int? targetEndPeriod;
   final String? location;
 }
 
@@ -407,6 +416,7 @@ void _validateTarget(ScheduleOccurrenceChange change, int? maxPeriod) {
   final start = change.targetStartPeriod ?? change.selection.startPeriod;
   if (start == null) return;
   final end =
+      change.targetEndPeriod ??
       start + change.selection.endPeriod! - change.selection.startPeriod!;
   if (end < start) {
     throw const ScheduleOccurrenceException('目标节次超出可保存范围。');
@@ -565,7 +575,8 @@ ScheduleOccurrencePart _targetPart(
       startPeriod: start,
       endPeriod: start == null
           ? null
-          : start + selection.endPeriod! - selection.startPeriod!,
+          : change.targetEndPeriod ??
+                start + selection.endPeriod! - selection.startPeriod!,
       clearPeriods: start == null,
       location: location,
       clearLocation: location != null && location.isEmpty,

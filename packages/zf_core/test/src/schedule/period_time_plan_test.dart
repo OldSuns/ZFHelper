@@ -9,6 +9,21 @@ PeriodTimeSection s(PeriodSession session, int first, int last) =>
     PeriodTimeSection(session: session, firstPeriod: first, lastPeriod: last);
 PeriodSectionInput input(PeriodSession session, int count, int start) =>
     PeriodSectionInput(session: session, count: count, startMinutes: start);
+PeriodSectionInput inputWithLongBreak(
+  PeriodSession session,
+  int count,
+  int start, {
+  int? after,
+  int? every,
+  int? minutes,
+}) => PeriodSectionInput(
+  session: session,
+  count: count,
+  startMinutes: start,
+  longBreakAfter: after,
+  longBreakEvery: every,
+  longBreakMinutes: minutes,
+);
 List<(int, int, int)> rows(PeriodTimePlan plan) => [
   for (final p in plan.periodsForCampus(null))
     (p.number, p.startMinutes, p.endMinutes),
@@ -25,11 +40,12 @@ void main() {
       final other = p(30, 10, 20, '南校区');
       final original = PeriodTimePlan(periods: [other, p(9, 1, 2)]);
       final plan = original.generate(
-        inputs: [input(afternoon, 4, 800), input(morning, 4, 480)],
+        inputs: [
+          input(afternoon, 4, 800),
+          inputWithLongBreak(morning, 4, 480, after: 2, minutes: 20),
+        ],
         classMinutes: 40,
         breakMinutes: 10,
-        longBreakEvery: 2,
-        longBreakMinutes: 20,
       );
       expect(rows(plan), [
         (1, 480, 520),
@@ -38,13 +54,54 @@ void main() {
         (4, 640, 680),
         (5, 800, 840),
         (6, 850, 890),
-        (7, 910, 950),
-        (8, 960, 1000),
+        (7, 900, 940),
+        (8, 950, 990),
       ]);
       expect(plan.sections, [s(morning, 1, 4), s(afternoon, 5, 8)]);
       expect(plan.periodsForCampus(' 南校区 ').single, same(other));
       expect(() => plan.periods.clear(), throwsUnsupportedError);
       plan.validate();
+    });
+
+    test('repeating long breaks alternate gaps inside one session', () {
+      final empty = PeriodTimePlan(periods: []);
+      final repeating = empty.generate(
+        inputs: [inputWithLongBreak(morning, 5, 480, every: 2, minutes: 10)],
+        classMinutes: 40,
+        breakMinutes: 5,
+      );
+      expect(rows(repeating), [
+        (1, 480, 520),
+        (2, 525, 565),
+        (3, 575, 615),
+        (4, 620, 660),
+        (5, 670, 710),
+      ]);
+      expect(
+        () => empty.generate(
+          inputs: [
+            inputWithLongBreak(
+              morning,
+              4,
+              480,
+              after: 2,
+              every: 2,
+              minutes: 10,
+            ),
+          ],
+          classMinutes: 40,
+          breakMinutes: 5,
+        ),
+        invalid,
+      );
+      expect(
+        () => empty.generate(
+          inputs: [inputWithLongBreak(morning, 2, 480, after: 2, minutes: 10)],
+          classMinutes: 40,
+          breakMinutes: 5,
+        ),
+        invalid,
+      );
     });
 
     test('edits preserve later durations and gaps within the section', () {

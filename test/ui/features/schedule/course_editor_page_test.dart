@@ -191,6 +191,13 @@ void main() {
         tester.view.viewInsets = FakeViewPadding(bottom: layout.keyboard);
         addTearDown(tester.view.resetViewInsets);
         await tester.pumpAndSettle();
+        await _weekday(tester, '周日');
+        expect(
+          tester
+              .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '周日'))
+              .selected,
+          isTrue,
+        );
         await _enter(tester, 'course-weeks', '1-30(单)');
         final save = find.byKey(const ValueKey('course-save'));
         expect(
@@ -199,7 +206,9 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         await _tap(tester, 'course-save');
-        expect((await result.future)!.weeks, hasLength(15));
+        final saved = (await result.future)!;
+        expect(saved.weeks, hasLength(15));
+        expect(saved.weekday, DateTime.sunday);
         expect(tester.takeException(), isNull);
       },
     );
@@ -282,8 +291,10 @@ Future<void> _tap(WidgetTester tester, String key) async {
 }
 
 Future<void> _weekday(WidgetTester tester, String day) async {
-  await _tap(tester, 'course-weekday');
-  await tester.tap(find.text(day).last);
+  final finder = find.widgetWithText(ChoiceChip, day);
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
   await tester.pumpAndSettle();
 }
 

@@ -516,9 +516,16 @@ void main() {
 
       expect(find.byType(Dialog), findsOneWidget);
       expect(_selectable('临床医学概论'), findsOneWidget);
+      expect(_selectable('张老师、李老师'), findsOneWidget);
+      expect(_selectable('主校区'), findsOneWidget);
+      expect(find.text('课程代码'), findsNothing);
+      await _scrollDetailsTo(tester, find.text('更多信息（课程代码、教学班等）'));
+      await tester.tap(find.text('更多信息（课程代码、教学班等）'));
+      await tester.pumpAndSettle();
       await _scrollDetailsTo(tester, _selectable('MED-101'));
       expect(_selectable('MED-101'), findsOneWidget);
       expect(_selectable('临床医学 2026 级 A 班'), findsOneWidget);
+      expect(_selectable('携带实验记录本'), findsOneWidget);
       expect(find.textContaining('internal-'), findsNothing);
       await _scrollDetailsTo(tester, _selectable('2-6周(双)').first);
       expect(_selectable('2-6周(双)'), findsWidgets);

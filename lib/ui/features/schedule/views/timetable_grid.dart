@@ -133,6 +133,10 @@ class _TimetableGridState extends State<TimetableGrid> {
       final hasWeekend = placed
           .followedBy(pending)
           .any((entry) => (entry.weekday ?? 0) >= DateTime.saturday);
+      final courseColors = scheduleCourseColors(
+        Theme.of(context).brightness,
+        widget.snapshot,
+      );
       final metrics = _GridMetrics(
         wide: constraints.maxWidth >= AppLayout.navigationRailMinWidth,
         textScale: textScale,
@@ -168,7 +172,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                         ),
                       )
                     else if (widget.agenda)
-                      ..._agendaSlivers(placed, dates)
+                      ..._agendaSlivers(placed, dates, courseColors)
                     else
                       SliverToBoxAdapter(
                         child: _buildGrid(
@@ -177,6 +181,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           placed,
                           dates,
                           metrics,
+                          courseColors,
                         ),
                       ),
                     if (pending.isNotEmpty) ...[
@@ -187,6 +192,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                         itemCount: pending.length,
                         itemBuilder: (context, index) => _AgendaCourseTile(
                           entry: pending[index],
+                          accent: courseColors[pending[index].name]!,
                           pending: true,
                           onTap: () => widget.onCourseTap(pending[index]),
                         ),
@@ -206,6 +212,7 @@ class _TimetableGridState extends State<TimetableGrid> {
   List<Widget> _agendaSlivers(
     List<ScheduleEntry> entries,
     CalendarWeek? dates,
+    Map<String, Color> courseColors,
   ) {
     final slivers = <Widget>[];
     for (var day = DateTime.monday; day <= DateTime.sunday; day++) {
@@ -242,6 +249,7 @@ class _TimetableGridState extends State<TimetableGrid> {
             final entry = lessons[index];
             return _AgendaCourseTile(
               entry: entry,
+              accent: courseColors[entry.name]!,
               onTap: () => widget.onCourseTap(entry),
               current: _isCurrentLesson(entry),
               conflict: lessons.any(
@@ -263,6 +271,7 @@ class _TimetableGridState extends State<TimetableGrid> {
     List<ScheduleEntry> placed,
     CalendarWeek? dates,
     _GridMetrics metrics,
+    Map<String, Color> courseColors,
   ) {
     final colors = Theme.of(context).colorScheme;
     final dayWidth = metrics.dayWidth(width);
@@ -312,6 +321,7 @@ class _TimetableGridState extends State<TimetableGrid> {
                           'schedule-course-${group.entries.single.id}',
                         ),
                         entry: group.entries.single,
+                        accent: courseColors[group.entries.single.name]!,
                         current: _isCurrentLesson(group.entries.single),
                         onTap: () => widget.onCourseTap(group.entries.single),
                       )
@@ -394,45 +404,56 @@ class _TimetableGridState extends State<TimetableGrid> {
 
   Future<void> _showConflicts(List<ScheduleEntry> entries) async {
     final size = MediaQuery.sizeOf(context);
-    Widget picker(BuildContext context) => ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: 640, maxHeight: size.height * 0.8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '冲突课程（${entries.length}门）',
-                    style: Theme.of(context).textTheme.titleMedium,
+    Widget picker(BuildContext context) {
+      final courseColors = scheduleCourseColors(
+        Theme.of(context).brightness,
+        widget.snapshot,
+      );
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 640,
+          maxHeight: size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '冲突课程（${entries.length}门）',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: '关闭冲突课程',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-          ),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.only(
-                bottom: 16 + MediaQuery.paddingOf(context).bottom,
-              ),
-              itemCount: entries.length,
-              itemBuilder: (context, index) => _AgendaCourseTile(
-                entry: entries[index],
-                onTap: () => Navigator.of(context).pop(entries[index]),
+                  IconButton(
+                    tooltip: '关闭冲突课程',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.only(
+                  bottom: 16 + MediaQuery.paddingOf(context).bottom,
+                ),
+                itemCount: entries.length,
+                itemBuilder: (context, index) => _AgendaCourseTile(
+                  entry: entries[index],
+                  accent: courseColors[entries[index].name]!,
+                  onTap: () => Navigator.of(context).pop(entries[index]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final selected = await showAdaptiveSheet<ScheduleEntry>(
       context: context,
       maxWidth: 640,
@@ -612,19 +633,20 @@ class _PeriodLabel extends StatelessWidget {
 class _GridCourseCard extends StatelessWidget {
   const _GridCourseCard({
     required this.entry,
+    required this.accent,
     required this.onTap,
     required this.current,
     super.key,
   });
 
   final ScheduleEntry entry;
+  final Color accent;
   final VoidCallback onTap;
   final bool current;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
     final description = [
       entry.name,
       scheduleWeekdayText(entry.weekday),
@@ -800,6 +822,7 @@ class _GridTileSurface extends StatelessWidget {
 class _AgendaCourseTile extends StatelessWidget {
   const _AgendaCourseTile({
     required this.entry,
+    required this.accent,
     required this.onTap,
     this.pending = false,
     this.current = false,
@@ -807,6 +830,7 @@ class _AgendaCourseTile extends StatelessWidget {
   });
 
   final ScheduleEntry entry;
+  final Color accent;
   final VoidCallback onTap;
   final bool pending;
   final bool current;
@@ -815,7 +839,6 @@ class _AgendaCourseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Card(

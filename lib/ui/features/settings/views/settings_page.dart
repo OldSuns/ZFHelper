@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'jwxt_browser_page.dart';
+
 import '../../auth/view_models/auth_view_model.dart';
 import '../../courses/view_models/courses_view_model.dart';
 import '../../grades/view_models/grades_view_model.dart';
@@ -60,6 +62,27 @@ class SettingsPage extends StatelessWidget {
                     builder: (context) => AccountSettingsPage(viewModel: auth),
                   ),
                 ),
+              ),
+              SettingsEntry(
+                icon: Icons.language_outlined,
+                title: '教务网页',
+                subtitle: school == null
+                    ? '添加学校后可在应用内打开教务系统'
+                    : '在应用内打开教务系统，复用当前账号登录态',
+                onTap: school == null
+                    ? null
+                    : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (context) => JwxtBrowserPage(
+                            profile: auth.state.profile!,
+                            cookies: switch (auth.state.selectedScope) {
+                              final scope? =>
+                                auth.storedCookiesFor(scope) ?? const [],
+                              _ => const [],
+                            },
+                          ),
+                        ),
+                      ),
               ),
               SettingsEntry(
                 icon: Icons.palette_outlined,

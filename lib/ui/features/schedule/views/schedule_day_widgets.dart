@@ -109,12 +109,16 @@ class ScheduleLessonTile extends StatelessWidget {
     required this.lesson,
     required this.now,
     required this.onTap,
+    this.accent,
     this.conflict = false,
     super.key,
   });
   final ScheduleLesson lesson;
   final DateTime now;
   final VoidCallback onTap;
+  // Shared semester-wide assignment; falls back to a name-keyed hash so the
+  // same course still keeps one color when the map is unavailable.
+  final Color? accent;
   final bool conflict;
 
   @override
@@ -123,7 +127,8 @@ class ScheduleLessonTile extends StatelessWidget {
     final phase = lesson.phaseAt(now);
     final active = phase == ScheduleLessonPhase.ongoing;
     final theme = Theme.of(context);
-    final accent = AppTheme.courseAccent(theme.brightness, entry.groupKey);
+    final accent =
+        this.accent ?? AppTheme.courseAccent(theme.brightness, entry.name);
     return _TimelineCard(
       time: lesson.startMinutes == null
           ? entry.schedulePeriodsText

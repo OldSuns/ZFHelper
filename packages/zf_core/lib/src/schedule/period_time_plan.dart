@@ -46,11 +46,28 @@ final class PeriodSectionInput {
     required this.session,
     required this.count,
     required this.startMinutes,
+    this.longBreakAfter,
+    this.longBreakEvery,
+    this.longBreakMinutes,
   });
 
   final PeriodSession session;
   final int count;
   final int startMinutes;
+
+  /// One-based position inside this session after which a single long break
+  /// is inserted, e.g. 2 for "上午第 2 节后大课间"。Mutually exclusive with
+  /// [longBreakEvery]; sessions without a special break leave both unset.
+  final int? longBreakAfter;
+
+  /// For schools that alternate short and long breaks (e.g. 5, 10, 5, 10
+  /// 分钟): after every `longBreakEvery`-th class inside this session the
+  /// break is [longBreakMinutes] instead of the regular break.
+  final int? longBreakEvery;
+
+  /// Minutes of the longer break; only valid together with [longBreakAfter]
+  /// or [longBreakEvery], and must be non-negative.
+  final int? longBreakMinutes;
 }
 
 /// An editable draft, including imported rows that conflict with one another.
@@ -109,8 +126,6 @@ final class PeriodTimePlan {
     required List<PeriodSectionInput> inputs,
     required int classMinutes,
     required int breakMinutes,
-    int? longBreakEvery,
-    int? longBreakMinutes,
   }) {
     if (inputs.isEmpty) {
       throw const PeriodTimeException('请至少启用一个时段。');
@@ -122,11 +137,6 @@ final class PeriodTimePlan {
     if (classMinutes <= 0 || breakMinutes < 0) {
       throw const PeriodTimeException('每节课时长必须大于 0，课间时长不能为负数。');
     }
-    if ((longBreakEvery == null) != (longBreakMinutes == null) ||
-        (longBreakEvery != null &&
-            (longBreakEvery <= 0 || longBreakMinutes! < 0))) {
-      throw const PeriodTimeException('长课间需要同时填写正数节次间隔和非负时长。');
-    }
     final ordered = [...inputs]
       ..sort((a, b) => a.session.index.compareTo(b.session.index));
     var totalCount = 0;
@@ -135,8 +145,6 @@ final class PeriodTimePlan {
         input,
         classMinutes: classMinutes,
         breakMinutes: breakMinutes,
-        longBreakEvery: longBreakEvery,
-        longBreakMinutes: longBreakMinutes,
       );
       totalCount += input.count;
       if (totalCount > PeriodTime.minutesPerDay ~/ classMinutes) {
@@ -155,11 +163,12 @@ final class PeriodTimePlan {
         final end = start + classMinutes;
         generated.add(_period(number++, start, end, targetCampus));
         if (index < input.count - 1) {
-          final gap =
-              longBreakEvery != null && (index + 1) % longBreakEvery == 0
-              ? longBreakMinutes!
-              : breakMinutes;
-          start = end + gap;
+          final isLongBreak =
+              (input.longBreakAfter != null &&
+                  index + 1 == input.longBreakAfter) ||
+              (input.longBreakEvery != null &&
+                  (index + 1) % input.longBreakEvery! == 0);
+          start = end + (isLongBreak ? input.longBreakMinutes! : breakMinutes);
         }
       }
       generatedSections.add(
@@ -411,8 +420,6 @@ void _validateGenerationWindow(
   PeriodSectionInput input, {
   required int classMinutes,
   required int breakMinutes,
-  int? longBreakEvery,
-  int? longBreakMinutes,
 }) {
   final name = _sessionName(input.session);
   if (input.count <= 0) {
@@ -422,15 +429,32 @@ void _validateGenerationWindow(
       input.startMinutes >= PeriodTime.minutesPerDay) {
     throw PeriodTimeException('$name的首课开始时间必须在 00:00 至 24:00 之间。');
   }
+  final fixed = input.longBreakAfter != null;
+  final repeating = input.longBreakEvery != null;
+  if ((input.longBreakMinutes == null) == (fixed || repeating) ||
+      (fixed && repeating) ||
+      (fixed &&
+          (input.longBreakAfter! < 1 ||
+              input.longBreakAfter! >= input.count)) ||
+      (repeating &&
+          (input.longBreakEvery! < 1 ||
+              input.longBreakEvery! >= input.count)) ||
+      (input.longBreakMinutes != null && input.longBreakMinutes! < 0)) {
+    throw PeriodTimeException('$name的课间安排需要选择指定位置或循环间隔之一，并填写非负休息时长。');
+  }
   final gaps = input.count - 1;
-  final longGaps = longBreakEvery == null ? 0 : gaps ~/ longBreakEvery;
+  final longGaps = input.longBreakAfter != null
+      ? 1
+      : input.longBreakEvery == null
+      ? 0
+      : gaps ~/ input.longBreakEvery!;
   var remaining = PeriodTime.minutesPerDay - input.startMinutes;
   // Divide before multiplying, so even an untrusted, enormous count cannot
   // overflow or allocate a list before the day's physical capacity is checked.
   for (final (count, minutes) in [
     (input.count, classMinutes),
     (gaps - longGaps, breakMinutes),
-    (longGaps, longBreakMinutes ?? 0),
+    (longGaps, input.longBreakMinutes ?? 0),
   ]) {
     if (count != 0 && minutes > remaining ~/ count) {
       throw PeriodTimeException('$name的课节与课间超过 24:00，请减少节数或调整时间。');

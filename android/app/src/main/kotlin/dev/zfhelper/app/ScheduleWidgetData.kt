@@ -52,6 +52,7 @@ internal data class ScheduleWidgetLesson(
     val title: String,
     val periodLabel: String,
     val location: String,
+    val place: String,
     val teacher: String?,
     val start: Int?,
     val end: Int?,
@@ -206,7 +207,7 @@ internal data class ScheduleWidgetSnapshot(
         }
 
         private fun parseLesson(json: JSONObject): ScheduleWidgetLesson {
-            json.allowedKeys("id", "title", "periodLabel", "location", "teacher", "startMinutes", "endMinutes", "periods")
+            json.allowedKeys("id", "title", "periodLabel", "location", "place", "teacher", "startMinutes", "endMinutes", "periods")
             val start = json.nullableMinute("startMinutes")
             val end = json.nullableMinute("endMinutes")
             widgetPayloadCheck((start == null) == (end == null), "课程作息")
@@ -227,7 +228,8 @@ internal data class ScheduleWidgetSnapshot(
             }
             return ScheduleWidgetLesson(
                 json.nonEmptyString("id"), json.nonEmptyString("title"), json.string("periodLabel"),
-                json.string("location"), json.nullableString("teacher"), start, end, periods,
+                // Version-1 snapshots predate "place"; default missing to "".
+                json.string("location"), json.nullableString("place") ?: "", json.nullableString("teacher"), start, end, periods,
             )
         }
     }

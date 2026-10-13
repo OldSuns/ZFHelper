@@ -4,6 +4,7 @@ import 'package:zf_core/zf_core.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/schedule_agenda.dart';
 import '../view_models/timetable_view_model.dart';
+import 'course_detail_sheet.dart';
 import 'schedule_day_widgets.dart';
 import 'today_course_countdown.dart';
 
@@ -36,6 +37,10 @@ class _AgendaScheduleViewState extends State<AgendaScheduleView> {
       final theme = Theme.of(context);
       final day = model.dayOn(model.agendaDate);
       final entries = scheduleAgendaItems(day, model.eventsOn(day.date));
+      final schedule = model.schedule;
+      final courseColors = schedule == null
+          ? const <String, Color>{}
+          : scheduleCourseColors(theme.brightness, schedule);
       final wide =
           constraints.maxWidth /
               (MediaQuery.textScalerOf(context).scale(14) / 14) >=
@@ -131,6 +136,7 @@ class _AgendaScheduleViewState extends State<AgendaScheduleView> {
                 ScheduleLessonTile(
                   lesson: lesson,
                   now: model.today,
+                  accent: courseColors[lesson.entry.name],
                   conflict: day.hasConflict(lesson),
                   onTap: () => widget.onCourse(lesson),
                 )
