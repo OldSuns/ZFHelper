@@ -39,6 +39,8 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
   String? _error;
   String? _previewError;
   String? _previewNote;
+  // 预览里是否有手动微调：自动重新生成会丢弃它们，需要明确告知用户。
+  bool _manualEdits = false;
 
   String? get _campus => normalizePeriodCampus(widget.campus);
 
@@ -161,7 +163,10 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       if (apply) {
         Navigator.pop(context, plan);
       } else {
-        _showPreview(plan);
+        _showPreview(
+          plan,
+          note: _manualEdits ? '已按最新参数重新生成，之前的手动调整未保留。' : null,
+        );
       }
     } on PeriodTimeException catch (error) {
       setState(() {
@@ -179,7 +184,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
     }
   }
 
-  void _showPreview(PeriodTimePlan plan, {String? note}) {
+  void _showPreview(PeriodTimePlan plan, {String? note, bool manual = false}) {
     final error = _validationError(plan);
     setState(() {
       _preview = plan;
@@ -188,6 +193,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       _error = null;
       _hasPreview = true;
       _stale = false;
+      _manualEdits = manual;
     });
   }
 
@@ -212,6 +218,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
                 minutes: int.parse(value),
               ),
               note: '已修改第 ${period.number} 节后的课间。',
+              manual: true,
             );
             return null;
           } on FormatException {
@@ -230,7 +237,7 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       builder: (_) => _PreviewPeriodEditDialog(plan: _preview, period: period),
     );
     if (!mounted || result == null) return;
-    _showPreview(result, note: '已修改第 ${period.number} 节时间。');
+    _showPreview(result, note: '已修改第 ${period.number} 节时间。', manual: true);
   }
 
   @override
@@ -529,7 +536,10 @@ class _PeriodTimeGeneratorPageState extends State<PeriodTimeGeneratorPage> {
       ),
       const SizedBox(height: 12),
       if (_stale) ...[
-        _message(context, '预览正在根据参数更新。'),
+        _message(
+          context,
+          _error == null ? '预览正在根据参数更新。' : '参数有误，预览仍是上次生成的结果，修正后自动更新。',
+        ),
         const SizedBox(height: 12),
       ],
       if (_previewError != null) ...[

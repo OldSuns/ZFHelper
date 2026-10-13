@@ -435,6 +435,44 @@ void main() {
     expect((await result.future)!.periodTimes.single.endMinutes, 540);
   });
 
+  testWidgets('regenerating after manual preview edits warns about the reset', (
+    tester,
+  ) async {
+    await _openCalendar(tester);
+    await _tap(tester, 'period-quick-arrange');
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '节数').at(0),
+      '2',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '首课开始').at(0),
+      '08:00',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '课间（分钟）'),
+      '5',
+    );
+    await _tapFinder(tester, find.byTooltip('修改第 1 节'));
+    await _enter(tester, 'preview-period-end', '09:00');
+    await _tap(tester, 'preview-period-apply');
+    expect(find.text('已修改第 1 节时间。'), findsOneWidget);
+
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '50',
+    );
+    expect(find.text('已按最新参数重新生成，之前的手动调整未保留。'), findsOneWidget);
+  });
+
   testWidgets(
     'empty local times survive restore and undo without affecting courses',
     (tester) async {
