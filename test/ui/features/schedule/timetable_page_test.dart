@@ -379,7 +379,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.runAsync(
-          () => tester.tap(find.widgetWithText(ListTile, '更新课表')),
+          () => tester.tap(find.widgetWithText(ListTile, '课表学期')),
+        );
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => tester.tap(find.widgetWithText(OutlinedButton, '更新课表')),
         );
         await tester.pumpAndSettle();
         expect(source.requests, 1);

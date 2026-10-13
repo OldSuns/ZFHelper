@@ -233,7 +233,7 @@ void main() {
       await tester.tap(navigationLabel('设置'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.byType(ListTile), findsNWidgets(5));
       await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
       await tester.pumpAndSettle();
       expect(find.byType(AccountSettingsPage), findsOneWidget);

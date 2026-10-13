@@ -80,7 +80,7 @@ internal data class ScheduleIslandPlan(
                     reminders += ScheduleIslandReminder(
                         key, sourceKey, day.date, lesson.title,
                         listOf(lesson.periodLabel, lesson.timeLabel).filter(String::isNotBlank).joinToString(" · "),
-                        lesson.location, phase, deadline, end,
+                        lesson.place, phase, deadline, end,
                     )
                 }
             }

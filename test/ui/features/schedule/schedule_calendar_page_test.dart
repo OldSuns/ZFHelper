@@ -22,6 +22,17 @@ void main() {
     expect(find.byTooltip('新增校区作息'), findsNothing);
   });
 
+  testWidgets(
+    'entry campuses enable the campus selector with generic default',
+    (tester) async {
+      await _openCalendar(tester, snapshot: _snapshot(entryCampuses: ['东校区']));
+
+      expect(find.text('通用（未指定校区）'), findsOneWidget);
+      expect(find.byTooltip('新增校区作息'), findsOneWidget);
+      expect(find.byKey(const ValueKey('period-campus-generic')), findsNothing);
+    },
+  );
+
   testWidgets('keeps saved manual campus controls', (tester) async {
     await _openCalendar(
       tester,
@@ -55,15 +66,108 @@ void main() {
     expect(_text(tester, 'calendar-total-weeks'), isEmpty);
     expect(find.text('当前教学周待确认'), findsOneWidget);
     await _tap(tester, 'calendar-pick-date');
-    final picker = tester.widget<DatePickerDialog>(
-      find.byType(DatePickerDialog),
+    expect(find.text('选择第一教学周的周一'), findsOneWidget);
+    // Nothing is preselected, so confirming stays disabled.
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '选定'))
+          .onPressed,
+      isNull,
     );
-    expect(picker.initialDate, isNull);
-    expect(picker.selectableDayPredicate!(DateTime(2026, 9, 7)), isTrue);
-    expect(picker.selectableDayPredicate!(DateTime(2026, 9, 8)), isFalse);
-    await tester.tap(find.text('取消').last);
+    // 2026-09-08 is a Tuesday and must not be selectable.
+    await tester.tap(find.text('8'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '选定'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(_text(tester, 'calendar-first-monday'), isEmpty);
+  });
+
+  testWidgets('monday picker scales with a narrow window', (tester) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      size: const Size(300, 700),
+    );
+    await _tap(tester, 'calendar-pick-date');
+    expect(find.text('选择第一教学周的周一'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('month quick selector lists only the bounded months', (
+    tester,
+  ) async {
+    await _openCalendar(tester, snapshot: _snapshot(unknownCalendar: true));
+    await _tap(tester, 'calendar-pick-date');
+    await tester.tap(find.byKey(const ValueKey('monday-picker-month-header')));
+    await tester.pumpAndSettle();
+
+    // Today is 2026-09-13, so the range spans 2026-03-13 to 2027-03-13.
+    expect(find.text('26年3月'), findsOneWidget);
+    expect(find.text('27年3月'), findsOneWidget);
+    expect(find.text('26年2月'), findsNothing);
+    expect(find.text('27年4月'), findsNothing);
+
+    // Switching to March shows its day grid (March has 31 days, September 30).
+    await tester.tap(find.text('26年3月'));
+    await tester.pumpAndSettle();
+    expect(find.text('31'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(_text(tester, 'calendar-first-monday'), isEmpty);
+  });
+
+  testWidgets('month bounds clamp the 31st to the shifted month end', (
+    tester,
+  ) async {
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31, 10, 30),
+    );
+    await _tap(tester, 'calendar-pick-date');
+    await tester.tap(find.byKey(const ValueKey('monday-picker-month-header')));
+    await tester.pumpAndSettle();
+
+    // 2026-08-31 ± 6 months must stay in February; an unclamped shift rolls
+    // Feb 31 into March and drops a whole month from each side.
+    expect(find.text('26年2月'), findsOneWidget);
+    expect(find.text('27年2月'), findsOneWidget);
+    expect(find.text('26年1月'), findsNothing);
+    expect(find.text('27年3月'), findsNothing);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('six-row month shows its last week without clipping', (
+    tester,
+  ) async {
+    // August 2026 starts on a Saturday, so its day grid needs 6 rows.
+    await _openCalendar(
+      tester,
+      snapshot: _snapshot(unknownCalendar: true),
+      today: DateTime(2026, 8, 31),
+    );
+    await _tap(tester, 'calendar-pick-date');
+
+    final dialogGrid = tester.getRect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(GridView),
+      ),
+    );
+    final lastDay = tester.getRect(find.text('31'));
+    expect(lastDay.top >= dialogGrid.top, isTrue);
+    expect(lastDay.bottom <= dialogGrid.bottom, isTrue);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -75,6 +179,7 @@ void main() {
       );
       await _tap(tester, 'calendar-pick-date');
       await tester.tap(find.text('7').last);
+      await tester.pump();
       await tester.tap(find.text('选定').last);
       await tester.pumpAndSettle();
 
@@ -146,7 +251,7 @@ void main() {
   });
 
   testWidgets(
-    'generates long breaks, shifts a section and saves other campuses',
+    'generates fixed section breaks, shifts a section and saves other campuses',
     (tester) async {
       final result = await _openCalendar(
         tester,
@@ -199,18 +304,22 @@ void main() {
         find.widgetWithText(TextFormField, '课间（分钟）'),
         '5',
       );
-      await _tapFinder(tester, find.text('周期性长课间'));
+      await _tapFinder(
+        tester,
+        find.byKey(const ValueKey('session-break-morning')),
+      );
+      await tester.tap(find.text('指定课间（第几节后单独调整）').last);
+      await tester.pumpAndSettle();
       await _enterFinder(
         tester,
-        find.widgetWithText(TextFormField, '每隔几节'),
+        find.widgetWithText(TextFormField, '第几节后'),
         '2',
       );
       await _enterFinder(
         tester,
-        find.widgetWithText(TextFormField, '休息（分钟）'),
-        '10',
+        find.widgetWithText(TextFormField, '休息时长（分钟）'),
+        '20',
       );
-      await _tapFinder(tester, find.text('生成预览'));
       await _tapFinder(tester, find.text('应用到作息草稿'));
       await _tap(tester, 'period-row-2');
       await _enter(tester, 'period-edit-end', '09:40');
@@ -222,12 +331,12 @@ void main() {
       await _tap(tester, 'calendar-save');
 
       final saved = (await result.future)!;
-      final times = saved.periodTimes.where((p) => p.campus == '北校区').toList();
+      final times = saved.periodTimes.where((p) => p.campus == null).toList();
       expect(times.map((p) => (p.startMinutes, p.endMinutes)), [
         (480, 525),
         (530, 580),
-        (590, 635),
-        (640, 685),
+        (600, 645),
+        (650, 695),
         (840, 885),
         (890, 935),
       ]);
@@ -259,6 +368,11 @@ void main() {
     );
     await _enterFinder(
       tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
       find.widgetWithText(TextFormField, '课间（分钟）'),
       '5',
     );
@@ -266,20 +380,38 @@ void main() {
     await _tap(tester, 'calendar-save');
 
     final settings = await result.future;
-    expect(settings!.periodTimes, hasLength(2));
-    expect(settings.periodTimes.map((period) => period.number), [1, 2]);
+    expect(
+      settings!.periodTimes.where((period) => period.campus == null),
+      hasLength(2),
+    );
+    expect(
+      settings.periodTimes
+          .where((period) => period.campus == null)
+          .map((period) => period.number),
+      [1, 2],
+    );
   });
 
   testWidgets('generated preview allows editing a specific period', (
     tester,
   ) async {
-    final original = _settings().copyWith(
-      periodTimes: [PeriodTime(number: 1, startMinutes: 480, endMinutes: 525)],
+    final original = ScheduleSettings(
+      periodCampus: '北校区',
+      useCustomPeriodTimes: true,
+      periodTimes: [
+        PeriodTime(
+          number: 1,
+          startMinutes: 480,
+          endMinutes: 525,
+          campus: '北校区',
+        ),
+      ],
       periodSections: [
         PeriodTimeSection(
           session: PeriodSession.morning,
           firstPeriod: 1,
           lastPeriod: 1,
+          campus: '北校区',
         ),
       ],
     );
@@ -295,13 +427,50 @@ void main() {
       find.widgetWithText(TextFormField, '课间（分钟）'),
       '5',
     );
-    await _tapFinder(tester, find.text('生成预览'));
     await _tapFinder(tester, find.byTooltip('修改第 1 节'));
     await _enter(tester, 'preview-period-end', '09:00');
     await _tap(tester, 'preview-period-apply');
     await _tapFinder(tester, find.text('应用到作息草稿'));
     await _tap(tester, 'calendar-save');
     expect((await result.future)!.periodTimes.single.endMinutes, 540);
+  });
+
+  testWidgets('regenerating after manual preview edits warns about the reset', (
+    tester,
+  ) async {
+    await _openCalendar(tester);
+    await _tap(tester, 'period-quick-arrange');
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '节数').at(0),
+      '2',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '首课开始').at(0),
+      '08:00',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '课间（分钟）'),
+      '5',
+    );
+    await _tapFinder(tester, find.byTooltip('修改第 1 节'));
+    await _enter(tester, 'preview-period-end', '09:00');
+    await _tap(tester, 'preview-period-apply');
+    expect(find.text('已修改第 1 节时间。'), findsOneWidget);
+
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '50',
+    );
+    expect(find.text('已按最新参数重新生成，之前的手动调整未保留。'), findsOneWidget);
   });
 
   testWidgets(
@@ -345,6 +514,7 @@ void main() {
           tester,
           size: const Size(320, 700),
           textScale: scale,
+          settings: _settings(),
         );
         await _tap(tester, 'period-quick-arrange');
         expect(tester.takeException(), isNull);
@@ -367,6 +537,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
   Size size = const Size(430, 1000),
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  DateTime? today,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -396,7 +567,7 @@ Future<Completer<ScheduleSettings?>> _openCalendar(
                     builder: (_) => ScheduleCalendarPage(
                       snapshot: snapshot ?? _snapshot(),
                       settings: settings ?? ScheduleSettings(),
-                      today: DateTime(2026, 9, 13, 10, 30),
+                      today: today ?? DateTime(2026, 9, 13, 10, 30),
                     ),
                   ),
                 ),
@@ -473,6 +644,7 @@ Future<void> _tap(WidgetTester tester, String key) async {
 ScheduleSnapshot _snapshot({
   bool unknownCalendar = false,
   List<PeriodTime>? periods,
+  List<String?>? entryCampuses,
 }) => ScheduleSnapshot(
   term: AcademicTerm(
     yearCode: '2026',
@@ -487,6 +659,7 @@ ScheduleSnapshot _snapshot({
       weekday: DateTime.monday,
       startPeriod: 1,
       endPeriod: 2,
+      campus: entryCampuses?.firstOrNull,
     ),
   ],
   fetchedAt: DateTime.utc(2026, 9, 13),
@@ -519,6 +692,7 @@ ScheduleSettings _settings() => ScheduleSettings(
   periodTimes: [
     PeriodTime(number: 1, startMinutes: 490, endMinutes: 535, campus: '北校区'),
   ],
+  periodCampus: '北校区',
   localEntries: [
     ScheduleEntry(
       id: 'local-study',

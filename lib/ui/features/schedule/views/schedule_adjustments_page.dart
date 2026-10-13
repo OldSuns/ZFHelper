@@ -184,7 +184,7 @@ class _ScheduleAdjustmentsPageState extends State<ScheduleAdjustmentsPage> {
                           initialKind: ScheduleChangeKind.makeup,
                         ),
                   icon: const Icon(Icons.event_available_outlined),
-                  label: const Text('按原始安排补课'),
+                  label: const Text('按原安排补课'),
                 ),
                 TextButton.icon(
                   onPressed: _restoring

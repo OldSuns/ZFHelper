@@ -9,6 +9,9 @@ const _sendTimeout = Duration(seconds: 30);
 const _receiveTimeout = Duration(seconds: 30);
 const _minimumStatusCode = 100;
 const _maximumStatusCode = 599;
+// Zhengfang answers stale AJAX requests with the non-standard status 901;
+// it is the only out-of-range status the gateway knows how to classify.
+const _zhengfangSessionExpiredStatus = 901;
 const _cancelled = LoginFailure(LoginFailureCode.cancelled, '登录请求已取消');
 const _invalidCookie = LoginFailure(
   LoginFailureCode.protocol,
@@ -79,7 +82,8 @@ final class DioAuthTransport implements AuthTransport {
     final body = response.data;
     if (status == null ||
         status < _minimumStatusCode ||
-        status > _maximumStatusCode ||
+        (status > _maximumStatusCode &&
+            status != _zhengfangSessionExpiredStatus) ||
         body is! List<int> ||
         body.any((byte) => byte < 0 || byte > 255)) {
       throw const LoginFailure(LoginFailureCode.protocol, '教务响应格式无效');

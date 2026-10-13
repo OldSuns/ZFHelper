@@ -244,25 +244,6 @@ class ScheduleSettingsSection extends StatelessWidget {
             onTap: account != null && !busy ? () => _chooseTerm(context) : null,
           ),
           SettingsEntry(
-            icon: Icons.sync_rounded,
-            title: viewModel.hasSchedule ? '更新课表' : '导入课表',
-            subtitle: viewModel.canRefresh
-                ? '获取所选学期，保留本地课程与校历设置'
-                : '请先在“账号与学校”中登录课表所属账号',
-            onTap: viewModel.canRefresh && !busy
-                ? () => _refresh(context)
-                : null,
-          ),
-          if (term != null)
-            SettingsEntry(
-              icon: Icons.school_outlined,
-              title: '导入教务当前学期',
-              subtitle: '重新读取学校当前学期，可用于新学期切换',
-              onTap: viewModel.canRefresh && !busy
-                  ? () => _refresh(context, useSchoolDefault: true)
-                  : null,
-            ),
-          SettingsEntry(
             icon: Icons.schedule_outlined,
             title: '校历与作息',
             subtitle: '设置当前学期的教学周与上课时间',

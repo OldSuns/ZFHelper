@@ -79,7 +79,11 @@ class _TermPickerState extends State<_TermPicker> {
   String? _yearError;
   String? _semesterError;
   bool _refreshing = false;
+  bool _updatingSelected = false;
+  bool _updatingSchoolDefault = false;
   String? _refreshFailure;
+
+  bool get _updating => _updatingSelected || _updatingSchoolDefault;
 
   @override
   void initState() {
@@ -112,7 +116,7 @@ class _TermPickerState extends State<_TermPicker> {
 
   Future<void> _refreshCatalog() async {
     final viewModel = widget.viewModel;
-    if (viewModel == null || _refreshing) return;
+    if (viewModel == null || _refreshing || _updating) return;
     final scope = _account.account.scope;
     setState(() {
       _refreshing = true;
@@ -130,6 +134,37 @@ class _TermPickerState extends State<_TermPicker> {
       } else {
         _refreshFailure = viewModel.data.failure?.message ?? '刷新学期列表失败，请稍后重试';
       }
+    });
+  }
+
+  Future<void> _refreshSchedule({required bool useSchoolDefault}) async {
+    final viewModel = widget.viewModel;
+    if (viewModel == null || _updating || _refreshing) return;
+    final scope = _account.account.scope;
+    setState(() {
+      if (useSchoolDefault) {
+        _updatingSchoolDefault = true;
+      } else {
+        _updatingSelected = true;
+      }
+      _refreshFailure = null;
+    });
+    final saved = await viewModel.refresh(useSchoolDefault: useSchoolDefault);
+    if (!mounted) return;
+    final account = viewModel.account;
+    if (saved &&
+        account != null &&
+        account.account.scope == scope &&
+        (!useSchoolDefault || account.catalog?.selectedTerm != null)) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _updatingSelected = false;
+      _updatingSchoolDefault = false;
+      _refreshFailure =
+          viewModel.data.failure?.message ??
+          (saved ? '学校没有指定默认学期，请选择学期后导入' : '更新课表失败，请稍后重试');
     });
   }
 
@@ -166,7 +201,9 @@ class _TermPickerState extends State<_TermPicker> {
                   IconButton(
                     key: const ValueKey('schedule-term-catalog-refresh'),
                     tooltip: '刷新学期列表',
-                    onPressed: _refreshing ? null : _refreshCatalog,
+                    onPressed: _refreshing || _updating
+                        ? null
+                        : _refreshCatalog,
                     icon: _refreshing
                         ? const SizedBox.square(
                             dimension: 20,
@@ -187,6 +224,43 @@ class _TermPickerState extends State<_TermPicker> {
                   ? '请选择要导入的学年和学期。也可以手动填写，不依赖学校页面提供选项。'
                   : '已保存的学期可离线查看。其他学期可手动选择，再前往“设置 → 课表”导入。',
             ),
+            if (widget.viewModel?.canRefresh ?? false) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('schedule-term-refresh'),
+                    onPressed: _updating
+                        ? null
+                        : () => _refreshSchedule(useSchoolDefault: false),
+                    icon: _updatingSelected
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync_rounded),
+                    label: Text(
+                      widget.viewModel?.hasSchedule ?? false ? '更新课表' : '导入课表',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('schedule-term-import-default'),
+                    onPressed: _updating
+                        ? null
+                        : () => _refreshSchedule(useSchoolDefault: true),
+                    icon: _updatingSchoolDefault
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.school_outlined),
+                    label: const Text('导入教务当前学期'),
+                  ),
+                ],
+              ),
+            ],
             if (_refreshFailure != null) ...[
               const SizedBox(height: 8),
               Semantics(
@@ -423,24 +497,22 @@ class _WeekPickerState extends State<_WeekPicker> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey('schedule-jump-week-input'),
-                          controller: _input,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: '跳转到第几周',
-                            errorText: _error,
-                            errorMaxLines: 3,
-                          ),
-                          onSubmitted: (_) => _jump(),
-                        ),
+                  TextField(
+                    key: const ValueKey('schedule-jump-week-input'),
+                    controller: _input,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.go,
+                    decoration: InputDecoration(
+                      labelText: '跳转到第几周',
+                      errorText: _error,
+                      errorMaxLines: 3,
+                      suffixIcon: IconButton(
+                        tooltip: '跳转',
+                        onPressed: _jump,
+                        icon: const Icon(Icons.arrow_forward),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton(onPressed: _jump, child: const Text('跳转')),
-                    ],
+                    ),
+                    onSubmitted: (_) => _jump(),
                   ),
                 ],
               ),
