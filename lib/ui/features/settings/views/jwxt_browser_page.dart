@@ -29,7 +29,9 @@ class JwxtBrowserPage extends StatefulWidget {
 class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
   // Windows without an environment gets a transient WebView2 profile whose
   // cookies cannot be seeded, so keep one persistent environment per process.
-  static WebViewEnvironment? _windowsEnvironment;
+  // The pending creation is cached too: concurrent page opens must share a
+  // single create operation instead of racing two environments.
+  static Future<WebViewEnvironment>? _windowsEnvironmentFuture;
 
   WebViewEnvironment? _environment;
   InAppWebViewController? _controller;
@@ -89,8 +91,8 @@ class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
     try {
       final CookieManager cookies;
       if (_isWindows) {
-        final environment = _windowsEnvironment ??=
-            await WebViewEnvironment.create(
+        final creation = _windowsEnvironmentFuture ??=
+            WebViewEnvironment.create(
               settings: WebViewEnvironmentSettings(
                 userDataFolder: (await getApplicationSupportDirectory()).uri
                     .resolve('zfhelper-browser')
@@ -98,6 +100,17 @@ class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
                 allowSingleSignOnUsingOSPrimaryAccount: false,
               ),
             );
+        late final WebViewEnvironment environment;
+        try {
+          environment = await creation;
+        } on Object {
+          // Drop only this failed creation so a later open can build a new
+          // environment instead of reusing a broken one.
+          if (identical(_windowsEnvironmentFuture, creation)) {
+            _windowsEnvironmentFuture = null;
+          }
+          rethrow;
+        }
         _environment = environment;
         cookies = CookieManager.fromPlatformCreationParams(
           PlatformCookieManagerCreationParams(
@@ -107,6 +120,10 @@ class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
       } else {
         cookies = CookieManager.instance();
       }
+      // The web view cookie store is shared app-wide; clear it so a session
+      // left by a previously selected account cannot leak into the initial
+      // navigation of the current account's portal.
+      await cookies.deleteAllCookies();
       failure = await _seed(cookies);
       blocked = _isWindows && _environment == null;
     } on Object {
