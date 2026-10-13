@@ -208,125 +208,120 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
                             ),
                           ],
                           const SizedBox(height: AppLayout.sectionGap),
-                          _textField(
-                            'course-name',
-                            '课程名称',
-                            _name,
-                            validator: (value) =>
-                                value == null || value.trim().isEmpty
-                                ? '请填写课程名称'
-                                : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _textField('course-teacher', '教师（选填）', _teacher),
-                          const SizedBox(height: 16),
-                          _textField('course-campus', '校区（选填）', _campus),
-                          const SizedBox(height: 16),
-                          _textField(
-                            'course-location',
-                            '教室 / 地点（选填）',
-                            _location,
-                          ),
+                          _sectionTitle(context, '基本信息'),
+                          _card([
+                            _textField(
+                              'course-name',
+                              '课程名称',
+                              _name,
+                              validator: (value) =>
+                                  value == null || value.trim().isEmpty
+                                  ? '请填写课程名称'
+                                  : null,
+                            ),
+                            const SizedBox(height: 16),
+                            _textField('course-teacher', '教师（选填）', _teacher),
+                            const SizedBox(height: 16),
+                            _textField('course-campus', '校区（选填）', _campus),
+                            const SizedBox(height: 16),
+                            _textField(
+                              'course-location',
+                              '教室 / 地点（选填）',
+                              _location,
+                            ),
+                          ]),
                           const SizedBox(height: AppLayout.sectionGap),
-                          Text(
-                            '上课安排',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<int>(
-                            key: const ValueKey('course-weekday'),
-                            focusNode: _focus('course-weekday'),
-                            initialValue: _weekday,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: '星期'),
-                            items: [
-                              for (
-                                var day = 1;
-                                day <= DateTime.daysPerWeek;
-                                day++
-                              )
-                                DropdownMenuItem(
-                                  value: day,
-                                  child: Text(_weekdays[day - 1]),
-                                ),
-                            ],
-                            onChanged: (value) =>
-                                setState(() => _weekday = value),
-                            validator: (value) =>
-                                value == null ? '请选择星期' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final fields = [
-                                _periodField(
-                                  'course-start-period',
-                                  '开始节次',
-                                  _startPeriod,
-                                ),
-                                _periodField(
-                                  'course-end-period',
-                                  '结束节次',
-                                  _endPeriod,
-                                ),
-                              ];
-                              if (constraints.maxWidth <
-                                  440 *
-                                      MediaQuery.textScalerOf(context)
-                                          .scale(1)) {
-                                return Column(
+                          _sectionTitle(context, '上课安排'),
+                          _card([
+                            Text(
+                              '星期',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            FormField<int>(
+                              key: const ValueKey('course-weekday'),
+                              initialValue: _weekday,
+                              validator: (value) =>
+                                  value == null ? '请选择星期' : null,
+                              builder: _weekdayRow,
+                            ),
+                            const SizedBox(height: 16),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final fields = [
+                                  _periodField(
+                                    'course-start-period',
+                                    '开始节次',
+                                    _startPeriod,
+                                  ),
+                                  _periodField(
+                                    'course-end-period',
+                                    '结束节次',
+                                    _endPeriod,
+                                  ),
+                                ];
+                                if (constraints.maxWidth <
+                                    440 *
+                                        MediaQuery.textScalerOf(context)
+                                            .scale(1)) {
+                                  return Column(
+                                    children: [
+                                      fields.first,
+                                      const SizedBox(height: 16),
+                                      fields.last,
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    fields.first,
-                                    const SizedBox(height: 16),
-                                    fields.last,
+                                    Expanded(child: fields.first),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: fields.last),
                                   ],
                                 );
-                              }
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(child: fields.first),
-                                  const SizedBox(width: 16),
-                                  Expanded(child: fields.last),
-                                ],
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.periodCount > 0
-                                ? '当前课表显示 ${widget.periodCount} 节，可按实际安排填写更多节次。'
-                                : '填写课节序号，例如第 3 节到第 4 节；无需先配置作息时间。',
-                          ),
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.periodCount > 0
+                                  ? '当前课表显示 ${widget.periodCount} 节，可按实际安排填写更多节次。'
+                                  : '填写课节序号，例如第 3 节到第 4 节；无需先配置作息时间。',
+                            ),
+                          ]),
                           const SizedBox(height: AppLayout.sectionGap),
-                          _textField(
-                            'course-weeks',
-                            '上课周次',
-                            _weeks,
-                            validator: (value) => _parseWeekDraft(value).error,
-                            helperText: '支持 1-16、1-16(单)、2,5,8；也可填写更大的周次。',
-                            onChanged: (_) => setState(() {}),
-                          ),
-                          const SizedBox(height: 8),
-                          if (widget.entry == null)
-                            Text('新课程已预选第 ${widget.initialWeek} 周，请按实际安排调整。'),
-                          const SizedBox(height: 12),
-                          TeachingWeekSelector(
-                            value: weekDraft.weeks,
-                            weekCount: widget.visibleWeekCount,
-                            currentWeek: widget.initialWeek,
-                            onChanged: _setWeeks,
-                            enabled: !_saving,
-                            semanticLabel: '选择上课周次',
-                            keyPrefix: 'course',
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            weekDraft.error == null
-                                ? '共 ${weekDraft.weeks.length} 个教学周'
-                                : '请填写明确的上课周次，不会自动按每周排课。',
-                            key: const ValueKey('course-weeks-summary'),
-                          ),
+                          _sectionTitle(context, '上课周次'),
+                          _card([
+                            _textField(
+                              'course-weeks',
+                              '上课周次',
+                              _weeks,
+                              validator: (value) =>
+                                  _parseWeekDraft(value).error,
+                              helperText: '支持 1-16、1-16(单)、2,5,8；也可填写更大的周次。',
+                              onChanged: (_) => setState(() {}),
+                            ),
+                            const SizedBox(height: 8),
+                            if (widget.entry == null)
+                              Text('新课程已预选第 ${widget.initialWeek} 周，请按实际安排调整。'),
+                            const SizedBox(height: 12),
+                            TeachingWeekSelector(
+                              value: weekDraft.weeks,
+                              weekCount: widget.visibleWeekCount,
+                              currentWeek: widget.initialWeek,
+                              onChanged: _setWeeks,
+                              enabled: !_saving,
+                              semanticLabel: '选择上课周次',
+                              keyPrefix: 'course',
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              weekDraft.error == null
+                                  ? '共 ${weekDraft.weeks.length} 个教学周'
+                                  : '请填写明确的上课周次，不会自动按每周排课。',
+                              key: const ValueKey('course-weeks-summary'),
+                            ),
+                          ]),
                           const SizedBox(height: AppLayout.sectionGap),
                         ],
                       ),
@@ -346,16 +341,82 @@ class _CourseEditorPageState extends State<CourseEditorPage> {
               20,
               12 + MediaQuery.viewInsetsOf(context).bottom,
             ),
-            child: FilledButton(
-              key: const ValueKey('course-save'),
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? '正在保存…' : '保存课程'),
+            child: Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('course-save'),
+                    onPressed: _saving ? null : _save,
+                    child: Text(_saving ? '正在保存…' : '保存课程'),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _weekdayRow(FormFieldState<int> field) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var day = 1; day <= DateTime.daysPerWeek; day++)
+              ChoiceChip(
+                key: ValueKey('course-weekday-$day'),
+                label: Text(_weekdays[day - 1]),
+                selected: field.value == day,
+                showCheckmark: false,
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                onSelected: (_) {
+                  field.didChange(day);
+                  setState(() => _weekday = day);
+                },
+              ),
+          ],
+        ),
+        if (field.hasError)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              field.errorText!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelLarge
+          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    ),
+  );
+
+  Widget _card(List<Widget> children) => Card(
+    margin: EdgeInsets.zero,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    ),
+  );
 
   Widget _textField(
     String key,

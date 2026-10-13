@@ -84,6 +84,7 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
     _times = PeriodTimesViewModel(
       schoolTimes: widget.snapshot.periodTimes,
       settings: widget.settings,
+      entryCampuses: widget.snapshot.entries.map((entry) => entry.campus),
     )..addListener(_timesChanged);
   }
 
