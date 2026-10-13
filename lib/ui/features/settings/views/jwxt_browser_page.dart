@@ -27,6 +27,11 @@ class JwxtBrowserPage extends StatefulWidget {
 }
 
 class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
+  // Cookie stores are shared process-wide (default store on Android, the
+  // single environment on Windows). Serialize every clear+seed so two pages
+  // opened in sequence cannot interleave their shared-store mutations.
+  static Future<void> _cookieTurn = Future<void>.value();
+
   // Windows without an environment gets a transient WebView2 profile whose
   // cookies cannot be seeded, so keep one persistent environment per process.
   // The pending creation is cached too: concurrent page opens must share a
@@ -88,50 +93,58 @@ class _JwxtBrowserPageState extends State<JwxtBrowserPage> {
     }
     String? failure;
     var blocked = false;
-    try {
-      final CookieManager cookies;
-      if (_isWindows) {
-        final creation = _windowsEnvironmentFuture ??=
-            WebViewEnvironment.create(
-              settings: WebViewEnvironmentSettings(
-                userDataFolder: (await getApplicationSupportDirectory()).uri
-                    .resolve('zfhelper-browser')
-                    .toFilePath(),
-                allowSingleSignOnUsingOSPrimaryAccount: false,
-              ),
-            );
-        late final WebViewEnvironment environment;
-        try {
-          environment = await creation;
-        } on Object {
-          // Drop only this failed creation so a later open can build a new
-          // environment instead of reusing a broken one.
-          if (identical(_windowsEnvironmentFuture, creation)) {
-            _windowsEnvironmentFuture = null;
+    final turn = _cookieTurn.then((_) async {
+      // A page disposed while waiting for its turn must not touch the
+      // shared cookie store afterwards.
+      if (!mounted) return;
+      try {
+        final CookieManager cookies;
+        if (_isWindows) {
+          final creation = _windowsEnvironmentFuture ??=
+              WebViewEnvironment.create(
+                settings: WebViewEnvironmentSettings(
+                  userDataFolder: (await getApplicationSupportDirectory()).uri
+                      .resolve('zfhelper-browser')
+                      .toFilePath(),
+                  allowSingleSignOnUsingOSPrimaryAccount: false,
+                ),
+              );
+          late final WebViewEnvironment environment;
+          try {
+            environment = await creation;
+          } on Object {
+            // Drop only this failed creation so a later open can build a new
+            // environment instead of reusing a broken one.
+            if (identical(_windowsEnvironmentFuture, creation)) {
+              _windowsEnvironmentFuture = null;
+            }
+            rethrow;
           }
-          rethrow;
+          _environment = environment;
+          cookies = CookieManager.fromPlatformCreationParams(
+            PlatformCookieManagerCreationParams(
+              webViewEnvironment: environment.platform,
+            ),
+          );
+        } else {
+          cookies = CookieManager.instance();
         }
-        _environment = environment;
-        cookies = CookieManager.fromPlatformCreationParams(
-          PlatformCookieManagerCreationParams(
-            webViewEnvironment: environment.platform,
-          ),
-        );
-      } else {
-        cookies = CookieManager.instance();
+        // The web view cookie store is shared app-wide; clear it so a session
+        // left by a previously selected account cannot leak into the initial
+        // navigation of the current account's portal.
+        await cookies.deleteAllCookies();
+        failure = await _seed(cookies);
+        blocked = _isWindows && _environment == null;
+      } on Object {
+        // The plugin may be unavailable (e.g. widget tests); the web view can
+        // still be opened manually, just without the saved session.
+        failure = '无法复用教务登录会话，可在网页中手动浏览';
+        blocked = _isWindows && _environment == null;
       }
-      // The web view cookie store is shared app-wide; clear it so a session
-      // left by a previously selected account cannot leak into the initial
-      // navigation of the current account's portal.
-      await cookies.deleteAllCookies();
-      failure = await _seed(cookies);
-      blocked = _isWindows && _environment == null;
-    } on Object {
-      // The plugin may be unavailable (e.g. widget tests); the web view can
-      // still be opened manually, just without the saved session.
-      failure = '无法复用教务登录会话，可在网页中手动浏览';
-      blocked = _isWindows && _environment == null;
-    }
+    });
+    // Keep the queue alive even when a turn throws.
+    _cookieTurn = turn.then((_) {}, onError: (_) {});
+    await turn;
     if (mounted) {
       setState(() {
         _failure = failure;
