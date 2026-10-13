@@ -365,6 +365,11 @@ final class AuthRepository {
     );
   }
 
+  /// Cookies stored for [scope], for reusing the session in an in-app
+  /// browser. Exposing them for browsing is not authentication.
+  List<LoginCookie>? storedCookiesFor(AccountScope scope) =>
+      _accounts[scope]?.record.login?.session.cookies;
+
   Future<void> configureSchool(SchoolConnection profile) async {
     _requireOpen();
     final revision = ++_profileRevision;
