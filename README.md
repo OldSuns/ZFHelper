@@ -63,7 +63,7 @@ For Android, use `flutter run -d <device-id>` with an ID from `flutter devices`.
 
 - School variants are not universally compatible. Real-school login, timetable, grades, and enrollment-result comparisons remain acceptance work.
 - Update checking reads the latest stable GitHub Release (pre-releases never qualify as "latest"), shows its notes, and can open the release or repository page in the system browser. Pre-release builds are not offered updates through this channel; their users download newer builds from the Releases page.
-- ICS export, school examination-schedule retrieval, system course reminders, Live Updates, and couple timetables are not implemented. Manually entered examination events are supported.
+- ICS export, school examination-schedule retrieval, system course reminders, and couple timetables are not implemented. Manually entered examination events are supported.
 - Scheduled auto-enrollment, cloud enrollment delegation, automatic withdrawal, and cross-device synchronization are outside the current scope.
 - Production-device background behavior, signed-package installation, and upgrade flows still require acceptance. GitHub CI and unsigned release assets do not establish those results.
 
