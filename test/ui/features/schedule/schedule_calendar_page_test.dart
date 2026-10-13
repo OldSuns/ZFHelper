@@ -22,6 +22,17 @@ void main() {
     expect(find.byTooltip('新增校区作息'), findsNothing);
   });
 
+  testWidgets(
+    'entry campuses enable the campus selector with generic default',
+    (tester) async {
+      await _openCalendar(tester, snapshot: _snapshot(entryCampuses: ['东校区']));
+
+      expect(find.text('通用（未指定校区）'), findsOneWidget);
+      expect(find.byTooltip('新增校区作息'), findsOneWidget);
+      expect(find.byKey(const ValueKey('period-campus-generic')), findsNothing);
+    },
+  );
+
   testWidgets('keeps saved manual campus controls', (tester) async {
     await _openCalendar(
       tester,
@@ -240,7 +251,7 @@ void main() {
   });
 
   testWidgets(
-    'generates long breaks, shifts a section and saves other campuses',
+    'generates fixed section breaks, shifts a section and saves other campuses',
     (tester) async {
       final result = await _openCalendar(
         tester,
@@ -293,18 +304,22 @@ void main() {
         find.widgetWithText(TextFormField, '课间（分钟）'),
         '5',
       );
-      await _tapFinder(tester, find.text('周期性长课间'));
+      await _tapFinder(
+        tester,
+        find.byKey(const ValueKey('session-break-morning')),
+      );
+      await tester.tap(find.text('指定课间（第几节后单独调整）').last);
+      await tester.pumpAndSettle();
       await _enterFinder(
         tester,
-        find.widgetWithText(TextFormField, '每隔几节'),
+        find.widgetWithText(TextFormField, '第几节后'),
         '2',
       );
       await _enterFinder(
         tester,
-        find.widgetWithText(TextFormField, '休息（分钟）'),
-        '10',
+        find.widgetWithText(TextFormField, '休息时长（分钟）'),
+        '20',
       );
-      await _tapFinder(tester, find.text('生成预览'));
       await _tapFinder(tester, find.text('应用到作息草稿'));
       await _tap(tester, 'period-row-2');
       await _enter(tester, 'period-edit-end', '09:40');
@@ -316,12 +331,12 @@ void main() {
       await _tap(tester, 'calendar-save');
 
       final saved = (await result.future)!;
-      final times = saved.periodTimes.where((p) => p.campus == '北校区').toList();
+      final times = saved.periodTimes.where((p) => p.campus == null).toList();
       expect(times.map((p) => (p.startMinutes, p.endMinutes)), [
         (480, 525),
         (530, 580),
-        (590, 635),
-        (640, 685),
+        (600, 645),
+        (650, 695),
         (840, 885),
         (890, 935),
       ]);
@@ -353,6 +368,11 @@ void main() {
     );
     await _enterFinder(
       tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
       find.widgetWithText(TextFormField, '课间（分钟）'),
       '5',
     );
@@ -360,20 +380,38 @@ void main() {
     await _tap(tester, 'calendar-save');
 
     final settings = await result.future;
-    expect(settings!.periodTimes, hasLength(2));
-    expect(settings.periodTimes.map((period) => period.number), [1, 2]);
+    expect(
+      settings!.periodTimes.where((period) => period.campus == null),
+      hasLength(2),
+    );
+    expect(
+      settings.periodTimes
+          .where((period) => period.campus == null)
+          .map((period) => period.number),
+      [1, 2],
+    );
   });
 
   testWidgets('generated preview allows editing a specific period', (
     tester,
   ) async {
-    final original = _settings().copyWith(
-      periodTimes: [PeriodTime(number: 1, startMinutes: 480, endMinutes: 525)],
+    final original = ScheduleSettings(
+      periodCampus: '北校区',
+      useCustomPeriodTimes: true,
+      periodTimes: [
+        PeriodTime(
+          number: 1,
+          startMinutes: 480,
+          endMinutes: 525,
+          campus: '北校区',
+        ),
+      ],
       periodSections: [
         PeriodTimeSection(
           session: PeriodSession.morning,
           firstPeriod: 1,
           lastPeriod: 1,
+          campus: '北校区',
         ),
       ],
     );
@@ -389,13 +427,50 @@ void main() {
       find.widgetWithText(TextFormField, '课间（分钟）'),
       '5',
     );
-    await _tapFinder(tester, find.text('生成预览'));
     await _tapFinder(tester, find.byTooltip('修改第 1 节'));
     await _enter(tester, 'preview-period-end', '09:00');
     await _tap(tester, 'preview-period-apply');
     await _tapFinder(tester, find.text('应用到作息草稿'));
     await _tap(tester, 'calendar-save');
     expect((await result.future)!.periodTimes.single.endMinutes, 540);
+  });
+
+  testWidgets('regenerating after manual preview edits warns about the reset', (
+    tester,
+  ) async {
+    await _openCalendar(tester);
+    await _tap(tester, 'period-quick-arrange');
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '节数').at(0),
+      '2',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '首课开始').at(0),
+      '08:00',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '45',
+    );
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '课间（分钟）'),
+      '5',
+    );
+    await _tapFinder(tester, find.byTooltip('修改第 1 节'));
+    await _enter(tester, 'preview-period-end', '09:00');
+    await _tap(tester, 'preview-period-apply');
+    expect(find.text('已修改第 1 节时间。'), findsOneWidget);
+
+    await _enterFinder(
+      tester,
+      find.widgetWithText(TextFormField, '每节课（分钟）'),
+      '50',
+    );
+    expect(find.text('已按最新参数重新生成，之前的手动调整未保留。'), findsOneWidget);
   });
 
   testWidgets(
@@ -439,6 +514,7 @@ void main() {
           tester,
           size: const Size(320, 700),
           textScale: scale,
+          settings: _settings(),
         );
         await _tap(tester, 'period-quick-arrange');
         expect(tester.takeException(), isNull);
@@ -568,6 +644,7 @@ Future<void> _tap(WidgetTester tester, String key) async {
 ScheduleSnapshot _snapshot({
   bool unknownCalendar = false,
   List<PeriodTime>? periods,
+  List<String?>? entryCampuses,
 }) => ScheduleSnapshot(
   term: AcademicTerm(
     yearCode: '2026',
@@ -582,6 +659,7 @@ ScheduleSnapshot _snapshot({
       weekday: DateTime.monday,
       startPeriod: 1,
       endPeriod: 2,
+      campus: entryCampuses?.firstOrNull,
     ),
   ],
   fetchedAt: DateTime.utc(2026, 9, 13),
@@ -614,6 +692,7 @@ ScheduleSettings _settings() => ScheduleSettings(
   periodTimes: [
     PeriodTime(number: 1, startMinutes: 490, endMinutes: 535, campus: '北校区'),
   ],
+  periodCampus: '北校区',
   localEntries: [
     ScheduleEntry(
       id: 'local-study',

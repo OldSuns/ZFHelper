@@ -238,7 +238,9 @@ class _CourseDetails extends StatelessWidget {
                 ),
                 ExpansionTile(
                   title: const Text('更多信息（课程代码、教学班等）'),
+                  tilePadding: EdgeInsets.zero,
                   childrenPadding: const EdgeInsets.only(bottom: 8),
+                  expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (entry.courseCode case final code?)
                       _DetailField(label: '课程代码', value: code),
