@@ -130,9 +130,7 @@ class _TimetableGridState extends State<TimetableGrid> {
               )
               .toList()
             ..sort(compareScheduleEntries);
-      final hasWeekend = placed
-          .followedBy(pending)
-          .any((entry) => (entry.weekday ?? 0) >= DateTime.saturday);
+      final hasWeekend = widget.snapshot.hasWeekendIn(widget.week);
       final courseColors = scheduleCourseColors(
         Theme.of(context).brightness,
         widget.snapshot,
