@@ -53,6 +53,13 @@ final class ScheduleSnapshot {
     return lastCourse > total ? lastCourse : total;
   }
 
+  /// Whether [week] has a Saturday or Sunday arrangement, placed or pending.
+  bool hasWeekendIn(int week) => entries.any(
+    (entry) =>
+        (entry.weekday ?? 0) >= DateTime.saturday &&
+        (entry.weeks.isEmpty || entry.occursInWeek(week)),
+  );
+
   /// The largest known period, or zero when no period information is available.
   int get maxPeriod {
     var highest = 0;

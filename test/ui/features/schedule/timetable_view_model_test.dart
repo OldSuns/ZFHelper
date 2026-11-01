@@ -21,6 +21,89 @@ void main() {
 
     tearDown(() => viewModel.dispose());
 
+    Future<void> load(ScheduleSnapshot snapshot) async {
+      store.library = ScheduleLibrary(
+        accounts: [scheduleTestSaved(snapshot: snapshot)],
+        selectedAccount: scheduleTestAccount.scope,
+      );
+      await viewModel.initialize();
+    }
+
+    ScheduleEntry course(int weekday, List<int> weeks) => ScheduleEntry(
+      id: 'course-$weekday',
+      name: '测试课程$weekday',
+      weekday: weekday,
+      startPeriod: 1,
+      endPeriod: 2,
+      weeks: weeks,
+    );
+
+    test('a weekend without weekend classes opens next week', () async {
+      await load(scheduleTestSnapshot());
+
+      expect(viewModel.selectedWeek, 2);
+      expect(viewModel.currentPosition.week, 1);
+      expect(viewModel.showsNextWeekForWeekend, isTrue);
+      expect(viewModel.isCurrentWeek, isTrue);
+
+      viewModel.previousWeek();
+      expect(viewModel.selectedWeek, 1);
+      expect(viewModel.showsNextWeekForWeekend, isFalse);
+      expect(viewModel.isCurrentWeek, isFalse);
+
+      await viewModel.returnToCurrentWeek();
+      expect(viewModel.selectedWeek, 2);
+    });
+
+    test('weekend classes keep the current week', () async {
+      await load(
+        scheduleTestSnapshot(
+          entries: [
+            course(1, [1, 2]),
+            course(6, [1]),
+          ],
+        ),
+      );
+
+      expect(viewModel.selectedWeek, 1);
+      expect(viewModel.showsNextWeekForWeekend, isFalse);
+    });
+
+    test('the last teaching week stays on its weekend', () async {
+      await load(
+        scheduleTestSnapshot(
+          entries: [
+            course(1, [1]),
+          ],
+        ).copyWith(
+          calendar: TeachingCalendar(
+            firstWeekMonday: DateTime(2026, 9, 7),
+            totalWeeks: 1,
+            source: TeachingCalendarSource.user,
+          ),
+        ),
+      );
+
+      expect(viewModel.selectedWeek, 1);
+      expect(viewModel.showsNextWeekForWeekend, isFalse);
+    });
+
+    test('midnight into an empty weekend advances to next week', () async {
+      now = DateTime(2026, 9, 11, 23);
+      await load(scheduleTestSnapshot());
+      expect(viewModel.selectedWeek, 1);
+
+      now = DateTime(2026, 9, 12);
+      viewModel.refreshToday();
+      expect(viewModel.selectedWeek, 2);
+      expect(viewModel.showsNextWeekForWeekend, isTrue);
+
+      now = DateTime(2026, 9, 14, 8);
+      viewModel.refreshToday();
+      expect(viewModel.selectedWeek, 2);
+      expect(viewModel.showsNextWeekForWeekend, isFalse);
+    });
+
     test('saves section times and rejects a stale calendar editor', () async {
       store.library = ScheduleLibrary(
         accounts: [scheduleTestSaved()],

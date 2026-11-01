@@ -593,6 +593,38 @@ class _TimetablePageState extends State<TimetablePage> {
           ],
         ),
       ),
+      if (model.showsNextWeekForWeekend)
+        Padding(
+          padding: EdgeInsets.fromLTRB(wide ? 24 : 12, 0, wide ? 24 : 12, 4),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                key: const ValueKey('timetable-weekend-next-week'),
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '本周末没有课程，已显示下一周',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       Expanded(
         child: Padding(
           padding: wide

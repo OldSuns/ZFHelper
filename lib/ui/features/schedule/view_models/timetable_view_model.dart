@@ -182,9 +182,29 @@ final class TimetableViewModel extends ChangeNotifier {
       schedule?.calendar.positionOn(_today) ??
       const TeachingWeekPosition(status: TeachingWeekStatus.unknown);
 
-  bool get isCurrentWeek => hasSchedule
-      ? currentPosition.week == _selectedWeek
-      : _week.contains(_today);
+  bool get isCurrentWeek =>
+      hasSchedule ? _homeWeek == _selectedWeek : _week.contains(_today);
+
+  /// The week opened by default: the current teaching week, or the next one
+  /// on a weekend when the current week has no weekend arrangements.
+  int? get _homeWeek {
+    final current = currentPosition.week;
+    final snapshot = schedule;
+    if (current == null ||
+        snapshot == null ||
+        _today.weekday < DateTime.saturday ||
+        snapshot.hasWeekendIn(current)) {
+      return current;
+    }
+    final limit = snapshot.navigationWeekLimit;
+    return limit != null && current >= limit ? current : current + 1;
+  }
+
+  /// Whether the timetable shows next week because this weekend has no classes.
+  bool get showsNextWeekForWeekend =>
+      hasSchedule &&
+      _selectedWeek == _homeWeek &&
+      _homeWeek != currentPosition.week;
 
   int get weekCount {
     final snapshot = schedule;
@@ -253,8 +273,8 @@ final class TimetableViewModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (currentPosition.week case final current?) {
-      showTeachingWeek(current);
+    if (_homeWeek case final home?) {
+      showTeachingWeek(home);
       return;
     }
     final stored = account;
@@ -267,7 +287,7 @@ final class TimetableViewModel extends ChangeNotifier {
       if (effective.calendar.totalWeeks == null) continue;
       final current = effective.calendar.positionOn(_today).week;
       if (current != null && await selectTerm(snapshot.term)) {
-        showTeachingWeek(current);
+        showTeachingWeek(_homeWeek ?? current);
         return;
       }
     }
@@ -454,7 +474,7 @@ final class TimetableViewModel extends ChangeNotifier {
         editTarget == target &&
         (previous?.firstWeekMonday != schedule?.calendar.firstWeekMonday ||
             previous?.totalWeeks != schedule?.calendar.totalWeeks)) {
-      _selectedWeek = currentPosition.week ?? 1;
+      _selectedWeek = _homeWeek ?? 1;
       _rememberWeek();
       notifyListeners();
     }
@@ -638,7 +658,7 @@ final class TimetableViewModel extends ChangeNotifier {
     }
     if (changedDate && wasCurrent) {
       if (hasSchedule) {
-        _selectedWeek = currentPosition.week ?? _selectedWeek;
+        _selectedWeek = _homeWeek ?? _selectedWeek;
         _rememberWeek();
       } else {
         _week = CalendarWeek.containing(now);
@@ -671,7 +691,7 @@ final class TimetableViewModel extends ChangeNotifier {
         (_calendarMonday == null &&
             schedule?.calendar.firstWeekMonday != null)) {
       _termKey = nextKey;
-      _selectedWeek = _browsedWeeks[nextKey] ?? currentPosition.week ?? 1;
+      _selectedWeek = _browsedWeeks[nextKey] ?? _homeWeek ?? 1;
     }
     final total = schedule?.navigationWeekLimit;
     if (total != null && _selectedWeek > total) _selectedWeek = total;

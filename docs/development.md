@@ -2,9 +2,9 @@
 
 ## Environment
 
-The application declares Flutter **>=3.47.4** and Dart **^3.13.3** in [pubspec.yaml](../pubspec.yaml). The [core package](../packages/zf_core/pubspec.yaml) accepts Dart **>=3.13.0 <4.0.0**. Use a Flutter SDK satisfying the application constraints; resolved dependencies are recorded in the lockfiles, not inferred from these minimums.
+The application declares Flutter **>=3.47.4** and Dart **^3.13.3** in [pubspec.yaml](../pubspec.yaml), and the [core package](../packages/zf_core/pubspec.yaml) accepts Dart **>=3.13.0 <4.0.0**. Use a Flutter SDK satisfying the application constraints; resolved dependencies are recorded in the lockfiles, not inferred from these minimums.
 
-Android requires the Flutter Android toolchain. The application minimum is API 33 (Android 13); compile/target SDK and NDK follow Flutter, and Java/Kotlin bytecode targets Java 17. Windows builds require the Visual Studio C++ desktop/CMake toolchain; web login requires WebView2 Runtime. Release builds use the pinned `windows-2022` GitHub Actions runner for compatibility with the official WebView plugin's Windows implementation. Check local toolchains with `flutter doctor`.
+Android requires the Flutter Android toolchain, with API 33 (Android 13) as the application minimum; compile/target SDK and NDK follow Flutter, and Java/Kotlin bytecode targets Java 17. Windows builds require the Visual Studio C++ desktop/CMake toolchain, and web login requires WebView2 Runtime. Release builds use the pinned `windows-2022` GitHub Actions runner for compatibility with the official WebView plugin. Check local toolchains with `flutter doctor`.
 
 ## Run and build
 
@@ -27,21 +27,19 @@ Ship the complete `build/windows/x64/runner/Release/` directory, not just its ex
 
 ## GitHub CI and releases
 
-Pull requests and pushes to `main` and `dev` run [.github/workflows/ci.yml](../.github/workflows/ci.yml). It restores both Dart packages, checks formatting, analyzes the application and core package, and runs their tests. It does not build or upload platform release artifacts.
+Pull requests and pushes to `main` and `dev` run [.github/workflows/ci.yml](../.github/workflows/ci.yml): it restores both Dart packages, checks formatting, analyzes both packages, and runs their tests. It does not build or upload platform release artifacts.
 
 ### Branch flow
 
-Feature branches merge into `dev` via pull request; `dev` merges into `main` via pull request. Stable release tags point only at commits reachable from `main`; pre-release tags point only at commits reachable from `dev`. Both workflows guard this: a stable tag that is not an ancestor of `origin/main` fails, and a pre-release tag that is not an ancestor of `origin/dev` fails.
+Feature branches merge into `dev` via pull request; `dev` merges into `main` via pull request. Stable release tags point only at commits reachable from `main`, and pre-release tags only at commits reachable from `dev`. Both release workflows guard this: a stable tag that is not an ancestor of `origin/main` fails, and a pre-release tag that is not an ancestor of `origin/dev` fails.
 
-Prepare release commits on `dev` (version bump plus [RELEASE_NOTES.md](../RELEASE_NOTES.md)) and merge them into `main`, so `dev` never falls behind the stable version commit. The build number after `+` must strictly increase for every published tag, stable or pre-release; continue incrementing from the latest release commit on `dev`. In-app update checks read the GitHub `latest` release endpoint, which never returns pre-releases, so stable-channel users are never offered a pre-release.
+Prepare release commits on `dev` (version bump plus [RELEASE_NOTES.md](../RELEASE_NOTES.md)) and merge them into `main`, so `dev` never falls behind the stable version commit. The build number after `+` must strictly increase for every published tag, stable or pre-release; continue incrementing from the latest release commit on `dev`. In-app update checks read the GitHub `latest` release endpoint, which never returns pre-releases.
 
 ### Stable releases
 
-A stable release is created only by pushing a `vX.Y.Z` tag. The tag workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`. For example, `0.1.1+4` is released with tag `v0.1.1`.
+A stable release is created only by pushing a `vX.Y.Z` tag, and the workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) requires the tag version to match the `X.Y.Z` part of `pubspec.yaml`; for example, `0.1.1+4` is released with tag `v0.1.1`.
 
-Before creating a stable release:
-
-1. On `dev`, update `pubspec.yaml` to `X.Y.Z+build` with a build number greater than every previously published tag, synchronize the displayed version in both READMEs, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
+1. On `dev`, update `pubspec.yaml` to `X.Y.Z+build` with a build number greater than every previously published tag, synchronize the displayed version in both READMEs, and update [RELEASE_NOTES.md](../RELEASE_NOTES.md).
 2. Commit the version change, merge `dev` into `main` via pull request, and wait for CI to pass.
 3. Push `vX.Y.Z` from that release commit on `main`.
 4. Check the GitHub Release body, assets, and their `.sha256` files. The body starts with `RELEASE_NOTES.md`, followed by signing information, artifact checksums, and GitHub's generated Full Changelog.
@@ -50,24 +48,20 @@ Before creating a stable release:
 
 A pre-release is created only by pushing a `vX.Y.Z-beta.N`, `vX.Y.Z-rc.N`, or `vX.Y.Z-dev.N` tag from a `dev` commit. The workflow in [.github/workflows/release-dev.yml](../.github/workflows/release-dev.yml) requires the tag to match the full `pubspec.yaml` version including the pre-release suffix; for example, `0.2.0-beta.1+5` is released with tag `v0.2.0-beta.1`.
 
-Before creating a pre-release:
-
-1. On `dev`, update `pubspec.yaml` to `X.Y.Z-stage.N+build` with a build number greater than every previously published tag, and update the shared [RELEASE_NOTES.md](../RELEASE_NOTES.md).
+1. On `dev`, update `pubspec.yaml` to `X.Y.Z-stage.N+build` with a build number greater than every previously published tag, and update [RELEASE_NOTES.md](../RELEASE_NOTES.md).
 2. Commit the version change and wait for CI to pass.
 3. Push `vX.Y.Z-stage.N` from that commit.
 4. Check the GitHub pre-release body, assets, and their `.sha256` files. The body adds a pre-release notice stating that the build comes from `dev`, may be unstable, and is intended for testing only.
 
-After the stable `vX.Y.Z` is released from `main`, the next pre-release on `dev` starts from the next version core, for example `vX.Y.(Z+1)-beta.1`, with the build number continued from the stable release's build number. Pre-releases are not offered through in-app update checks; pre-release users download new builds from the GitHub Releases page until a stable release overtakes their version.
+After the stable `vX.Y.Z` is released from `main`, the next pre-release on `dev` starts from the next version core, for example `vX.Y.(Z+1)-beta.1`, with the build number continued from the stable release's build number. Pre-releases are not offered through in-app update checks; pre-release users download new builds from the GitHub Releases page until a stable release overtakes their version. In-app version ordering uses a project-defined stage order `dev < beta < rc < stable`, accepts only these three stages, and rejects other suffixes such as `-alpha.1`; do not publish tags with other pre-release suffixes.
 
-In-app version ordering uses a project-defined stage order `dev < beta < rc < stable`, and accepts only these three stages; it is intentionally simpler than the full SemVer pre-release lexical ordering and rejects other suffixes such as `-alpha.1`. Do not publish tags with other pre-release suffixes.
-
-The release workflow builds an Android AAB, Android APK, and a ZIP containing the complete Windows release directory. Android signing uses the protected `release` Environment secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. If all four are configured, Android assets are signed; if none are configured, the workflow publishes assets marked `unsigned` for testing only. Partial configuration fails. Unsigned assets are not official distribution or upgrade evidence. The workflow never stores signing material in the repository and cleans temporary signing files after the build.
+The release workflow builds an Android AAB, Android APK, and a ZIP containing the complete Windows release directory. Android signing uses the protected `release` Environment secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`: all four configured signs the Android assets, none configured publishes assets marked `unsigned` for testing only, and partial configuration fails. Unsigned assets are not official distribution or upgrade evidence. The workflow never stores signing material in the repository and cleans temporary signing files after the build.
 
 Verify a downloaded asset with `Get-FileHash <file> -Algorithm SHA256` on PowerShell or `sha256sum <file>` on Unix. A successful workflow, signed package, installation, and upgrade are separate acceptance evidence; none proves real-school compatibility or production-device background behavior.
 
 ## Targeted validation
 
-Choose existing checks relevant to the change before expanding coverage. Do not repeatedly run whole suites or device smoke checks for unrelated documentation or formatting work. Resolve dependencies first when package configuration changes.
+Choose existing checks relevant to the change before expanding coverage. Do not repeatedly run whole suites or device smoke checks for unrelated documentation or formatting work, and resolve dependencies first when package configuration changes.
 
 Application examples, run from the repository root:
 
@@ -92,9 +86,7 @@ dart format --output=none --set-exit-if-changed <changed-paths>
 flutter analyze --no-pub <changed-paths>
 ```
 
-`<changed-paths>` is a placeholder, not a literal command argument. `dart analyze` may be used within the core package for its modified files. Add a corresponding platform build only when the change affects that platform or requires compilation evidence.
-
-Device checks are needed for platform-specific behavior such as WebView authentication, foreground-service permissions/interruption, persistence across restarts, widget rendering/launcher sizing, and tap-to-agenda handling. Real-school access and enrollment actions need explicit authorization; never use constructed responses as substitutes.
+`<changed-paths>` is a placeholder, not a literal command argument, and `dart analyze` may be used within the core package for its modified files. Add a corresponding platform build only when the change affects that platform or requires compilation evidence. Device checks are needed for platform-specific behavior such as WebView authentication, foreground-service permissions/interruption, persistence across restarts, widget rendering/launcher sizing, and tap-to-agenda handling. Real-school access and enrollment actions need explicit authorization; never use constructed responses as substitutes.
 
 ## Documentation checks
 
@@ -119,6 +111,6 @@ Use a compact record when reporting validation:
 | Result | Pass/fail and a concise observed outcome |
 | Not covered | Platforms, network actions, school data, device recovery, or release scenarios not exercised |
 
-Keep source inspection, constructed-data tests, compilation, emulator checks, production-device behavior, and authenticated real-school results separate. A running service, HTTP 200, or successful debug build is not proof of successful enrollment. Documentation changes do not refresh historical acceptance results.
+Keep source inspection, constructed-data tests, compilation, emulator checks, production-device behavior, and authenticated real-school results separate. A running service, HTTP 200, or successful debug build is not proof of successful enrollment, and documentation changes do not refresh historical acceptance results.
 
-Current acceptance gaps include real-school authentication and business-data/result comparisons; Android multi-account persistence, process recovery and long-running/background behavior; launcher/widget restart behavior; Windows minimize/sleep behavior; and formal signed-package installation/upgrade workflows. CI, automated builds, and unsigned release assets do not close these gaps. Record newly executed evidence rather than carrying old build results forward as validation of the current revision.
+Current acceptance gaps include real-school authentication and business-data/result comparisons; Android multi-account persistence, process recovery, and long-running/background behavior; launcher/widget restart behavior; Windows minimize/sleep behavior; and formal signed-package installation/upgrade workflows. CI, automated builds, and unsigned release assets do not close these gaps. Record newly executed evidence rather than carrying old build results forward as validation of the current revision.
