@@ -12,4 +12,6 @@
     <dimen name="schedule_widget_row_title_text">14sp</dimen>
     <dimen name="schedule_widget_body_text">12sp</dimen>
     <dimen name="schedule_widget_caption_text">11sp</dimen>
+    <dimen name="schedule_widget_countdown_gap">4dp</dimen>
+    <dimen name="schedule_widget_countdown_padding">6dp</dimen>
 </resources>

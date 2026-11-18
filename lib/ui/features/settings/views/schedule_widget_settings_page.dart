@@ -72,11 +72,11 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        '小组件会随桌面尺寸自动切换：约 2×1 格突出当前或下一节课，常规尺寸显示今日列表，横向展开显示今天与明天，继续增高后显示本周七天概览。实际占格和可用尺寸由桌面决定。',
+                        '小组件随桌面尺寸调整：较矮时显示当前或下一节课，默认 3×2 和较宽的 4×2 都显示可上下滚动的课程列表。实际占格和可用尺寸由桌面决定。',
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        '课程名称优先显示；空间充足时再补充时间、节次、地点和教师。列表会定位到当前或下一节课程，点击课程、日期或星期可打开对应日期的日程。',
+                        '课程名称优先显示。空间充足时，当前课程显示距离下课的时间，今天的下一节课在开课前 30 分钟内显示倒计时。点击小组件可打开周课表。',
                       ),
                       const SizedBox(height: 12),
                       const Text(
@@ -91,6 +91,57 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                       if (lastSync != null)
                         Text('最近同步：${_timestamp(lastSync)}'),
                     ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppLayout.sectionGap),
+            SettingsSection(
+              title: '显示内容',
+              children: [
+                SwitchListTile.adaptive(
+                  secondary: const Icon(Icons.timer_outlined),
+                  title: const Text('显示课程倒计时'),
+                  subtitle: const Text('显示正在进行课程的剩余时间，以及 30 分钟内的下一节课倒计时'),
+                  value: model.settings.showCountdown,
+                  onChanged: !model.settingsInitialized || model.busy
+                      ? null
+                      : (value) {
+                          unawaited(model.updateSettings(showCountdown: value));
+                        },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                ),
+                SwitchListTile.adaptive(
+                  secondary: const Icon(Icons.place_outlined),
+                  title: const Text('显示上课地点'),
+                  subtitle: const Text('在课程卡片中显示教室或地点'),
+                  value: model.settings.showLocation,
+                  onChanged: !model.settingsInitialized || model.busy
+                      ? null
+                      : (value) {
+                          unawaited(model.updateSettings(showLocation: value));
+                        },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                ),
+                SwitchListTile.adaptive(
+                  secondary: const Icon(Icons.person_outline),
+                  title: const Text('显示教师信息'),
+                  subtitle: const Text('宽版小组件空间充足时显示授课教师'),
+                  value: model.settings.showTeacher,
+                  onChanged: !model.settingsInitialized || model.busy
+                      ? null
+                      : (value) {
+                          unawaited(model.updateSettings(showTeacher: value));
+                        },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
                   ),
                 ),
               ],
@@ -142,7 +193,7 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
             ],
             const SizedBox(height: AppLayout.sectionGap),
             Text(
-              '也可长按桌面添加小组件，长按已添加的小组件调整大小。显示按系统周期、日期和课程边界刷新；系统省电时可能延迟。列表、双日和周概览提供刷新按钮，也可在此重新同步。',
+              '也可长按桌面添加小组件，长按已添加的小组件调整大小。课程、外观或这些显示设置变化后会自动同步；系统省电时可能延迟后台刷新。',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

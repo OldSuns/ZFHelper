@@ -259,6 +259,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         return;
       }
       Navigator.of(context).popUntil((route) => route.isFirst);
+      if (source == null) {
+        _selectDestination(AppDestination.timetable.index);
+        return;
+      }
       _timetable.selectAgendaDate(launch.date);
       _timetable.showSection(ScheduleSection.agenda);
       _selectDestination(

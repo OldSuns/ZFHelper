@@ -70,7 +70,7 @@ void main() {
     matching: find.text(label),
   );
 
-  testWidgets('widget launches open their date and dismiss nested settings', (
+  testWidgets('widget taps open the timetable and dismiss nested settings', (
     tester,
   ) async {
     const channel = MethodChannel('zfhelper/schedule_widget');
@@ -80,6 +80,12 @@ void main() {
       (call) async => switch (call.method) {
         'consumeLaunch' => '2027-01-18',
         'capabilities' => {'supported': true, 'canPin': true, 'count': 1},
+        'settings' => {
+          'showCountdown': true,
+          'showLocation': true,
+          'showTeacher': true,
+        },
+        'setSettings' => null,
         'publish' => null,
         _ => throw StateError('Unexpected widget method: ${call.method}'),
       },
@@ -92,9 +98,12 @@ void main() {
     final model = tester
         .widget<TimetablePage>(find.byType(TimetablePage))
         .viewModel;
-    expect(model.section, ScheduleSection.agenda);
-    expect(model.agendaDate, DateTime(2027, 1, 18));
+    expect(model.section, ScheduleSection.timetable);
+    expect(model.agendaDate, DateTime(2026, 9, 12));
 
+    await tester.tap(find.byKey(const ValueKey('schedule-section-agenda')));
+    await tester.pumpAndSettle();
+    expect(model.section, ScheduleSection.agenda);
     await tester.tap(navigationLabel('设置'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, '显示'));
@@ -109,8 +118,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(DisplaySettingsPage), findsNothing);
     expect(find.byType(TimetablePage), findsOneWidget);
-    expect(model.section, ScheduleSection.agenda);
-    expect(model.agendaDate, DateTime(2026, 10, 12));
+    expect(model.section, ScheduleSection.timetable);
+    expect(model.agendaDate, DateTime(2026, 9, 12));
     expect(tester.takeException(), isNull);
   });
 

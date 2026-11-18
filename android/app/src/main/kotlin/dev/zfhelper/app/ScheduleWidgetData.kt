@@ -35,6 +35,38 @@ internal data class ScheduleWidgetTheme(
     val dark: ScheduleWidgetColors,
 )
 
+internal data class ScheduleWidgetSettings(
+    val showCountdown: Boolean = true,
+    val showLocation: Boolean = true,
+    val showTeacher: Boolean = true,
+) {
+    fun toMap(): Map<String, Boolean> = mapOf(
+        "showCountdown" to showCountdown,
+        "showLocation" to showLocation,
+        "showTeacher" to showTeacher,
+    )
+
+    companion object {
+        val defaults = ScheduleWidgetSettings()
+
+        fun fromArguments(arguments: Any?): ScheduleWidgetSettings {
+            val values = arguments as? Map<*, *>
+                ?: invalidWidgetPayload("小组件显示设置")
+            widgetPayloadCheck(
+                values.keys.all { it in setOf("showCountdown", "showLocation", "showTeacher") },
+                "未知显示设置",
+            )
+            fun read(key: String): Boolean = values[key] as? Boolean
+                ?: invalidWidgetPayload("显示设置.$key")
+            return ScheduleWidgetSettings(
+                showCountdown = read("showCountdown"),
+                showLocation = read("showLocation"),
+                showTeacher = read("showTeacher"),
+            )
+        }
+    }
+}
+
 internal data class ScheduleWidgetPeriod(val start: Int, val end: Int)
 
 internal data class ScheduleWidgetSource(val schoolId: String, val accountId: String, val termKey: String)
@@ -299,6 +331,32 @@ internal class ScheduleWidgetStore(context: Context) {
             Log.e("ScheduleWidget", "widget_saved_theme_migration_failed")
         }
         return legacyTheme
+    }
+
+    fun settings(): ScheduleWidgetSettings = try {
+        ScheduleWidgetSettings(
+            showCountdown = preferences.getBoolean("show_countdown", true),
+            showLocation = preferences.getBoolean("show_location", true),
+            showTeacher = preferences.getBoolean("show_teacher", true),
+        )
+    } catch (_: ClassCastException) {
+        Log.e("ScheduleWidget", "widget_saved_settings_invalid")
+        ScheduleWidgetSettings.defaults
+    }
+
+    fun writeSettings(settings: ScheduleWidgetSettings) {
+        if (!preferences.edit()
+                .putBoolean("show_countdown", settings.showCountdown)
+                .putBoolean("show_location", settings.showLocation)
+                .putBoolean("show_teacher", settings.showTeacher)
+                .commit()
+        ) {
+            throw ScheduleWidgetException(
+                "widget_settings_write_failed",
+                "小组件显示设置未能保存，请重试",
+                ScheduleWidgetFailureKind.DISPLAY,
+            )
+        }
     }
 
     fun write(payload: String) {

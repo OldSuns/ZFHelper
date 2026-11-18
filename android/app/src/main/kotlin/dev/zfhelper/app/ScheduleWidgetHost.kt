@@ -130,6 +130,15 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             return
         }
         when (call.method) {
+            "settings" -> complete(result) {
+                store.settings().toMap()
+            }
+            "setSettings" -> complete(result) {
+                val settings = ScheduleWidgetSettings.fromArguments(call.arguments)
+                store.writeSettings(settings)
+                renderAndSchedule(store.read())
+                null
+            }
             "capabilities" -> complete(result) {
                 val snapshot = try {
                     store.read()
@@ -337,6 +346,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             }
         }
         val savedTheme = store.theme(visibleSnapshot)
+        val settings = store.settings()
         for (id in ids) {
             manager.updateAppWidget(
                 id,
@@ -347,10 +357,11 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                     blockingFailure?.message,
                     now,
                     savedTheme,
+                    settings,
                 ),
             )
         }
-        scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty())
+        scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty(), settings)
         if (failure != null && blockingFailure == null) store.clearFailure()
         cleanupFailure?.let { throw it }
     }
@@ -359,6 +370,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         snapshot: ScheduleWidgetSnapshot?,
         now: ZonedDateTime,
         hasWidgets: Boolean,
+        settings: ScheduleWidgetSettings = store.settings(),
     ) {
         val alarm = application.getSystemService(AlarmManager::class.java)
         val intent = Intent(application, ScheduleWidgetProvider::class.java).setAction(SCHEDULE_WIDGET_BOUNDARY)
@@ -373,7 +385,8 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         val today = now.toLocalDate()
         val startOfDay = today.atStartOfDay()
         var next = today.plusDays(1).atStartOfDay(now.zone)
-        snapshot?.days?.firstOrNull { it.date == today }?.lessons?.forEach { lesson ->
+        val lessons = snapshot?.days?.firstOrNull { it.date == today }?.lessons.orEmpty()
+        lessons.forEach { lesson ->
             lesson.periods.forEach { period ->
                 for (minutes in listOf(period.start, period.end)) {
                     val boundary = startOfDay.plusMinutes(minutes.toLong()).atZone(now.zone)
@@ -381,8 +394,23 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 }
             }
         }
+        val countdownUpdate = if (!settings.showCountdown) {
+            null
+        } else if (snapshot != null && ScheduleWidgetRenderer.hasCountdown(snapshot, now, settings)) {
+            now.plusMinutes(1).withSecond(0).withNano(0)
+        } else {
+            lessons.mapNotNull { lesson ->
+                lesson.start?.takeIf { it >= SCHEDULE_WIDGET_UPCOMING_MINUTES }?.let { start ->
+                    startOfDay.plusMinutes((start - SCHEDULE_WIDGET_UPCOMING_MINUTES).toLong()).atZone(now.zone)
+                }?.takeIf { it > now }
+            }.minOrNull()
+        }
         // Widgets do not need exact alarms or a wake-up while the screen is off.
-        alarm.setWindow(AlarmManager.RTC, next.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, pending)
+        if (countdownUpdate != null && countdownUpdate <= next) {
+            alarm.set(AlarmManager.RTC, countdownUpdate.toInstant().toEpochMilli(), pending)
+        } else {
+            alarm.setWindow(AlarmManager.RTC, next.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, pending)
+        }
     }
 
     private fun showFailure(failure: ScheduleWidgetException) {
@@ -400,10 +428,19 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         try {
             val now = ZonedDateTime.now()
             val ids = manager.getAppWidgetIds(provider)
+            val settings = store.settings()
             for (id in ids) {
                 manager.updateAppWidget(
                     id,
-                    ScheduleWidgetRenderer.render(application, id, null, failure.message, now, store.theme()),
+                    ScheduleWidgetRenderer.render(
+                        application,
+                        id,
+                        null,
+                        failure.message,
+                        now,
+                        store.theme(),
+                        settings,
+                    ),
                 )
             }
             scheduleNextUpdate(null, now, ids.isNotEmpty())

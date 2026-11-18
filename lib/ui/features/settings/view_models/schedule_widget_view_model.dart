@@ -27,6 +27,9 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   final DateTime Function() _clock;
   late final StreamSubscription<ScheduleRepositoryState> _subscription;
   ScheduleWidgetCapabilities? _capabilities;
+  ScheduleWidgetSettings _settings = const ScheduleWidgetSettings();
+  bool _settingsInitialized = false;
+  bool _settingsSaving = false;
   String? _failure;
   Object? _requestedSource;
   Future<bool>? _sync;
@@ -35,7 +38,10 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool _disposed = false;
 
   ScheduleWidgetCapabilities? get capabilities => _capabilities;
-  bool get busy => _sync != null || _pinning;
+  ScheduleWidgetSettings get settings => _settings;
+  bool get settingsInitialized => _settingsInitialized;
+  bool get settingsBusy => _settingsSaving;
+  bool get busy => _sync != null || _pinning || _settingsSaving;
   bool get canSync => _repository.state.initialized && _appearance.initialized;
   String? get failure => _failure ?? _capabilities?.failure;
   Stream<ScheduleWidgetLaunch> get launches => _platform.launches;
@@ -97,12 +103,47 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   }
 
   Future<void> refreshStatus() async {
+    _settingsInitialized = false;
     try {
       _capabilities = await _platform.capabilities();
+      _settings = await _platform.settings();
+      _settingsInitialized = true;
     } on ScheduleWidgetException catch (error) {
       _failure = error.message;
     }
     _notify();
+  }
+
+  Future<bool> updateSettings({
+    bool? showCountdown,
+    bool? showLocation,
+    bool? showTeacher,
+  }) async {
+    if (_disposed || busy || !_settingsInitialized) return false;
+    final next = ScheduleWidgetSettings(
+      showCountdown: showCountdown ?? _settings.showCountdown,
+      showLocation: showLocation ?? _settings.showLocation,
+      showTeacher: showTeacher ?? _settings.showTeacher,
+    );
+    if (next.showCountdown == _settings.showCountdown &&
+        next.showLocation == _settings.showLocation &&
+        next.showTeacher == _settings.showTeacher) {
+      return true;
+    }
+    _settingsSaving = true;
+    _failure = null;
+    _notify();
+    try {
+      await _platform.setSettings(next);
+      _settings = next;
+      return true;
+    } on ScheduleWidgetException catch (error) {
+      _failure = error.message;
+      return false;
+    } finally {
+      _settingsSaving = false;
+      _notify();
+    }
   }
 
   Future<bool> synchronize() {
