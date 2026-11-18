@@ -170,6 +170,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
 
   static Map<String, int> _colors(ColorScheme colors) => {
     'surface': colors.surface.toARGB32(),
+    'card': colors.primaryContainer.toARGB32(),
     'primary': colors.primary.toARGB32(),
     'text': colors.onSurface.toARGB32(),
     'secondary': colors.onSurfaceVariant.toARGB32(),

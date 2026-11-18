@@ -8,7 +8,7 @@ import android.text.TextPaint
 import android.util.SizeF
 import kotlin.math.ceil
 
-internal enum class ScheduleWidgetStyle { NEXT, CARD, TODAY_LIST, TWO_DAY, WEEK }
+internal enum class ScheduleWidgetStyle { NEXT, CARD, TODAY_LIST }
 
 internal data class ScheduleWidgetLayout(
     val size: SizeF,
@@ -23,10 +23,10 @@ internal class ScheduleWidgetSizing(context: Context) {
     val padding = dp(R.dimen.schedule_widget_padding)
     val compactPadding = dp(R.dimen.schedule_widget_compact_padding)
     val cardPadding = dp(R.dimen.schedule_widget_card_padding)
-    val titleLine = lineHeight(R.dimen.schedule_widget_title_text)
     val bodyLine = lineHeight(R.dimen.schedule_widget_body_text)
     val captionLine = lineHeight(R.dimen.schedule_widget_caption_text)
     private val rowTitleLine = lineHeight(R.dimen.schedule_widget_row_title_text)
+    val titleLine = lineHeight(R.dimen.schedule_widget_title_text)
     val stripTitleLine = rowTitleLine
     val titlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_title_text).toFloat()
     val stripTitlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_row_title_text).toFloat()
@@ -39,7 +39,6 @@ internal class ScheduleWidgetSizing(context: Context) {
     fun bodyHeight(text: String): Float = lineHeight(R.dimen.schedule_widget_body_text, text)
 
     fun variants(): List<ScheduleWidgetLayout> {
-        val minimumWidth = dp(R.dimen.schedule_widget_min_width)
         // The first responsive breakpoint covers every launcher-reported narrow width.
         // Some launchers subtract host padding and report less than minResizeWidth.
         val narrowWidth = 1f
@@ -47,24 +46,18 @@ internal class ScheduleWidgetSizing(context: Context) {
         val twoLines = 2 * compactPadding + stripTitleLine + bodyLine + 6
         val threeLines = twoLines + bodyLine + 2
         val cardHeight = maxOf(
-            dp(R.dimen.schedule_widget_default_height),
-            2 * cardPadding + captionLine + titleLine + 2 * bodyLine + 8,
+            minimumHeight + 24,
+            2 * cardPadding + captionLine + stripTitleLine + 2 * bodyLine + 12,
         )
         val tallCardHeight = maxOf(
             cardHeight + 8,
-            2 * cardPadding + captionLine + 2 * titleLine + 2 * bodyLine + 8,
+            2 * cardPadding + captionLine + 2 * stripTitleLine + 2 * bodyLine + 12,
         )
         val todayHeight = maxOf(
-            tallCardHeight + 16,
-            2 * padding + headerHeight + 2 * rowTitleLine + 4 * bodyLine + 18,
+            dp(R.dimen.schedule_widget_default_height),
+            2 * padding + bodyLine + 4 + rowTitleLine + 2 * bodyLine + 22,
         )
-        val twoDayWidth = maxOf(300f, 2 * minimumWidth + 3 * padding)
-        val twoDayHeight = maxOf(150f, 2 * padding + headerHeight + 2 * compactRowHeight + captionLine + 8)
-        val weekWidth = maxOf(280f, twoDayWidth)
-        val weekHeight = maxOf(
-            260f,
-            2 * padding + maxOf(48f, headerHeight) + 7 * maxOf(28f, bodyLine + 6),
-        )
+        val wideWidth = dp(R.dimen.schedule_widget_wide_width)
         return listOf(
             ScheduleWidgetLayout(SizeF(narrowWidth, minimumHeight), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, maxOf(minimumHeight + 8, twoLines)), ScheduleWidgetStyle.NEXT),
@@ -72,13 +65,11 @@ internal class ScheduleWidgetSizing(context: Context) {
             ScheduleWidgetLayout(SizeF(narrowWidth, cardHeight), ScheduleWidgetStyle.CARD),
             ScheduleWidgetLayout(SizeF(narrowWidth, tallCardHeight), ScheduleWidgetStyle.CARD),
             ScheduleWidgetLayout(SizeF(narrowWidth, todayHeight), ScheduleWidgetStyle.TODAY_LIST),
-            ScheduleWidgetLayout(SizeF(twoDayWidth, twoDayHeight), ScheduleWidgetStyle.TWO_DAY),
             ScheduleWidgetLayout(
-                SizeF(narrowWidth, todayHeight + compactRowHeight + 2 * captionLine),
+                SizeF(wideWidth, todayHeight),
                 ScheduleWidgetStyle.TODAY_LIST,
                 detailed = true,
             ),
-            ScheduleWidgetLayout(SizeF(weekWidth, weekHeight), ScheduleWidgetStyle.WEEK, detailed = true),
         )
     }
 

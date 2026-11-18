@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="schedule_widget_default_width">180dp</dimen>
+    <dimen name="schedule_widget_wide_width">240dp</dimen>
     <dimen name="schedule_widget_default_height">110dp</dimen>
     <dimen name="schedule_widget_min_width">110dp</dimen>
     <dimen name="schedule_widget_min_height">48dp</dimen>
