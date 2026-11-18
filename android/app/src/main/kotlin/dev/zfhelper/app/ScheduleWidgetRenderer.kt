@@ -51,7 +51,9 @@ internal object ScheduleWidgetRenderer {
         val (snapshot, _, focus, colors, now) = frame
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
         val listDay = if (variant.style == ScheduleWidgetStyle.TODAY_LIST) {
-            snapshot?.days?.firstOrNull { it.date == focus.date && it.lessons.isNotEmpty() }
+            snapshot?.days?.firstOrNull { day ->
+                day.date == focus.date && day.lessons.any { it.id == focus.lessonId }
+            }
         } else {
             null
         }
@@ -189,9 +191,8 @@ internal object ScheduleWidgetRenderer {
         } else {
             -1
         }
-        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }.coerceAtLeast(0)
-        val orderedLessons = day.lessons.drop(focusedIndex) + day.lessons.take(focusedIndex)
-        orderedLessons.forEachIndexed { index, lesson ->
+        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
+        day.lessons.drop(focusedIndex).forEachIndexed { index, lesson ->
             rows.addItem(
                 index.toLong(),
                 lessonRow(
@@ -203,9 +204,6 @@ internal object ScheduleWidgetRenderer {
                     variant,
                     sizing,
                     focusLabel = frame.focus.label.takeIf { lesson.id == frame.focus.lessonId },
-                    sectionLabel = "此前课程".takeIf {
-                        focusedIndex > 0 && index == day.lessons.size - focusedIndex
-                    },
                 ),
             )
         }
@@ -236,7 +234,6 @@ internal object ScheduleWidgetRenderer {
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
         focusLabel: String?,
-        sectionLabel: String?,
     ): RemoteViews {
         val row = RemoteViews(context.packageName, R.layout.schedule_widget_lesson)
         val focused = focusLabel != null
@@ -251,8 +248,8 @@ internal object ScheduleWidgetRenderer {
         row.visible(R.id.schedule_widget_lesson_when, !columns)
         row.visible(R.id.schedule_widget_lesson_accent, focused)
         row.tintBackground(R.id.schedule_widget_lesson_root, colors.card)
-        row.visible(R.id.schedule_widget_lesson_state, focused || sectionLabel != null)
-        row.setTextViewText(R.id.schedule_widget_lesson_state, focusLabel ?: sectionLabel.orEmpty())
+        row.visible(R.id.schedule_widget_lesson_state, focused)
+        row.setTextViewText(R.id.schedule_widget_lesson_state, focusLabel.orEmpty())
         row.setTextColor(R.id.schedule_widget_lesson_state, colors.primary)
         row.setWidgetColor(
             R.id.schedule_widget_lesson_accent,
@@ -293,7 +290,7 @@ internal object ScheduleWidgetRenderer {
         )
         row.setContentDescription(
             R.id.schedule_widget_lesson_root,
-            listOfNotNull(sectionLabel, lesson.title, lesson.periodLabel, lesson.timeLabel, lesson.location, detail, phase.label)
+            listOf(lesson.title, lesson.periodLabel, lesson.timeLabel, lesson.location, detail, phase.label)
                 .filter(String::isNotBlank).joinToString("，"),
         )
         return row
