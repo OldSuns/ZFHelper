@@ -1,6 +1,7 @@
 # Highlights
 
-- On Saturday or Sunday, when the current teaching week has no weekend classes (five-day grid), the timetable now opens the next week with a one-line notice. "Return to this week" targets that week, the week picker still marks the actual current week, and weeks with weekend classes or the last teaching week stay unchanged.
+- The Android timetable widget now preserves its appearance when theme persistence fails and refreshes its snapshot when the saved theme changes.
+- Course cards in the widget now use a scrolling layout that adapts to the available space and supports longer course content.
 
 ## Installation
 
