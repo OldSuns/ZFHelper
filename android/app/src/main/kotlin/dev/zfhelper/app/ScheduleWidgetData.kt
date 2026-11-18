@@ -8,7 +8,12 @@ import org.json.JSONException
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
@@ -18,6 +23,11 @@ internal class ScheduleWidgetException(
     val code: String,
     override val message: String,
     val kind: ScheduleWidgetFailureKind = ScheduleWidgetFailureKind.SNAPSHOT,
+) : Exception(message)
+
+internal class ScheduleWidgetSettingsException(
+    val code: String,
+    override val message: String,
 ) : Exception(message)
 
 internal data class ScheduleWidgetColors(
@@ -50,20 +60,21 @@ internal data class ScheduleWidgetSettings(
         val defaults = ScheduleWidgetSettings()
 
         fun fromArguments(arguments: Any?): ScheduleWidgetSettings {
-            val values = arguments as? Map<*, *>
-                ?: invalidWidgetPayload("小组件显示设置")
-            widgetPayloadCheck(
-                values.keys.all { it in setOf("showCountdown", "showLocation", "showTeacher") },
-                "未知显示设置",
-            )
+            val values = arguments as? Map<*, *> ?: invalidSettings("格式错误")
+            if (values.keys.any { it !in setOf("showCountdown", "showLocation", "showTeacher") }) {
+                invalidSettings("未知选项")
+            }
             fun read(key: String): Boolean = values[key] as? Boolean
-                ?: invalidWidgetPayload("显示设置.$key")
+                ?: invalidSettings(key)
             return ScheduleWidgetSettings(
                 showCountdown = read("showCountdown"),
                 showLocation = read("showLocation"),
                 showTeacher = read("showTeacher"),
             )
         }
+
+        private fun invalidSettings(field: String): Nothing =
+            throw ScheduleWidgetSettingsException("widget_settings_invalid", "小组件显示设置无效（$field）")
     }
 }
 
@@ -259,6 +270,7 @@ internal fun scheduleWidgetClock(minutes: Int): String =
 
 internal class ScheduleWidgetStore(context: Context) {
     private val file = AtomicFile(File(context.filesDir, "schedule_widget.json"))
+    private val settingsFile = File(context.filesDir, "schedule_widget_settings.json")
     private val preferences = context.getSharedPreferences("schedule_widget_status", Context.MODE_PRIVATE)
     private var memoryFailure: ScheduleWidgetException? = null
 
@@ -333,7 +345,28 @@ internal class ScheduleWidgetStore(context: Context) {
         return legacyTheme
     }
 
-    fun settings(): ScheduleWidgetSettings = try {
+    fun settings(): ScheduleWidgetSettings {
+        fun readFailure() = ScheduleWidgetSettingsException(
+            "widget_settings_read_failed", "小组件显示设置未能读取，请重试",
+        )
+        try {
+            val json = JSONObject(Files.readAllBytes(settingsFile.toPath()).toString(Charsets.UTF_8))
+            return ScheduleWidgetSettings.fromArguments(json.keys().asSequence().associateWith { json.get(it) })
+        } catch (_: NoSuchFileException) {
+            // Preserve preferences saved before settings moved to their own file.
+            return legacySettings()
+        } catch (_: IOException) {
+            throw readFailure()
+        } catch (_: SecurityException) {
+            throw readFailure()
+        } catch (_: JSONException) {
+            throw readFailure()
+        } catch (_: ScheduleWidgetSettingsException) {
+            throw readFailure()
+        }
+    }
+
+    private fun legacySettings(): ScheduleWidgetSettings = try {
         ScheduleWidgetSettings(
             showCountdown = preferences.getBoolean("show_countdown", true),
             showLocation = preferences.getBoolean("show_location", true),
@@ -345,17 +378,21 @@ internal class ScheduleWidgetStore(context: Context) {
     }
 
     fun writeSettings(settings: ScheduleWidgetSettings) {
-        if (!preferences.edit()
-                .putBoolean("show_countdown", settings.showCountdown)
-                .putBoolean("show_location", settings.showLocation)
-                .putBoolean("show_teacher", settings.showTeacher)
-                .commit()
-        ) {
-            throw ScheduleWidgetException(
-                "widget_settings_write_failed",
-                "小组件显示设置未能保存，请重试",
-                ScheduleWidgetFailureKind.DISPLAY,
-            )
+        fun writeFailure() = ScheduleWidgetSettingsException(
+            "widget_settings_write_failed", "小组件显示设置未能保存，请重试",
+        )
+        val pending = File(settingsFile.parentFile, "${settingsFile.name}.new")
+        try {
+            FileOutputStream(pending).use { stream ->
+                stream.write(JSONObject(settings.toMap()).toString().toByteArray(Charsets.UTF_8))
+                stream.fd.sync()
+            }
+            // Readers only see the new settings after the file is replaced. A retry overwrites a failed draft.
+            Files.move(pending.toPath(), settingsFile.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+        } catch (_: IOException) {
+            throw writeFailure()
+        } catch (_: SecurityException) {
+            throw writeFailure()
         }
     }
 

@@ -81,7 +81,7 @@ When there is room in the list, the focused lesson shows a rounded badge with mi
 
 The widget has no manual refresh button: timetable, account, calendar, or appearance changes synchronize it, and system updates plus inexact alarms provide background refresh opportunities. The selected application appearance remains available if the timetable snapshot is temporarily unreadable. Power management can delay background updates, so the badge shows the countdown as of the latest refresh and is not a precise reminder service.
 
-Timetable settings > Desktop widget lets users choose whether course countdowns, locations, and teacher names are shown. These display choices are enabled by default, persist across app restarts, and take effect on existing widgets immediately; disabling countdowns also removes their minute-by-minute background refresh.
+Timetable settings > Desktop widget lets users choose whether course countdowns, locations, and teacher names are shown. These display choices are enabled by default, persist across app restarts, and take effect on existing widgets immediately; disabling countdowns cancels their background refreshes while retaining course-boundary refreshes.
 
 ### Android course notifications
 

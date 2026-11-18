@@ -22,6 +22,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         when (intent.action) {
             SCHEDULE_WIDGET_REFRESH,
             SCHEDULE_WIDGET_BOUNDARY,
+            SCHEDULE_WIDGET_COUNTDOWN,
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_LOCALE_CHANGED -> refresh(context)

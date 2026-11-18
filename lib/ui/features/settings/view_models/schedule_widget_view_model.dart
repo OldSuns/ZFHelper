@@ -139,6 +139,13 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
       return true;
     } on ScheduleWidgetException catch (error) {
       _failure = error.message;
+      try {
+        _settings = await _platform.settings();
+        _settingsInitialized = true;
+      } on ScheduleWidgetException catch (readError) {
+        _failure = '${error.message}；${readError.message}';
+        _settingsInitialized = false;
+      }
       return false;
     } finally {
       _settingsSaving = false;

@@ -366,14 +366,15 @@ internal object ScheduleWidgetRenderer {
         val active = day?.lessons?.firstOrNull { it.phaseAt(minutes).isActive }
         if (active != null) {
             val phase = active.phaseAt(minutes)
-            val countdown = active.end?.takeIf { settings.showCountdown && phase.isActive && it > minutes }
+            val countdown = active.end?.takeIf { settings.showCountdown && phase == ScheduleWidgetPhase.IN_CLASS && it > minutes }
                 ?.let { "剩 ${it - minutes} 分钟" }
             return lessonFocus(today, phase.label, active, settings, countdown)
         }
         val next = day?.lessons?.filter { it.start != null && it.start > minutes }?.minByOrNull { it.start!! }
         val untilNext = next?.start?.minus(minutes)
         if (next != null && untilNext != null && untilNext <= SCHEDULE_WIDGET_UPCOMING_MINUTES) {
-            return lessonFocus(today, "下一节", next, settings, "还有 $untilNext 分钟")
+            val countdown = if (settings.showCountdown) "还有 $untilNext 分钟" else null
+            return lessonFocus(today, "下一节", next, settings, countdown)
         }
         if (day != null && (day.byPeriod || day.lessons.any { it.start == null })) {
             val pending = day.lessons.firstOrNull { it.end == null || it.end > minutes }
