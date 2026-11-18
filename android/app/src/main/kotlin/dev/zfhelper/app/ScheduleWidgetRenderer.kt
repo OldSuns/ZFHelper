@@ -54,14 +54,17 @@ internal object ScheduleWidgetRenderer {
             day.date == frame.focus.date && day.lessons.any { it.id == frame.focus.lessonId }
         }
         val listState = listDay?.let { day ->
-            ScheduleWidgetListState(snapshot?.source, day.date, listLessons(day, frame))
+            ScheduleWidgetListState(snapshot.source, day.date, listLessons(day, frame))
         }
         val sizing = ScheduleWidgetSizing(context)
         val countdownWidth = frame.focus.countdown?.let { sizing.countdownWidth(frame.focus.title, it) }
         return ScheduleWidgetRendering(
             RemoteViews(
                 sizing.variants(countdownWidth).associate { variant ->
-                    variant.size to focusLayout(context, widgetId, variant, sizing, frame, listState != previousListState)
+                    variant.size to focusLayout(
+                        context, widgetId, variant, sizing, frame, listDay,
+                        listState?.lessons.orEmpty(), listState != previousListState,
+                    )
                 },
             ),
             listState,
@@ -74,17 +77,13 @@ internal object ScheduleWidgetRenderer {
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
         frame: WidgetFrame,
+        preparedDay: ScheduleWidgetDay?,
+        lessons: List<ScheduleWidgetLesson>,
         resetScroll: Boolean,
     ): RemoteViews {
         val (snapshot, _, focus, colors, now, _) = frame
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
-        val listDay = if (variant.style == ScheduleWidgetStyle.TODAY_LIST) {
-            snapshot?.days?.firstOrNull { day ->
-                day.date == focus.date && day.lessons.any { it.id == focus.lessonId }
-            }
-        } else {
-            null
-        }
+        val listDay = preparedDay.takeIf { variant.style == ScheduleWidgetStyle.TODAY_LIST }
         val showList = listDay != null
         val strip = variant.style == ScheduleWidgetStyle.NEXT
         val padding = sizing.pixels(sizing.padding)
@@ -133,7 +132,7 @@ internal object ScheduleWidgetRenderer {
             listOf(focus.date.format(dateFormat), focus.label, focus.title, focus.meta, focus.location)
                 .filter(String::isNotBlank).joinToString("，"),
         )
-        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing, resetScroll)
+        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing, lessons, resetScroll)
         return views
     }
 
@@ -212,6 +211,7 @@ internal object ScheduleWidgetRenderer {
         frame: WidgetFrame,
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
+        lessons: List<ScheduleWidgetLesson>,
         resetScroll: Boolean,
     ) {
         val rows = RemoteViews.RemoteCollectionItems.Builder().setViewTypeCount(1)
@@ -220,7 +220,6 @@ internal object ScheduleWidgetRenderer {
         } else {
             -1
         }
-        val lessons = listLessons(day, frame)
         lessons.forEachIndexed { index, lesson ->
             rows.addItem(
                 index.toLong(),
@@ -261,9 +260,13 @@ internal object ScheduleWidgetRenderer {
     private fun listLessons(day: ScheduleWidgetDay, frame: WidgetFrame): List<ScheduleWidgetLesson> {
         val minutes = if (day.date == frame.now.toLocalDate()) frame.now.hour * 60 + frame.now.minute else -1
         val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
-        return day.lessons.drop(focusedIndex).filterIndexed { index, lesson ->
-            index == 0 || lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
+        val focused = day.lessons[focusedIndex]
+        val remaining = day.lessons.filterIndexed { index, lesson ->
+            lesson.id != focused.id &&
+                (index > focusedIndex || day.byPeriod && lesson.end == null) &&
+                lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
         }
+        return listOf(focused) + remaining
     }
 
     private fun lessonRow(

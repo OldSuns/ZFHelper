@@ -236,6 +236,12 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
       ),
     );
     if (confirmed == true && mounted) {
+      if (model.busy) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('正在同步或更新小组件，请稍后重新重置显示设置。')),
+        );
+        return;
+      }
       await model.resetSettings();
     }
   }

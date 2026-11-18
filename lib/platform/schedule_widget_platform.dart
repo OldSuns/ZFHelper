@@ -74,8 +74,9 @@ final class ScheduleWidgetSettings {
 }
 
 final class ScheduleWidgetException implements Exception {
-  const ScheduleWidgetException(this.message);
+  const ScheduleWidgetException(this.message, {this.code});
   final String message;
+  final String? code;
 }
 
 abstract interface class ScheduleWidgetPlatform {
@@ -118,6 +119,7 @@ final class AndroidScheduleWidgetPlatform implements ScheduleWidgetPlatform {
     } on PlatformException catch (error) {
       throw ScheduleWidgetException(
         error.message ?? '桌面小组件操作失败（${error.code}）',
+        code: error.code,
       );
     } on MissingPluginException {
       throw const ScheduleWidgetException('桌面小组件服务不可用，请完整重启新版应用');

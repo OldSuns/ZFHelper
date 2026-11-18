@@ -34,7 +34,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   String? _publicationFailure;
   String? _statusFailure;
   String? _settingsReadFailure;
-  String? _settingsSaveFailure;
+  ScheduleWidgetException? _settingsSaveFailure;
   Object? _requestedSource;
   Future<bool>? _sync;
   bool _pending = false;
@@ -54,7 +54,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
       _publicationFailure,
       _statusFailure,
       _capabilities?.failure,
-      _settingsSaveFailure,
+      _settingsSaveFailure?.message,
       _settingsReadFailure,
     ].whereType<String>().toSet();
     return messages.isEmpty ? null : messages.join('；');
@@ -131,6 +131,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
 
   Future<void> _refreshSettings() async {
     _settingsInitialized = false;
+    _notify();
     try {
       _settings = await _platform.settings();
       _settingsInitialized = true;
@@ -175,7 +176,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
       _settingsReadFailure = null;
       return true;
     } on ScheduleWidgetException catch (error) {
-      _settingsSaveFailure = error.message;
+      _settingsSaveFailure = error;
       await _refreshSettings();
       return false;
     } finally {
@@ -217,10 +218,17 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
         await refreshStatus();
         // Account or timetable changes can arrive while the host reads status.
       } while (_pending && !_disposed);
-      return !_disposed &&
+      final synchronized =
+          !_disposed &&
           _publicationFailure == null &&
           _statusFailure == null &&
           _capabilities?.failure == null;
+      if (synchronized &&
+          _settingsReadFailure == null &&
+          _settingsSaveFailure?.code == 'widget_platform_failed') {
+        _settingsSaveFailure = null;
+      }
+      return synchronized;
     } finally {
       _sync = null;
       _notify();

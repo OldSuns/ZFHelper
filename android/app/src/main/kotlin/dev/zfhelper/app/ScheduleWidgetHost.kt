@@ -35,6 +35,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
     private val manager = AppWidgetManager.getInstance(application)
     private val provider = ComponentName(application, ScheduleWidgetProvider::class.java)
     private val widgetLists = mutableMapOf<Int, ScheduleWidgetListState>()
+    private var nextWidgetBoundary: ZonedDateTime? = null
     private var channel: MethodChannel? = null
     private var activity = WeakReference<MainActivity>(null)
     private var resumed = false
@@ -138,7 +139,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             "setSettings" -> complete(result) {
                 val settings = ScheduleWidgetSettings.fromArguments(call.arguments)
                 store.writeSettings(settings)
-                renderAndSchedule(store.read())
+                renderAndSchedule(store.read(), committedSettings = settings)
                 null
             }
             "capabilities" -> complete(result) {
@@ -344,6 +345,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         snapshot: ScheduleWidgetSnapshot?,
         forceTimers: Boolean = false,
         preserveScroll: Boolean = false,
+        committedSettings: ScheduleWidgetSettings? = null,
     ) {
         val now = ZonedDateTime.now()
         val ids = manager.getAppWidgetIds(provider)
@@ -362,7 +364,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
         var settingsFailure: ScheduleWidgetSettingsException? = null
         val settings = try {
-            store.settings()
+            committedSettings ?: store.settings()
         } catch (failure: ScheduleWidgetSettingsException) {
             Log.e("ScheduleWidget", failure.code)
             settingsFailure = failure
@@ -379,7 +381,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 now,
                 savedTheme,
                 settings,
-                widgetLists[id].takeIf { preserveScroll },
+                widgetLists[id].takeIf { preserveScroll && nextWidgetBoundary?.isAfter(now) == true },
             )
             manager.updateAppWidget(id, rendering.views)
             val listState = rendering.listState
@@ -406,6 +408,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         if (!hasWidgets) {
             alarm.cancel(boundaryIntent)
             alarm.cancel(countdownIntent)
+            nextWidgetBoundary = null
             return
         }
         val today = now.toLocalDate()
@@ -433,6 +436,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
         // Keep the class boundary independent of best-effort countdown updates.
         alarm.setWindow(AlarmManager.RTC, next.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, boundaryIntent)
+        nextWidgetBoundary = next
         if (countdownUpdate != null && countdownUpdate < next) {
             alarm.setWindow(
                 AlarmManager.RTC, countdownUpdate.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, countdownIntent,
