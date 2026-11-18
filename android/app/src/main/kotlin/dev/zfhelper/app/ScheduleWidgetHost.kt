@@ -336,10 +336,18 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 island.recordFailure(cleanupFailure)
             }
         }
+        val savedTheme = store.theme(visibleSnapshot)
         for (id in ids) {
             manager.updateAppWidget(
                 id,
-                ScheduleWidgetRenderer.render(application, id, visibleSnapshot, blockingFailure?.message, now),
+                ScheduleWidgetRenderer.render(
+                    application,
+                    id,
+                    visibleSnapshot,
+                    blockingFailure?.message,
+                    now,
+                    savedTheme,
+                ),
             )
         }
         scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty())
@@ -393,7 +401,10 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             val now = ZonedDateTime.now()
             val ids = manager.getAppWidgetIds(provider)
             for (id in ids) {
-                manager.updateAppWidget(id, ScheduleWidgetRenderer.render(application, id, null, failure.message, now))
+                manager.updateAppWidget(
+                    id,
+                    ScheduleWidgetRenderer.render(application, id, null, failure.message, now, store.theme()),
+                )
             }
             scheduleNextUpdate(null, now, ids.isNotEmpty())
         } catch (renderFailure: RuntimeException) {
@@ -405,7 +416,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
     private fun platformFailure(failure: RuntimeException): ScheduleWidgetException {
         Log.e("ScheduleWidget", "widget_platform_failed: ${failure.javaClass.simpleName}")
         return ScheduleWidgetException(
-            "widget_platform_failed", "系统未能显示小组件，点击刷新重试", ScheduleWidgetFailureKind.DISPLAY,
+            "widget_platform_failed", "系统未能显示小组件，请打开应用重新同步", ScheduleWidgetFailureKind.DISPLAY,
         )
     }
 }

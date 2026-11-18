@@ -10,10 +10,7 @@ import org.json.JSONTokener
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
-import java.time.DayOfWeek
 import java.time.format.DateTimeParseException
-import java.time.temporal.ChronoUnit
-import java.time.temporal.TemporalAdjusters
 
 internal enum class ScheduleWidgetFailureKind { SNAPSHOT, DISPLAY }
 
@@ -29,6 +26,13 @@ internal data class ScheduleWidgetColors(
     val text: Int,
     val secondary: Int,
     val outline: Int,
+    val card: Int = surface,
+)
+
+internal data class ScheduleWidgetTheme(
+    val appearance: String,
+    val light: ScheduleWidgetColors,
+    val dark: ScheduleWidgetColors,
 )
 
 internal data class ScheduleWidgetPeriod(val start: Int, val end: Int)
@@ -81,38 +85,6 @@ internal data class ScheduleWidgetDay(
     val byPeriod: Boolean,
     val lessons: List<ScheduleWidgetLesson>,
 )
-
-internal data class ScheduleWidgetWeekDay(
-    val date: LocalDate,
-    val lessons: List<ScheduleWidgetLesson>,
-)
-
-internal data class ScheduleWidgetWeek(
-    val number: Int,
-    val days: List<ScheduleWidgetWeekDay>,
-)
-
-internal fun ScheduleWidgetSnapshot.weekAt(date: LocalDate): ScheduleWidgetWeek? {
-    if (days.isEmpty()) return null
-    val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val firstMonday = days.first().date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val lastSunday = days.last().date.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
-    if (date < firstMonday || date > lastSunday) return null
-    val anchor = days.minBy { kotlin.math.abs(ChronoUnit.DAYS.between(it.date, date)) }
-    val anchorMonday = anchor.date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val number = anchor.week + ChronoUnit.WEEKS.between(anchorMonday, monday).toInt()
-    if (number < 1) return null
-    return ScheduleWidgetWeek(
-        number,
-        List(7) { offset ->
-            val day = monday.plusDays(offset.toLong())
-            ScheduleWidgetWeekDay(
-                day,
-                days.firstOrNull { it.date == day }?.lessons.orEmpty(),
-            )
-        },
-    )
-}
 
 internal data class ScheduleWidgetSnapshot(
     val generatedAt: Long,
@@ -185,11 +157,16 @@ internal data class ScheduleWidgetSnapshot(
             }
         }
 
-        private fun parseColors(json: JSONObject): ScheduleWidgetColors {
-            json.allowedKeys("surface", "primary", "text", "secondary", "outline")
+        fun parseColors(json: JSONObject): ScheduleWidgetColors {
+            json.allowedKeys("surface", "primary", "text", "secondary", "outline", "card")
+            val surface = json.color("surface")
             return ScheduleWidgetColors(
-                json.color("surface"), json.color("primary"), json.color("text"),
-                json.color("secondary"), json.color("outline"),
+                surface,
+                json.color("primary"),
+                json.color("text"),
+                json.color("secondary"),
+                json.color("outline"),
+                if (json.has("card")) json.color("card") else surface,
             )
         }
 
@@ -288,7 +265,54 @@ internal class ScheduleWidgetStore(context: Context) {
         return ScheduleWidgetSnapshot.parse(payload)
     }
 
+    fun theme(snapshot: ScheduleWidgetSnapshot? = null): ScheduleWidgetTheme? {
+        val saved = try {
+            preferences.getString("theme", null)
+        } catch (_: ClassCastException) {
+            Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+            null
+        }
+        val savedTheme = if (saved == null) {
+            null
+        } else {
+            try {
+                val json = JSONObject(saved)
+                json.allowedKeys("appearance", "light", "dark")
+                val appearance = json.string("appearance")
+                widgetPayloadCheck(appearance in setOf("system", "light", "dark"), "外观")
+                ScheduleWidgetTheme(
+                    appearance,
+                    ScheduleWidgetSnapshot.parseColors(json.objectValue("light")),
+                    ScheduleWidgetSnapshot.parseColors(json.objectValue("dark")),
+                )
+            } catch (_: JSONException) {
+                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+                null
+            } catch (_: ScheduleWidgetException) {
+                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+                null
+            }
+        }
+        if (savedTheme != null || snapshot == null) return savedTheme
+        val legacyTheme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
+        if (!preferences.edit().putString("theme", legacyTheme.toJson().toString()).commit()) {
+            Log.e("ScheduleWidget", "widget_saved_theme_migration_failed")
+        }
+        return legacyTheme
+    }
+
     fun write(payload: String) {
+        val snapshot = ScheduleWidgetSnapshot.parse(payload)
+        val theme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
+            .toJson()
+            .toString()
+        if (!preferences.edit().putString("theme", theme).commit()) {
+            throw ScheduleWidgetException(
+                "widget_theme_write_failed",
+                "小组件外观设置未能保存，请重新同步",
+                ScheduleWidgetFailureKind.SNAPSHOT,
+            )
+        }
         val stream = try {
             file.startWrite()
         } catch (_: IOException) {
@@ -309,6 +333,19 @@ internal class ScheduleWidgetStore(context: Context) {
             throw ScheduleWidgetException("widget_write_failed", "小组件课表未能保存，请检查本机存储后重试")
         }
     }
+
+    private fun ScheduleWidgetColors.toJson(): JSONObject = JSONObject()
+        .put("surface", surface)
+        .put("primary", primary)
+        .put("text", text)
+        .put("secondary", secondary)
+        .put("outline", outline)
+        .put("card", card)
+
+    private fun ScheduleWidgetTheme.toJson(): JSONObject = JSONObject()
+        .put("appearance", appearance)
+        .put("light", light.toJson())
+        .put("dark", dark.toJson())
 
     fun clearFailure() {
         if (!preferences.edit().remove("failure").commit()) {

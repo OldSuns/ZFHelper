@@ -16,43 +16,28 @@
         android:orientation="horizontal"
         android:visibility="gone">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/schedule_widget_date"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/schedule_widget_name"
+            android:textSize="@dimen/schedule_widget_body_text"
+            android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/schedule_widget_date"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:text="@string/schedule_widget_name"
-                android:textSize="@dimen/schedule_widget_body_text"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/schedule_widget_context"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:includeFontPadding="false"
-                android:layout_marginTop="2dp"
-                android:maxLines="1"
-                android:text="@string/schedule_widget_today"
-                android:textSize="@dimen/schedule_widget_caption_text" />
-        </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/schedule_widget_refresh"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/schedule_widget_refresh"
-            android:padding="13dp"
-            android:src="@drawable/schedule_widget_refresh" />
+        <TextView
+            android:id="@+id/schedule_widget_context"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="start"
+            android:gravity="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/schedule_widget_today"
+            android:textSize="@dimen/schedule_widget_caption_text" />
     </LinearLayout>
 
     <LinearLayout

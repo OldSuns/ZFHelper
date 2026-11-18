@@ -3,16 +3,20 @@
     android:id="@+id/schedule_widget_lesson_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?android:attr/selectableItemBackground"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/schedule_widget_lesson_background"
     android:minHeight="48dp"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:paddingBottom="5dp"
+    android:paddingHorizontal="8dp"
+    android:paddingTop="5dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingTop="6dp">
+        android:paddingBottom="1dp"
+        android:paddingTop="1dp">
 
         <LinearLayout
             android:id="@+id/schedule_widget_lesson_time"
@@ -42,11 +46,30 @@
                 android:textSize="@dimen/schedule_widget_body_text" />
         </LinearLayout>
 
+        <FrameLayout
+            android:id="@+id/schedule_widget_lesson_accent"
+            android:layout_width="3dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="8dp"
+            android:background="@android:color/transparent"
+            android:visibility="gone" />
+
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/schedule_widget_lesson_state"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textSize="@dimen/schedule_widget_caption_text"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_title"
@@ -91,8 +114,4 @@
         </LinearLayout>
     </LinearLayout>
 
-    <FrameLayout
-        android:id="@+id/schedule_widget_lesson_divider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp" />
 </LinearLayout>
