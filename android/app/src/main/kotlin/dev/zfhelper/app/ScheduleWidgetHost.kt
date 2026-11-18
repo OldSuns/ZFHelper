@@ -34,6 +34,7 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
     private val handler = Handler(Looper.getMainLooper())
     private val manager = AppWidgetManager.getInstance(application)
     private val provider = ComponentName(application, ScheduleWidgetProvider::class.java)
+    private val widgetLists = mutableMapOf<Int, ScheduleWidgetListState>()
     private var channel: MethodChannel? = null
     private var activity = WeakReference<MainActivity>(null)
     private var resumed = false
@@ -183,8 +184,12 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
     }
 
-    fun refreshInBackground(forceTimers: Boolean = false, finished: () -> Unit = {}) {
-        background(finished) { renderAndSchedule(store.read(), forceTimers) }
+    fun refreshInBackground(
+        forceTimers: Boolean = false,
+        countdownOnly: Boolean = false,
+        finished: () -> Unit = {},
+    ) {
+        background(finished) { renderAndSchedule(store.read(), forceTimers, countdownOnly) }
     }
 
     fun receiveIslandEvent(intent: Intent, finished: () -> Unit) {
@@ -335,13 +340,16 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
     }
 
-    private fun renderAndSchedule(snapshot: ScheduleWidgetSnapshot?, forceTimers: Boolean = false) {
+    private fun renderAndSchedule(
+        snapshot: ScheduleWidgetSnapshot?,
+        forceTimers: Boolean = false,
+        preserveScroll: Boolean = false,
+    ) {
         val now = ZonedDateTime.now()
         val ids = manager.getAppWidgetIds(provider)
         val failure = store.failure
         val blockingFailure = failure?.takeIf { it.kind == ScheduleWidgetFailureKind.SNAPSHOT }
         val visibleSnapshot = if (blockingFailure == null) snapshot else null
-        val settings = if (visibleSnapshot == null) ScheduleWidgetSettings.defaults else store.settings()
         var cleanupFailure: ScheduleIslandException? = null
         runIsland { island.reconcile(visibleSnapshot, now, forceTimers) }?.let { failure ->
             island.recordFailure(failure)
@@ -352,20 +360,30 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 island.recordFailure(cleanupFailure)
             }
         }
+        var settingsFailure: ScheduleWidgetSettingsException? = null
+        val settings = try {
+            store.settings()
+        } catch (failure: ScheduleWidgetSettingsException) {
+            Log.e("ScheduleWidget", failure.code)
+            settingsFailure = failure
+            ScheduleWidgetSettings(showCountdown = false, showLocation = false, showTeacher = false)
+        }
         val savedTheme = store.theme(visibleSnapshot)
+        widgetLists.keys.retainAll(ids.toSet())
         for (id in ids) {
-            manager.updateAppWidget(
+            val rendering = ScheduleWidgetRenderer.render(
+                application,
                 id,
-                ScheduleWidgetRenderer.render(
-                    application,
-                    id,
-                    visibleSnapshot,
-                    blockingFailure?.message,
-                    now,
-                    savedTheme,
-                    settings,
-                ),
+                if (settingsFailure == null) visibleSnapshot else null,
+                blockingFailure?.message ?: settingsFailure?.message,
+                now,
+                savedTheme,
+                settings,
+                widgetLists[id].takeIf { preserveScroll },
             )
+            manager.updateAppWidget(id, rendering.views)
+            val listState = rendering.listState
+            if (listState == null) widgetLists.remove(id) else widgetLists[id] = listState
         }
         scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty(), settings)
         if (failure != null && blockingFailure == null) store.clearFailure()
@@ -451,8 +469,9 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                         now,
                         store.theme(),
                         settings,
-                    ),
+                    ).views,
                 )
+                widgetLists.remove(id)
             }
             scheduleNextUpdate(null, now, ids.isNotEmpty(), settings)
         } catch (renderFailure: RuntimeException) {

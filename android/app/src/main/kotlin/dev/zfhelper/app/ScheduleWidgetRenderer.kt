@@ -16,6 +16,17 @@ import java.util.Locale
 
 internal const val SCHEDULE_WIDGET_UPCOMING_MINUTES = 30
 
+internal data class ScheduleWidgetListState(
+    val source: ScheduleWidgetSource?,
+    val date: LocalDate,
+    val lessons: List<ScheduleWidgetLesson>,
+)
+
+internal data class ScheduleWidgetRendering(
+    val views: RemoteViews,
+    val listState: ScheduleWidgetListState?,
+)
+
 internal object ScheduleWidgetRenderer {
     private val dateFormat = DateTimeFormatter.ofPattern("M月d日 EEE", Locale.SIMPLIFIED_CHINESE)
     private val shortDateFormat = DateTimeFormatter.ofPattern("M/d EEE", Locale.SIMPLIFIED_CHINESE)
@@ -28,7 +39,8 @@ internal object ScheduleWidgetRenderer {
         now: ZonedDateTime,
         savedTheme: ScheduleWidgetTheme?,
         settings: ScheduleWidgetSettings = ScheduleWidgetSettings.defaults,
-    ): RemoteViews {
+        previousListState: ScheduleWidgetListState? = null,
+    ): ScheduleWidgetRendering {
         val today = now.toLocalDate()
         val frame = WidgetFrame(
             snapshot,
@@ -38,12 +50,21 @@ internal object ScheduleWidgetRenderer {
             now,
             settings,
         )
+        val listDay = snapshot?.days?.firstOrNull { day ->
+            day.date == frame.focus.date && day.lessons.any { it.id == frame.focus.lessonId }
+        }
+        val listState = listDay?.let { day ->
+            ScheduleWidgetListState(snapshot?.source, day.date, listLessons(day, frame))
+        }
         val sizing = ScheduleWidgetSizing(context)
         val countdownWidth = frame.focus.countdown?.let { sizing.countdownWidth(frame.focus.title, it) }
-        return RemoteViews(
-            sizing.variants(countdownWidth).associate { variant ->
-                variant.size to focusLayout(context, widgetId, variant, sizing, frame)
-            },
+        return ScheduleWidgetRendering(
+            RemoteViews(
+                sizing.variants(countdownWidth).associate { variant ->
+                    variant.size to focusLayout(context, widgetId, variant, sizing, frame, listState != previousListState)
+                },
+            ),
+            listState,
         )
     }
 
@@ -53,6 +74,7 @@ internal object ScheduleWidgetRenderer {
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
         frame: WidgetFrame,
+        resetScroll: Boolean,
     ): RemoteViews {
         val (snapshot, _, focus, colors, now, _) = frame
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
@@ -111,7 +133,7 @@ internal object ScheduleWidgetRenderer {
             listOf(focus.date.format(dateFormat), focus.label, focus.title, focus.meta, focus.location)
                 .filter(String::isNotBlank).joinToString("，"),
         )
-        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing)
+        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing, resetScroll)
         return views
     }
 
@@ -190,6 +212,7 @@ internal object ScheduleWidgetRenderer {
         frame: WidgetFrame,
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
+        resetScroll: Boolean,
     ) {
         val rows = RemoteViews.RemoteCollectionItems.Builder().setViewTypeCount(1)
         val minutes = if (day.date == frame.now.toLocalDate()) {
@@ -197,10 +220,7 @@ internal object ScheduleWidgetRenderer {
         } else {
             -1
         }
-        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
-        val lessons = day.lessons.drop(focusedIndex).filterIndexed { index, lesson ->
-            index == 0 || lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
-        }
+        val lessons = listLessons(day, frame)
         lessons.forEachIndexed { index, lesson ->
             rows.addItem(
                 index.toLong(),
@@ -221,7 +241,7 @@ internal object ScheduleWidgetRenderer {
             )
         }
         views.setRemoteAdapter(R.id.schedule_widget_list, rows.build())
-        views.setScrollPosition(R.id.schedule_widget_list, 0)
+        if (resetScroll) views.setScrollPosition(R.id.schedule_widget_list, 0)
         val template = Intent(context, MainActivity::class.java).apply {
             action = "dev.zfhelper.app.SCHEDULE_WIDGET_OPEN_LIST"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -236,6 +256,14 @@ internal object ScheduleWidgetRenderer {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
             ),
         )
+    }
+
+    private fun listLessons(day: ScheduleWidgetDay, frame: WidgetFrame): List<ScheduleWidgetLesson> {
+        val minutes = if (day.date == frame.now.toLocalDate()) frame.now.hour * 60 + frame.now.minute else -1
+        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
+        return day.lessons.drop(focusedIndex).filterIndexed { index, lesson ->
+            index == 0 || lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
+        }
     }
 
     private fun lessonRow(

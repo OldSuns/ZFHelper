@@ -22,20 +22,20 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         when (intent.action) {
             SCHEDULE_WIDGET_REFRESH,
             SCHEDULE_WIDGET_BOUNDARY,
-            SCHEDULE_WIDGET_COUNTDOWN,
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_LOCALE_CHANGED -> refresh(context)
+            SCHEDULE_WIDGET_COUNTDOWN -> refresh(context, countdownOnly = true)
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED -> refresh(context, forceTimers = true)
             else -> super.onReceive(context, intent)
         }
     }
 
-    private fun refresh(context: Context, forceTimers: Boolean = false) {
+    private fun refresh(context: Context, forceTimers: Boolean = false, countdownOnly: Boolean = false) {
         val pending = goAsync()
         // Accessing this host does not instantiate the application's lazy FlutterEngine.
-        (context.applicationContext as ZfHelperApplication).scheduleWidgets.refreshInBackground(forceTimers) {
+        (context.applicationContext as ZfHelperApplication).scheduleWidgets.refreshInBackground(forceTimers, countdownOnly) {
             pending.finish()
         }
     }

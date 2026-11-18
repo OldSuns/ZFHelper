@@ -79,6 +79,8 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                         '课程名称优先显示。空间充足时，当前课程显示距离下课的时间，今天的下一节课在开课前 30 分钟内显示倒计时。点击小组件可打开周课表。',
                       ),
                       const SizedBox(height: 12),
+                      const Text('倒计时显示最近一次刷新时的分钟数，后台刷新可能延迟，不保证每分钟更新。'),
+                      const SizedBox(height: 12),
                       const Text(
                         '内容跟随应用当前选择的账号、学期和外观。已保存的课程可以离线查看，课表和校历修改后自动同步。',
                       ),
@@ -144,6 +146,19 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
                     vertical: 8,
                   ),
                 ),
+                if (model.settingsReadFailure != null)
+                  ListTile(
+                    leading: const Icon(Icons.settings_backup_restore),
+                    title: const Text('重置显示设置'),
+                    subtitle: const Text('无法读取设置时，可将三个显示选项恢复为默认开启'),
+                    trailing: const Icon(Icons.chevron_right),
+                    enabled: !model.busy,
+                    onTap: model.busy ? null : () => _resetSettings(model),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: AppLayout.sectionGap),
@@ -200,6 +215,29 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
         );
       },
     );
+  }
+
+  Future<void> _resetSettings(ScheduleWidgetViewModel model) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重置小组件显示设置？'),
+        content: const Text('课程倒计时、上课地点和教师信息将恢复为开启。已添加的小组件会立即更新，课表和外观设置保持不变。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('重置'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await model.resetSettings();
+    }
   }
 
   static String _timestamp(DateTime value) =>

@@ -31,6 +31,10 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool _settingsInitialized = false;
   bool _settingsSaving = false;
   String? _failure;
+  String? _publicationFailure;
+  String? _statusFailure;
+  String? _settingsReadFailure;
+  String? _settingsSaveFailure;
   Object? _requestedSource;
   Future<bool>? _sync;
   bool _pending = false;
@@ -43,7 +47,19 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool get settingsBusy => _settingsSaving;
   bool get busy => _sync != null || _pinning || _settingsSaving;
   bool get canSync => _repository.state.initialized && _appearance.initialized;
-  String? get failure => _failure ?? _capabilities?.failure;
+  String? get settingsReadFailure => _settingsReadFailure;
+  String? get failure {
+    final messages = [
+      _failure,
+      _publicationFailure,
+      _statusFailure,
+      _capabilities?.failure,
+      _settingsSaveFailure,
+      _settingsReadFailure,
+    ].whereType<String>().toSet();
+    return messages.isEmpty ? null : messages.join('；');
+  }
+
   Stream<ScheduleWidgetLaunch> get launches => _platform.launches;
 
   String get sourceLabel {
@@ -103,15 +119,25 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   }
 
   Future<void> refreshStatus() async {
-    _settingsInitialized = false;
     try {
       _capabilities = await _platform.capabilities();
+      _statusFailure = null;
+    } on ScheduleWidgetException catch (error) {
+      _statusFailure = error.message;
+    }
+    await _refreshSettings();
+    _notify();
+  }
+
+  Future<void> _refreshSettings() async {
+    _settingsInitialized = false;
+    try {
       _settings = await _platform.settings();
       _settingsInitialized = true;
+      _settingsReadFailure = null;
     } on ScheduleWidgetException catch (error) {
-      _failure = error.message;
+      _settingsReadFailure = error.message;
     }
-    _notify();
   }
 
   Future<bool> updateSettings({
@@ -130,22 +156,27 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
         next.showTeacher == _settings.showTeacher) {
       return true;
     }
+    return _saveSettings(next);
+  }
+
+  Future<bool> resetSettings() async {
+    if (_disposed || busy) return false;
+    return _saveSettings(const ScheduleWidgetSettings());
+  }
+
+  Future<bool> _saveSettings(ScheduleWidgetSettings next) async {
     _settingsSaving = true;
-    _failure = null;
+    _settingsSaveFailure = null;
     _notify();
     try {
       await _platform.setSettings(next);
       _settings = next;
+      _settingsInitialized = true;
+      _settingsReadFailure = null;
       return true;
     } on ScheduleWidgetException catch (error) {
-      _failure = error.message;
-      try {
-        _settings = await _platform.settings();
-        _settingsInitialized = true;
-      } on ScheduleWidgetException catch (readError) {
-        _failure = '${error.message}；${readError.message}';
-        _settingsInitialized = false;
-      }
+      _settingsSaveFailure = error.message;
+      await _refreshSettings();
       return false;
     } finally {
       _settingsSaving = false;
@@ -162,6 +193,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
 
   Future<bool> _publishPending() async {
     _failure = null;
+    _publicationFailure = null;
     _notify();
     try {
       do {
@@ -176,16 +208,19 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
           };
           try {
             await _platform.publish(jsonEncode(payload));
-            _failure = null;
+            _publicationFailure = null;
           } on ScheduleWidgetException catch (error) {
-            _failure = error.message;
+            _publicationFailure = error.message;
           }
         }
         if (_disposed) return false;
         await refreshStatus();
         // Account or timetable changes can arrive while the host reads status.
       } while (_pending && !_disposed);
-      return !_disposed && failure == null;
+      return !_disposed &&
+          _publicationFailure == null &&
+          _statusFailure == null &&
+          _capabilities?.failure == null;
     } finally {
       _sync = null;
       _notify();
