@@ -192,7 +192,10 @@ internal object ScheduleWidgetRenderer {
             -1
         }
         val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
-        day.lessons.drop(focusedIndex).forEachIndexed { index, lesson ->
+        val lessons = day.lessons.drop(focusedIndex).filterIndexed { index, lesson ->
+            index == 0 || lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
+        }
+        lessons.forEachIndexed { index, lesson ->
             rows.addItem(
                 index.toLong(),
                 lessonRow(
