@@ -16,7 +16,6 @@ import java.util.Locale
 internal object ScheduleWidgetRenderer {
     private val dateFormat = DateTimeFormatter.ofPattern("M月d日 EEE", Locale.SIMPLIFIED_CHINESE)
     private val shortDateFormat = DateTimeFormatter.ofPattern("M/d EEE", Locale.SIMPLIFIED_CHINESE)
-    private val weekdayFormat = DateTimeFormatter.ofPattern("EEE", Locale.SIMPLIFIED_CHINESE)
 
     fun render(
         context: Context,
@@ -105,227 +104,6 @@ internal object ScheduleWidgetRenderer {
                 .filter(String::isNotBlank).joinToString("，"),
         )
         if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing)
-        return views
-    }
-
-    private fun twoDayLayout(
-        context: Context,
-        widgetId: Int,
-        variant: ScheduleWidgetLayout,
-        sizing: ScheduleWidgetSizing,
-        frame: WidgetFrame,
-    ): RemoteViews {
-        val today = frame.now.toLocalDate()
-        val tomorrow = today.plusDays(1)
-        val todayDay = frame.snapshot?.days?.firstOrNull { it.date == today }
-        val tomorrowDay = frame.snapshot?.days?.firstOrNull { it.date == tomorrow }
-        val minutes = frame.now.hour * 60 + frame.now.minute
-        val remaining = todayDay?.lessons.orEmpty().filter { it.end == null || it.end > minutes }
-        val tomorrowLessons = tomorrowDay?.lessons.orEmpty()
-        if (remaining.isEmpty() && tomorrowLessons.isEmpty()) {
-            return focusLayout(context, widgetId, variant, sizing, frame)
-        }
-        val views = RemoteViews(context.packageName, R.layout.schedule_widget_two_day)
-        val week = frame.snapshot?.weekAt(today)?.number
-        views.tintBackground(R.id.schedule_widget_two_day_root, frame.colors.surface)
-        views.setTextViewText(R.id.schedule_widget_two_day_title, "今明课程")
-        views.setTextViewText(
-            R.id.schedule_widget_two_day_context,
-            listOfNotNull(week?.let { "第 $it 周" }, frame.snapshot?.termLabel)
-                .joinToString(" · "),
-        )
-        views.setTextViewText(
-            R.id.schedule_widget_today_heading,
-            "今天 ${today.format(shortDateFormat)}",
-        )
-        views.setTextViewText(
-            R.id.schedule_widget_tomorrow_heading,
-            "明天 ${tomorrow.format(shortDateFormat)}",
-        )
-        val rowLimit = sizing.twoDayRowLimit(variant.size.height)
-        bindCompactDay(
-            context,
-            widgetId,
-            views,
-            R.id.schedule_widget_today_courses,
-            R.id.schedule_widget_today_footer,
-            today,
-            remaining,
-            rowLimit,
-            frame.colors,
-            when {
-                todayDay == null -> "今天无课"
-                remaining.isEmpty() -> "今日课程已结束"
-                else -> "剩余 ${remaining.size} 门"
-            },
-        )
-        bindCompactDay(
-            context,
-            widgetId,
-            views,
-            R.id.schedule_widget_tomorrow_courses,
-            R.id.schedule_widget_tomorrow_footer,
-            tomorrow,
-            tomorrowLessons,
-            rowLimit,
-            frame.colors,
-            if (tomorrowLessons.isEmpty()) "明天无课" else "共 ${tomorrowLessons.size} 门",
-        )
-        for (id in listOf(
-            R.id.schedule_widget_two_day_title,
-            R.id.schedule_widget_today_heading,
-            R.id.schedule_widget_tomorrow_heading,
-        )) {
-            views.setTextColor(id, frame.colors.text)
-        }
-        for (id in listOf(
-            R.id.schedule_widget_two_day_context,
-            R.id.schedule_widget_today_footer,
-            R.id.schedule_widget_tomorrow_footer,
-        )) {
-            views.setTextColor(id, frame.colors.secondary)
-        }
-        views.setWidgetColor(R.id.schedule_widget_day_divider, "setBackgroundColor", frame.colors.outline)
-        views.setWidgetColor(R.id.schedule_widget_two_day_refresh, "setColorFilter", frame.colors.primary)
-        views.setOnClickPendingIntent(R.id.schedule_widget_two_day_refresh, refresh(context))
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_today_column,
-            openDate(context, widgetId, today),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_tomorrow_column,
-            openDate(context, widgetId, tomorrow),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_two_day_root,
-            openDate(context, widgetId, today),
-        )
-        views.setContentDescription(
-            R.id.schedule_widget_two_day_root,
-            "今明课程，今天${remaining.size}门剩余课程，明天${tomorrowLessons.size}门课程",
-        )
-        return views
-    }
-
-    private fun bindCompactDay(
-        context: Context,
-        widgetId: Int,
-        views: RemoteViews,
-        containerId: Int,
-        footerId: Int,
-        date: LocalDate,
-        lessons: List<ScheduleWidgetLesson>,
-        rowLimit: Int,
-        colors: WidgetColors,
-        footer: String,
-    ) {
-        lessons.take(rowLimit).forEach { lesson ->
-            val row = RemoteViews(context.packageName, R.layout.schedule_widget_compact_lesson)
-            val timing = if (lesson.start != null) {
-                scheduleWidgetClock(lesson.start)
-            } else {
-                lesson.periodLabel.ifBlank { lesson.timeLabel }
-            }
-            val meta = listOf(timing, lesson.location).filter(String::isNotBlank).joinToString(" · ")
-            row.setTextViewText(R.id.schedule_widget_compact_lesson_title, lesson.title)
-            row.setTextViewText(R.id.schedule_widget_compact_lesson_meta, meta)
-            row.setTextColor(R.id.schedule_widget_compact_lesson_title, colors.text)
-            row.setTextColor(R.id.schedule_widget_compact_lesson_meta, colors.secondary)
-            row.setOnClickPendingIntent(
-                R.id.schedule_widget_compact_lesson_root,
-                openDate(context, widgetId, date),
-            )
-            row.setContentDescription(
-                R.id.schedule_widget_compact_lesson_root,
-                listOf(lesson.title, timing, lesson.location).filter(String::isNotBlank)
-                    .joinToString("，"),
-            )
-            views.addView(containerId, row)
-        }
-        val hidden = lessons.size - rowLimit
-        views.setTextViewText(footerId, if (hidden > 0) "$footer · 还有 $hidden 门" else footer)
-    }
-
-    private fun weekLayout(
-        context: Context,
-        widgetId: Int,
-        week: ScheduleWidgetWeek,
-        frame: WidgetFrame,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.schedule_widget_week)
-        val today = frame.now.toLocalDate()
-        val first = week.days.first().date
-        val last = week.days.last().date
-        views.tintBackground(R.id.schedule_widget_week_root, frame.colors.surface)
-        views.setTextViewText(R.id.schedule_widget_week_title, "本周 · 第 ${week.number} 周")
-        views.setTextViewText(
-            R.id.schedule_widget_week_context,
-            "${first.monthValue}/${first.dayOfMonth}–${last.monthValue}/${last.dayOfMonth} · ${week.days.sumOf { it.lessons.size }} 门课",
-        )
-        views.setTextColor(R.id.schedule_widget_week_title, frame.colors.text)
-        views.setTextColor(R.id.schedule_widget_week_context, frame.colors.secondary)
-        views.setWidgetColor(R.id.schedule_widget_week_refresh, "setColorFilter", frame.colors.primary)
-        views.setOnClickPendingIntent(R.id.schedule_widget_week_refresh, refresh(context))
-        val rows = RemoteViews.RemoteCollectionItems.Builder().setViewTypeCount(1)
-        week.days.forEachIndexed { index, day ->
-            val row = RemoteViews(context.packageName, R.layout.schedule_widget_week_day)
-            val isToday = day.date == today
-            val names = day.lessons.map { it.title }.distinct()
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_label,
-                if (isToday) "今天" else day.date.format(weekdayFormat),
-            )
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_courses,
-                if (names.isEmpty()) "无课" else names.joinToString("、"),
-            )
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_count,
-                if (day.lessons.isEmpty()) "" else "${day.lessons.size} 门",
-            )
-            row.setTextColor(
-                R.id.schedule_widget_week_day_label,
-                if (isToday) frame.colors.primary else frame.colors.text,
-            )
-            row.setTextColor(R.id.schedule_widget_week_day_courses, frame.colors.text)
-            row.setTextColor(R.id.schedule_widget_week_day_count, frame.colors.secondary)
-            row.setOnClickFillInIntent(
-                R.id.schedule_widget_week_day_root,
-                Intent().putExtra(SCHEDULE_WIDGET_DATE, day.date.toString()),
-            )
-            row.setContentDescription(
-                R.id.schedule_widget_week_day_root,
-                "${day.date.format(dateFormat)}，${if (names.isEmpty()) "无课" else names.joinToString("、")}",
-            )
-            rows.addItem(index.toLong(), row)
-        }
-        views.setRemoteAdapter(R.id.schedule_widget_week_days, rows.build())
-        val template = Intent(context, MainActivity::class.java).apply {
-            action = "dev.zfhelper.app.SCHEDULE_WIDGET_OPEN_WEEK_LIST"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        views.setPendingIntentTemplate(
-            R.id.schedule_widget_week_days,
-            PendingIntent.getActivity(
-                context,
-                widgetId,
-                template,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-            ),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_week_header,
-            openDate(context, widgetId, today),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_week_root,
-            openDate(context, widgetId, today),
-        )
-        views.setContentDescription(
-            R.id.schedule_widget_week_root,
-            "第${week.number}周，本周${week.days.sumOf { it.lessons.size }}门课",
-        )
         return views
     }
 
@@ -611,13 +389,6 @@ internal object ScheduleWidgetRenderer {
         )
     }
 
-    private fun refresh(context: Context): PendingIntent = PendingIntent.getBroadcast(
-        context,
-        0,
-        Intent(context, ScheduleWidgetProvider::class.java).setAction(SCHEDULE_WIDGET_REFRESH),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
-
     private fun openDate(context: Context, widgetId: Int, date: LocalDate): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = "dev.zfhelper.app.SCHEDULE_WIDGET_OPEN.$date"
@@ -662,7 +433,6 @@ internal object ScheduleWidgetRenderer {
             WidgetColor(day.primary, night.primary),
             WidgetColor(day.text, night.text),
             WidgetColor(day.secondary, night.secondary),
-            WidgetColor(day.outline, night.outline),
         )
     }
 
@@ -690,7 +460,6 @@ internal object ScheduleWidgetRenderer {
         val primary: WidgetColor,
         val text: WidgetColor,
         val secondary: WidgetColor,
-        val outline: WidgetColor,
     )
 
     private data class WidgetFrame(

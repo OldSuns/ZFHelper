@@ -31,8 +31,6 @@ internal class ScheduleWidgetSizing(context: Context) {
     val titlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_title_text).toFloat()
     val stripTitlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_row_title_text).toFloat()
     val timeColumnWidth = ceil(maxOf(textWidth("00:00"), textWidth("待上课")) + padding)
-    val headerHeight = bodyLine + captionLine + 6
-    val compactRowHeight = rowTitleLine + bodyLine + 12
 
     fun pixels(dp: Float): Int = (dp * density).toInt()
 
@@ -72,10 +70,6 @@ internal class ScheduleWidgetSizing(context: Context) {
             ),
         )
     }
-
-    fun twoDayRowLimit(height: Float): Int =
-        ((height - 2 * padding - headerHeight - captionLine - 16) / compactRowHeight)
-            .toInt().coerceIn(1, 4)
 
     // Resource dimensions use Android's SP conversion, including Android 14's
     // nonlinear font scaling. Multiplying breakpoints by fontScale is inaccurate.
