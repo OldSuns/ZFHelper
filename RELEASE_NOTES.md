@@ -1,7 +1,7 @@
 # Highlights
 
-- The Android timetable widget now preserves its appearance when theme persistence fails and refreshes its snapshot when the saved theme changes.
-- Course cards in the widget now use a scrolling layout that adapts to the available space and supports longer course content.
+- The Android timetable widget now starts its chronological course list at the current or nearest upcoming lesson, omitting earlier lessons and overlapping lessons that have already finished.
+- After the day's courses end, the widget advances to the next course day when available; otherwise it shows that today's courses have ended. Lessons without complete clock times remain visible.
 
 ## Installation
 
