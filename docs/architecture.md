@@ -4,6 +4,8 @@ ZFHelper shares a Flutter UI and application layer between Android and Windows. 
 
 ## Ownership
 
+The LXY branch keeps shared application/data ownership while fixing its display name and update channel in [app_identity.dart](../lib/app/app_identity.dart). `ReleaseRepository` owns channel/tag validation, paginated LXY release selection, and matching release assets; `UpdateCheckViewModel` compares versions within that channel and resolves current-version notes through it. Only update-check preferences use a separate LXY file. Android application ID, signing identity, database paths, secure-storage keys/options, and native storage names remain compatible with the ordinary edition for in-place upgrades. LXY produces Android APKs only; shared Windows source remains available for upstream synchronization.
+
 | Location | Responsibility |
 | --- | --- |
 | [lib/app](../lib/app) | Dependency assembly, four-destination shell, startup restoration, lifecycle, exit handling, and coordinated account-data removal |

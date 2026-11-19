@@ -67,9 +67,9 @@ Appearance supports system, light, and dark modes across restarts with Catppucci
 
 ### Update checking
 
-The app checks GitHub for the latest ZFHelper Release silently at startup, at most once per 24 hours. A new release is announced once per tag with a non-blocking notice, and the Data-and-application entry keeps a badge until a manual check confirms the app is current. Manual checks show release details and notes at any time.
+The LXY edition, displayed as 流星雨课表, checks GitHub for the highest published non-prerelease `lxy-vX.Y.Z` version silently at startup, at most once per 24 hours. Release lookup includes pagination; ordinary releases never qualify. A new release is announced once per tag with a non-blocking notice, and the Data-and-application entry keeps a badge until a manual check confirms the app is current. Manual checks show the channel, release details, and notes. Update timestamps and notification state are channel-specific; existing business data and credentials retain their storage locations for signed upgrades from the ordinary edition. Ordinary clients retain their stable update channel, and LXY releases never take GitHub's Latest designation.
 
-On Android the APK is downloaded in-app with progress (mirror first, then the official asset URL) and handed to the system package installer, requesting the "install unknown apps" grant when missing. Windows keeps browser-based downloads. Failures are explicit and retryable, and the release page remains a fallback.
+On Android the matching LXY APK is downloaded in-app with progress (mirror first, then the official asset URL) and handed to the system package installer, requesting the "install unknown apps" grant when missing. Failures are explicit and retryable, and the matching release page remains a fallback. LXY distributes APKs only; PRs and branch pushes run quality checks, and version tags trigger signed APK publication. Ordinary-to-LXY and LXY-to-LXY installation/data retention still require device acceptance with matching certificates and increasing Android build numbers.
 
 ### Android timetable widget
 
@@ -100,7 +100,7 @@ Notifications are removed at phase expiry and recomputed from the current snapsh
 | Real-school login, timetable, grades, and enrollment results | Need comparison against actual school records |
 | Android multi-account persistence, process recovery, background behavior, widget launchers, and restart behavior | Need production-device acceptance |
 | Windows minimize/sleep behavior during selection | Needs acceptance beyond source inspection |
-| GitHub CI checks and tag-triggered Android/Windows release builds | Configured in `.github/workflows/`; needs GitHub Actions acceptance |
+| GitHub CI checks and tag-triggered signed LXY APK release builds | Configured in `.github/workflows/`; needs GitHub Actions acceptance |
 | Android release signing and application upgrades | Signing secrets and production-device acceptance still required |
 
 These entries retain the product direction without presenting it as working functionality or a delivery commitment. See [development](development.md) for recording evidence.

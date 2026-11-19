@@ -45,7 +45,17 @@ class _UpdateCheckPageState extends State<UpdateCheckPage> {
                 constraints: const BoxConstraints(
                   maxWidth: AppLayout.contentMaxWidth,
                 ),
-                child: _buildContent(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '更新通道：${widget.viewModel.repository.channel.displayName}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildContent(context),
+                  ],
+                ),
               ),
             ),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../../app/app_identity.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/auth_view_model.dart';
 import 'auth_notice.dart';
@@ -625,7 +626,7 @@ class _LoginBrand extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'ZFHelper',
+          appDisplayName,
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),

@@ -23,6 +23,7 @@ import '../platform/schedule_island_platform.dart';
 import '../platform/schedule_widget_platform.dart';
 import '../ui/features/settings/view_models/appearance_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
+import 'app_identity.dart';
 
 typedef AppClock = DateTime Function();
 
@@ -40,7 +41,7 @@ final class AppConfiguration {
     UpdatePreferencesStore? updatePreferences,
     this.appInstaller,
     this.updateDownloadDirectory,
-  }) : releases = releases ?? ReleaseRepository(),
+  }) : releases = releases ?? ReleaseRepository(channel: appReleaseChannel),
        updatePreferences =
            updatePreferences ??
            JsonFileUpdatePreferencesStore(
@@ -48,7 +49,7 @@ final class AppConfiguration {
                final directory = await getApplicationSupportDirectory();
                await directory.create(recursive: true);
                return directory.uri
-                   .resolve('zfhelper-update.json')
+                   .resolve(appReleaseChannel.preferencesFileName)
                    .toFilePath();
              },
            );
@@ -73,12 +74,14 @@ final class AppConfiguration {
     return AppConfiguration(
       scheduleWidgetPlatform: createScheduleWidgetPlatform(),
       scheduleIslandPlatform: createScheduleIslandPlatform(),
-      releases: ReleaseRepository(),
+      releases: ReleaseRepository(channel: appReleaseChannel),
       updatePreferences: JsonFileUpdatePreferencesStore(
         resolvePath: () async {
           final directory = await getApplicationSupportDirectory();
           await directory.create(recursive: true);
-          return directory.uri.resolve('zfhelper-update.json').toFilePath();
+          return directory.uri
+              .resolve(appReleaseChannel.preferencesFileName)
+              .toFilePath();
         },
       ),
       appInstaller: createAppInstallerPlatform(),

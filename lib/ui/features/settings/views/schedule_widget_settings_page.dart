@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_identity.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/schedule_widget_view_model.dart';
 import '../widgets/settings_section.dart';
@@ -46,7 +47,7 @@ class _ScheduleWidgetSettingsPageState extends State<ScheduleWidgetSettingsPage>
         children: [
           Text('课表桌面小组件目前支持 Android。'),
           SizedBox(height: 12),
-          Text('在 Android 设备上，可以长按桌面，从小组件列表添加 ZFHelper 课表。'),
+          Text('在 Android 设备上，可以长按桌面，从小组件列表添加$appDisplayName。'),
         ],
       );
     }

@@ -1,12 +1,14 @@
-# ZFHelper
+# 流星雨课表 (LXY)
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A Flutter/Dart client for the newer Zhengfang academic administration system. Android-first, with Windows support.
+The LXY Android edition of ZFHelper, a Flutter/Dart client for the newer Zhengfang academic administration system. This branch distributes APKs only and is intended for one recipient.
 
 ## Status
 
-The project is under development. The application UI is currently Simplified Chinese; English documentation does not imply an English UI. GitHub CI checks pull requests and the `main`/`dev` branches; stable releases are built from `vX.Y.Z` tags on `main`, and pre-releases from `vX.Y.Z-beta.N`-style tags on `dev` are published as GitHub pre-releases. School compatibility and release readiness still require real-school and device acceptance.
+Prepared LXY version: **0.2.3+14**, based on ordinary ZFHelper 0.2.3. The application UI is Simplified Chinese. Pull requests and branch pushes run quality checks without packaging APKs; `lxy-vX.Y.Z` tags on `LXY` run checks and publish a signed APK and checksum without taking GitHub's Latest designation. Shared changes can flow from `dev` to both `main` and `LXY` through separate PRs. School compatibility and signed upgrade behavior still require real-school and device acceptance.
+
+For the first installation, download the LXY APK and install it over the ordinary edition without uninstalling. The application ID and local storage remain compatible; the signing certificate must match and the build number must be higher. Subsequent in-app updates stay in the LXY channel. Release visibility follows the repository's visibility. See [development](docs/development.md#lxy-apk-releases-and-installation) for release and migration requirements.
 
 ## Features
 
@@ -32,7 +34,7 @@ Appearance follows the system or uses persistent light/dark mode with Catppuccin
 | Target | Runtime and platform capabilities |
 | --- | --- |
 | Android 13+ (API 33) | Responsive UI, foreground-service-backed seat watching, and an offline home-screen timetable widget |
-| Windows | Sidebar/split-pane layouts; selection operations run while the application process remains open; no Android widget |
+| Windows (upstream source only) | Shared source retained; LXY does not build or publish Windows packages |
 
 Android background work is subject to notification permission, service limits, and power management. Widget refreshes are not precise course reminders. Interrupted operations require manual continuation or result verification after restart.
 
@@ -45,7 +47,7 @@ From the repository root:
 ```powershell
 flutter pub get
 flutter devices
-flutter run -d windows
+flutter run -d <device-id>
 ```
 
 For Android, use `flutter run -d <device-id>` with an ID from `flutter devices`. Windows web login requires WebView2 Runtime.
@@ -62,7 +64,7 @@ For Android, use `flutter run -d <device-id>` with an ID from `flutter devices`.
 ## Limitations
 
 - School variants are not universally compatible. Real-school login, timetable, grades, and enrollment-result comparisons remain acceptance work.
-- Update checking reads the latest stable GitHub Release (pre-releases never qualify as "latest"), shows its notes, and can open the release or repository page in the system browser. Pre-release builds are not offered updates through this channel; their users download newer builds from the Releases page.
+- LXY checks only published `lxy-vX.Y.Z` releases, including release notes and matching APK assets. Ordinary releases and pre-releases are excluded. The ordinary edition retains its separate stable update channel.
 - ICS export, school examination-schedule retrieval, system course reminders, and couple timetables are not implemented. Manually entered examination events are supported.
 - Scheduled auto-enrollment, cloud enrollment delegation, automatic withdrawal, and cross-device synchronization are outside the current scope.
 - Production-device background behavior, signed-package installation, and upgrade flows still require acceptance. GitHub CI and unsigned release assets do not establish those results.

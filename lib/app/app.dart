@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../ui/core/app_theme.dart';
 import 'app_configuration.dart';
+import 'app_identity.dart';
 import 'app_shell.dart';
 
 class ZfHelperApp extends StatelessWidget {
@@ -15,7 +16,7 @@ class ZfHelperApp extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: configuration.appearance,
     builder: (context, _) => MaterialApp(
-      title: 'ZFHelper',
+      title: appDisplayName,
       debugShowCheckedModeBanner: false,
       locale: const Locale('zh', 'CN'),
       supportedLocales: const [Locale('zh', 'CN')],

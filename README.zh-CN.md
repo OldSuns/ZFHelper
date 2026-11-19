@@ -1,12 +1,14 @@
-# ZFHelper
+# 流星雨课表（LXY）
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-面向新正方教务系统的 Flutter/Dart 客户端，Android 优先，同时支持 Windows。
+ZFHelper 的 LXY Android 定制版，面向新正方教务系统，使用 Flutter/Dart 开发。本分支只发布 APK，面向一位指定用户使用。
 
 ## 项目状态
 
-项目仍在开发中。应用界面目前使用简体中文；英文文档不代表已经提供英文界面。GitHub CI 会检查 PR 及 `main`/`dev` 分支；稳定版由 `main` 上的 `vX.Y.Z` tag 触发发布，`dev` 上的 `vX.Y.Z-beta.N` 形式 tag 会发布为 GitHub 预发布。学校兼容性与正式发布条件仍需真实学校和设备验收。
+首版准备版本为 **0.2.3+14**，基于普通版 ZFHelper 0.2.3。界面使用简体中文。PR 和分支推送只运行质量检查，不打包 APK；`LXY` 上的 `lxy-vX.Y.Z` 标签通过检查后发布签名 APK 和校验文件，不占用 GitHub 的 Latest。通用改动可以从 `dev` 分别通过 PR 进入 `main` 和 `LXY`。学校兼容性和签名覆盖升级仍需真实学校及设备验收。
+
+首次使用时下载 LXY APK，直接覆盖安装普通版，不要先卸载。应用 ID 和本地存储保持兼容；签名证书必须相同，构建号必须更高。后续应用内更新只接收 LXY 版本。发布内容的可见性沿用仓库设置。发布与迁移要求见[开发说明](docs/development.md#lxy-apk-releases-and-installation)。
 
 ## 功能
 
@@ -32,7 +34,7 @@
 | 平台 | 运行方式与平台能力 |
 | --- | --- |
 | Android 13+（API 33） | 自适应界面、前台服务支撑的捡漏，以及离线桌面课表小组件 |
-| Windows | 侧栏与分栏布局；选课操作依赖应用进程持续运行；不提供 Android 小组件 |
+| Windows（仅保留上游源码） | 保留共享实现；LXY 不构建或发布 Windows 安装包 |
 
 Android 后台运行受通知权限、服务时限与省电策略限制。小组件更新不等于准点课程提醒。重启后，中断操作需要手动继续或核实结果。
 
@@ -45,7 +47,7 @@ Android 后台运行受通知权限、服务时限与省电策略限制。小组
 ```powershell
 flutter pub get
 flutter devices
-flutter run -d windows
+flutter run -d <device-id>
 ```
 
 Android 使用 `flutter run -d <device-id>`，设备 ID 来自 `flutter devices`。Windows 网页登录需要 WebView2 Runtime。
@@ -64,7 +66,7 @@ Android 使用 `flutter run -d <device-id>`，设备 ID 来自 `flutter devices`
 ## 限制
 
 - 不保证兼容所有学校分支；真实学校的登录、课表、成绩与选课结果仍需对照验收。
-- 检查更新读取最新稳定版 GitHub Release（预发布不会被视为 latest），展示更新说明，并可在系统浏览器打开发布页或仓库地址。预发布版本不会通过该渠道收到更新，需自行从 Releases 页下载新构建。
+- LXY 只检查已发布的 `lxy-vX.Y.Z` 版本，读取本通道更新说明和对应 APK，排除普通版及预发布版本。普通版继续使用自己的稳定更新通道。
 - ICS 导出、学校考试安排获取、系统课程提醒和情侣课表尚未实现；手动录入考试日程已支持。
 - 定时抢课、云端代抢、自动退课及跨设备同步不在当前范围内。
 - 真实设备的后台行为、正式签名安装与升级流程仍需验收。GitHub CI 和未签名发布包不能证明这些结果。

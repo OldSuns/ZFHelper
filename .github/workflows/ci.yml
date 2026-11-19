@@ -1,11 +1,13 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
       - main
       - dev
+      - LXY
 
 permissions:
   contents: read

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_identity.dart';
 import '../../../../data/repositories/schedule_repository.dart';
 import '../../../../platform/schedule_widget_platform.dart';
 import '../../../core/app_theme.dart';
@@ -243,8 +244,8 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
       if (!await synchronize()) return failure ?? sourceNotice ?? '课表尚未同步到小组件';
       final accepted = await _platform.requestPin();
       return accepted
-          ? '请在系统弹窗中确认添加；也可在桌面的小组件列表中找到 ZFHelper。'
-          : '当前桌面不支持快捷添加，请长按桌面，从小组件列表添加 ZFHelper 课表。';
+          ? '请在系统弹窗中确认添加；也可在桌面的小组件列表中找到$appDisplayName。'
+          : '当前桌面不支持快捷添加，请长按桌面，从小组件列表添加$appDisplayName。';
     } on ScheduleWidgetException catch (error) {
       _failure = error.message;
       return error.message;

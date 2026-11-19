@@ -10,6 +10,34 @@ const _downloadMirrorPrefix = 'https://ghfast.top/';
 const _releasesApiUrl =
     'https://api.github.com/repos/OldSuns/ZFHelper/releases';
 
+enum ReleaseChannel {
+  stable,
+  lxy;
+
+  String get displayName => this == lxy ? 'LXY' : '正式版';
+
+  String get preferencesFileName =>
+      this == lxy ? 'zfhelper-update-lxy.json' : 'zfhelper-update.json';
+
+  bool acceptsTag(String tag) => this == lxy
+      ? RegExp(r'^lxy-v\d+\.\d+\.\d+$').hasMatch(tag)
+      : tag.startsWith('v') && _versionPattern.hasMatch(tag);
+
+  String versionForTag(String tag) {
+    if (!acceptsTag(tag)) {
+      throw const ReleaseException('发布版本不属于当前更新通道');
+    }
+    return this == lxy ? tag.substring(4) : tag;
+  }
+
+  String tagForVersion(String version) {
+    final tag = releaseTagForVersion(version);
+    final result = this == lxy ? 'lxy-$tag' : tag;
+    versionForTag(result);
+    return result;
+  }
+}
+
 final class ReleaseInfo {
   const ReleaseInfo({
     required this.tagName,
@@ -169,15 +197,61 @@ final class _ParsedVersion {
 }
 
 final class ReleaseRepository {
-  ReleaseRepository({Dio? client, this._probe}) : _client = client ?? Dio();
+  ReleaseRepository({
+    Dio? client,
+    this._probe,
+    this.channel = ReleaseChannel.stable,
+  }) : _client = client ?? Dio();
 
   final Dio _client;
   final DownloadProbe? _probe;
+  final ReleaseChannel channel;
 
-  Future<ReleaseInfo> fetchLatest() => _fetch('latest');
+  Future<ReleaseInfo> fetchLatest() async {
+    if (channel == ReleaseChannel.stable) return _fetch('latest');
+    Map<Object?, Object?>? latest;
+    String? latestVersion;
+    // Releases are ordered by creation date, not by channel or version.
+    // Read every page so ordinary releases cannot hide an LXY update.
+    for (var page = 1; ; page++) {
+      final data = await _fetchJson('', query: {'per_page': 100, 'page': page});
+      if (data is! List) {
+        throw const ReleaseException('GitHub Release 列表格式无效');
+      }
+      for (final item in data) {
+        if (item is! Map ||
+            item['draft'] != false ||
+            item['prerelease'] != false ||
+            item['tag_name'] is! String ||
+            !channel.acceptsTag(item['tag_name'] as String)) {
+          continue;
+        }
+        final version = channel.versionForTag(item['tag_name'] as String);
+        if (latestVersion == null ||
+            compareVersions(version, latestVersion) > 0) {
+          latest = item;
+          latestVersion = version;
+        }
+      }
+      if (data.length < 100) break;
+    }
+    if (latest == null) {
+      throw const ReleaseException('LXY 通道暂无可用的发布版本', statusCode: 404);
+    }
+    // Validate the selected release only: removed assets on an older release
+    // must not block a newer update, and a broken latest release must not
+    // silently fall back to an older APK.
+    return _parseRelease(latest);
+  }
 
-  Future<ReleaseInfo> fetchByTag(String tag) =>
-      _fetch('tags/${Uri.encodeComponent(tag)}');
+  Future<ReleaseInfo> fetchByTag(String tag) async {
+    channel.versionForTag(tag);
+    final release = await _fetch('tags/${Uri.encodeComponent(tag)}');
+    if (release.tagName != tag) {
+      throw const ReleaseException('发布版本与请求的版本不一致');
+    }
+    return release;
+  }
 
   Future<Uri> resolveDownloadUrl(ReleaseAsset asset) async {
     if (await (_probe ?? _probeDownload)(asset.mirrorUrl)) {
@@ -279,10 +353,45 @@ final class ReleaseRepository {
     }
   }
 
-  Future<ReleaseInfo> _fetch(String path) async {
+  Future<ReleaseInfo> _fetch(String path) async =>
+      _parseRelease(await _fetchJson(path));
+
+  ReleaseInfo _parseRelease(Object? data) {
+    if (data is! Map) {
+      throw const ReleaseException('GitHub Release 响应格式无效');
+    }
+    try {
+      final release = ReleaseInfo.fromJson(Map<String, Object?>.from(data));
+      channel.versionForTag(release.tagName);
+      if (data['draft'] == true ||
+          (channel == ReleaseChannel.lxy && data['prerelease'] == true)) {
+        throw const ReleaseException('该发布版本尚不可用于当前更新通道');
+      }
+      if (channel == ReleaseChannel.lxy) {
+        final tag = release.tagName;
+        if (release.htmlUrl.path != '/OldSuns/ZFHelper/releases/tag/$tag' ||
+            release.assets.any(
+              (asset) => !asset.url.path.startsWith(
+                '/OldSuns/ZFHelper/releases/download/$tag/',
+              ),
+            )) {
+          throw const ReleaseException('发布页或安装包与 LXY 版本不一致');
+        }
+        if (release.assetWithExtension('.apk') == null) {
+          throw const ReleaseException('LXY 发布缺少 APK 安装包');
+        }
+      }
+      return release;
+    } on FormatException catch (error) {
+      throw ReleaseException(error.message);
+    }
+  }
+
+  Future<Object?> _fetchJson(String path, {Map<String, Object?>? query}) async {
     try {
       final response = await _client.get<Object?>(
-        '$_releasesApiUrl/$path',
+        path.isEmpty ? _releasesApiUrl : '$_releasesApiUrl/$path',
+        queryParameters: query,
         options: Options(
           headers: const {
             'Accept': 'application/vnd.github+json',
@@ -293,15 +402,13 @@ final class ReleaseRepository {
           validateStatus: (_) => true,
         ),
       );
-      if (response.statusCode != 200 || response.data is! Map) {
+      if (response.statusCode != 200) {
         throw ReleaseException(
           _statusMessage(response.statusCode),
           statusCode: response.statusCode,
         );
       }
-      return ReleaseInfo.fromJson(
-        Map<String, Object?>.from(response.data! as Map),
-      );
+      return response.data;
     } on ReleaseException {
       rethrow;
     } on FormatException catch (error) {

@@ -370,7 +370,7 @@ internal object ScheduleWidgetRenderer {
         val today = now.toLocalDate()
         if (failure != null) return WidgetFocus(today, "同步异常", "课表暂不可用", failure)
         if (snapshot == null) {
-            return WidgetFocus(today, "桌面课表", "先同步课表", "打开 ZFHelper，完成课表设置")
+            return WidgetFocus(today, "桌面课表", "先同步课表", "打开流星雨课表，完成课表设置")
         }
         when (snapshot.status) {
             "noAccount" -> return WidgetFocus(

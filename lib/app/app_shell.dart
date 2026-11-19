@@ -21,6 +21,7 @@ import '../ui/features/settings/view_models/schedule_island_view_model.dart';
 import '../ui/features/settings/view_models/schedule_widget_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
 import 'app_configuration.dart';
+import 'app_identity.dart';
 
 enum AppDestination {
   timetable('课表', Icons.calendar_month_outlined, Icons.calendar_month),
@@ -425,7 +426,7 @@ class _DesktopNavigation extends StatelessWidget {
             child: SizedBox(
               width: extended ? null : _compactWidth - AppLayout.pagePadding,
               child: Text(
-                'ZFHelper',
+                appDisplayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(

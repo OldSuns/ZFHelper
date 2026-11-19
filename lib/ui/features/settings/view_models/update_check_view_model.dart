@@ -141,10 +141,15 @@ final class UpdateCheckViewModel extends ChangeNotifier {
     try {
       final version = await _readVersion();
       final release = await repository.fetchLatest();
-      final hasUpdate = compareVersions(release.tagName, version) > 0;
+      final hasUpdate =
+          compareVersions(
+            repository.channel.versionForTag(release.tagName),
+            version,
+          ) >
+          0;
       ReleaseInfo? releaseForCurrentVersion;
       if (!hasUpdate) {
-        final currentTag = releaseTagForVersion(version);
+        final currentTag = repository.channel.tagForVersion(version);
         releaseForCurrentVersion = release.tagName == currentTag
             ? release
             : await _fetchCurrentRelease(currentTag, version);

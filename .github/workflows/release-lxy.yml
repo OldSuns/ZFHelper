@@ -1,0 +1,127 @@
+name: LXY APK release
+
+on:
+  push:
+    tags:
+      - 'lxy-v*.*.*'
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.47.4
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+
+concurrency:
+  group: release-lxy
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Build and publish signed LXY APK
+    needs: quality
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate branch, version, and global Android build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch origin LXY --tags
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the LXY branch and tags.' }
+          $publishedTags = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read published versions.' }
+          & .github/scripts/validate-lxy-release.ps1 -Tag $env:GITHUB_REF_NAME -PublishedTags $publishedTags
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Restore locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Require the existing Android release signing identity
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing release signing secret: $name. LXY requires signed upgrade APKs."
+            }
+          }
+          $keystorePath = Join-Path $env:RUNNER_TEMP 'zfhelper-lxy-release.jks'
+          [IO.File]::WriteAllBytes($keystorePath, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+          @(
+            "storeFile=$($keystorePath.Replace('\', '/'))"
+            "storePassword=$env:ANDROID_KEYSTORE_PASSWORD"
+            "keyAlias=$env:ANDROID_KEY_ALIAS"
+            "keyPassword=$env:ANDROID_KEY_PASSWORD"
+          ) -join "`n" | Set-Content -LiteralPath 'android/key.properties' -Encoding UTF8
+
+      - name: Build APK
+        run: flutter build apk --release --no-pub
+
+      - name: Package APK and checksum
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:GITHUB_REF_NAME.Substring(5)
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $apk = "artifacts/zfhelper-lxy-$version.apk"
+          Copy-Item -LiteralPath 'build/app/outputs/flutter-apk/app-release.apk' -Destination $apk
+          (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant() + "  zfhelper-lxy-$version.apk" |
+            Set-Content -LiteralPath "$apk.sha256" -Encoding ascii
+
+      - name: Publish LXY release without changing Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch origin LXY --tags
+          if ($LASTEXITCODE -ne 0) { throw 'Could not refresh published tags.' }
+          $publishedTags = @(gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false) | .tag_name')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not recheck published versions.' }
+          & .github/scripts/validate-lxy-release.ps1 -Tag $env:GITHUB_REF_NAME -PublishedTags $publishedTags
+          $notes = Get-Content -LiteralPath 'RELEASE_NOTES.md' -Raw -Encoding UTF8
+          if ([string]::IsNullOrWhiteSpace($notes)) { throw 'Release notes must not be empty.' }
+          $bodyPath = Join-Path $env:RUNNER_TEMP 'lxy-release-notes.md'
+          $body = $notes.Trim() + "`n`nSigned Android APK for the LXY update channel. A SHA-256 file is included.`n"
+          Set-Content -LiteralPath $bodyPath -Value $body -Encoding UTF8
+          $assets = @(Get-ChildItem -LiteralPath artifacts -File | ForEach-Object { $_.FullName })
+          gh release create $env:GITHUB_REF_NAME @assets --verify-tag --latest=false --title "流星雨课表 $($env:GITHUB_REF_NAME.Substring(5))" --notes-file $bodyPath
+          if ($LASTEXITCODE -ne 0) { throw 'LXY release publication failed.' }
+
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('android/key.properties', (Join-Path $env:RUNNER_TEMP 'zfhelper-lxy-release.jks'))) {
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+          }

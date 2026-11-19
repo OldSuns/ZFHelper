@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../app/app_identity.dart';
 import '../../courses/view_models/courses_view_model.dart';
 import '../../grades/view_models/grades_view_model.dart';
 import '../../schedule/view_models/timetable_view_model.dart';
@@ -31,7 +32,7 @@ class AppSettingsPage extends StatelessWidget {
       future: PackageInfo.fromPlatform(),
       builder: (context, snapshot) => AlertDialog(
         icon: const Icon(Icons.school_outlined, size: 40),
-        title: const Text('ZFHelper'),
+        title: const Text(appDisplayName),
         scrollable: true,
         content: Text(
           '${snapshot.data?.version ?? '读取版本中…'}\n\n新正方教务助手，提供课表、选课与成绩查询。',
@@ -90,7 +91,7 @@ class AppSettingsPage extends StatelessWidget {
           SettingsEntry(
             icon: Icons.info_outline,
             title: '关于应用',
-            subtitle: 'ZFHelper · 查看版本信息',
+            subtitle: '$appDisplayName · 查看版本信息',
             onTap: () => _showAbout(context),
           ),
         ],
