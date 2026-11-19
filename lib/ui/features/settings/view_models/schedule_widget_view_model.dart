@@ -27,7 +27,14 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   final DateTime Function() _clock;
   late final StreamSubscription<ScheduleRepositoryState> _subscription;
   ScheduleWidgetCapabilities? _capabilities;
+  ScheduleWidgetSettings _settings = const ScheduleWidgetSettings();
+  bool _settingsInitialized = false;
+  bool _settingsSaving = false;
   String? _failure;
+  String? _publicationFailure;
+  String? _statusFailure;
+  String? _settingsReadFailure;
+  ScheduleWidgetException? _settingsSaveFailure;
   Object? _requestedSource;
   Future<bool>? _sync;
   bool _pending = false;
@@ -35,9 +42,24 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool _disposed = false;
 
   ScheduleWidgetCapabilities? get capabilities => _capabilities;
-  bool get busy => _sync != null || _pinning;
+  ScheduleWidgetSettings get settings => _settings;
+  bool get settingsInitialized => _settingsInitialized;
+  bool get settingsBusy => _settingsSaving;
+  bool get busy => _sync != null || _pinning || _settingsSaving;
   bool get canSync => _repository.state.initialized && _appearance.initialized;
-  String? get failure => _failure ?? _capabilities?.failure;
+  String? get settingsReadFailure => _settingsReadFailure;
+  String? get failure {
+    final messages = [
+      _failure,
+      _publicationFailure,
+      _statusFailure,
+      _capabilities?.failure,
+      _settingsSaveFailure?.message,
+      _settingsReadFailure,
+    ].whereType<String>().toSet();
+    return messages.isEmpty ? null : messages.join('；');
+  }
+
   Stream<ScheduleWidgetLaunch> get launches => _platform.launches;
 
   String get sourceLabel {
@@ -99,10 +121,68 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   Future<void> refreshStatus() async {
     try {
       _capabilities = await _platform.capabilities();
+      _statusFailure = null;
     } on ScheduleWidgetException catch (error) {
-      _failure = error.message;
+      _statusFailure = error.message;
     }
+    await _refreshSettings();
     _notify();
+  }
+
+  Future<void> _refreshSettings() async {
+    _settingsInitialized = false;
+    _notify();
+    try {
+      _settings = await _platform.settings();
+      _settingsInitialized = true;
+      _settingsReadFailure = null;
+    } on ScheduleWidgetException catch (error) {
+      _settingsReadFailure = error.message;
+    }
+  }
+
+  Future<bool> updateSettings({
+    bool? showCountdown,
+    bool? showLocation,
+    bool? showTeacher,
+  }) async {
+    if (_disposed || busy || !_settingsInitialized) return false;
+    final next = ScheduleWidgetSettings(
+      showCountdown: showCountdown ?? _settings.showCountdown,
+      showLocation: showLocation ?? _settings.showLocation,
+      showTeacher: showTeacher ?? _settings.showTeacher,
+    );
+    if (next.showCountdown == _settings.showCountdown &&
+        next.showLocation == _settings.showLocation &&
+        next.showTeacher == _settings.showTeacher) {
+      return true;
+    }
+    return _saveSettings(next);
+  }
+
+  Future<bool> resetSettings() async {
+    if (_disposed || busy) return false;
+    return _saveSettings(const ScheduleWidgetSettings());
+  }
+
+  Future<bool> _saveSettings(ScheduleWidgetSettings next) async {
+    _settingsSaving = true;
+    _settingsSaveFailure = null;
+    _notify();
+    try {
+      await _platform.setSettings(next);
+      _settings = next;
+      _settingsInitialized = true;
+      _settingsReadFailure = null;
+      return true;
+    } on ScheduleWidgetException catch (error) {
+      _settingsSaveFailure = error;
+      await _refreshSettings();
+      return false;
+    } finally {
+      _settingsSaving = false;
+      _notify();
+    }
   }
 
   Future<bool> synchronize() {
@@ -114,6 +194,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
 
   Future<bool> _publishPending() async {
     _failure = null;
+    _publicationFailure = null;
     _notify();
     try {
       do {
@@ -128,16 +209,26 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
           };
           try {
             await _platform.publish(jsonEncode(payload));
-            _failure = null;
+            _publicationFailure = null;
           } on ScheduleWidgetException catch (error) {
-            _failure = error.message;
+            _publicationFailure = error.message;
           }
         }
         if (_disposed) return false;
         await refreshStatus();
         // Account or timetable changes can arrive while the host reads status.
       } while (_pending && !_disposed);
-      return !_disposed && failure == null;
+      final synchronized =
+          !_disposed &&
+          _publicationFailure == null &&
+          _statusFailure == null &&
+          _capabilities?.failure == null;
+      if (synchronized &&
+          _settingsReadFailure == null &&
+          _settingsSaveFailure?.code == 'widget_platform_failed') {
+        _settingsSaveFailure = null;
+      }
+      return synchronized;
     } finally {
       _sync = null;
       _notify();

@@ -23,6 +23,7 @@ import org.json.JSONException
 internal const val SCHEDULE_WIDGET_DATE = "schedule_widget_date"
 internal const val SCHEDULE_WIDGET_REFRESH = "dev.zfhelper.app.SCHEDULE_WIDGET_REFRESH"
 internal const val SCHEDULE_WIDGET_BOUNDARY = "dev.zfhelper.app.SCHEDULE_WIDGET_BOUNDARY"
+internal const val SCHEDULE_WIDGET_COUNTDOWN = "dev.zfhelper.app.SCHEDULE_WIDGET_COUNTDOWN"
 private const val WIDGET_CHANNEL = "zfhelper/schedule_widget"
 private const val UPDATE_WINDOW_MILLIS = 10 * 60 * 1000L
 
@@ -33,6 +34,8 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
     private val handler = Handler(Looper.getMainLooper())
     private val manager = AppWidgetManager.getInstance(application)
     private val provider = ComponentName(application, ScheduleWidgetProvider::class.java)
+    private val widgetLists = mutableMapOf<Int, ScheduleWidgetListState>()
+    private var nextWidgetBoundary: ZonedDateTime? = null
     private var channel: MethodChannel? = null
     private var activity = WeakReference<MainActivity>(null)
     private var resumed = false
@@ -130,6 +133,15 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             return
         }
         when (call.method) {
+            "settings" -> complete(result) {
+                store.settings().toMap()
+            }
+            "setSettings" -> complete(result) {
+                val settings = ScheduleWidgetSettings.fromArguments(call.arguments)
+                store.writeSettings(settings)
+                renderAndSchedule(store.read(), committedSettings = settings)
+                null
+            }
             "capabilities" -> complete(result) {
                 val snapshot = try {
                     store.read()
@@ -173,8 +185,12 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
     }
 
-    fun refreshInBackground(forceTimers: Boolean = false, finished: () -> Unit = {}) {
-        background(finished) { renderAndSchedule(store.read(), forceTimers) }
+    fun refreshInBackground(
+        forceTimers: Boolean = false,
+        countdownOnly: Boolean = false,
+        finished: () -> Unit = {},
+    ) {
+        background(finished) { renderAndSchedule(store.read(), forceTimers, countdownOnly) }
     }
 
     fun receiveIslandEvent(intent: Intent, finished: () -> Unit) {
@@ -193,6 +209,8 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 island.recordFailure(failure)
             } catch (failure: JSONException) {
                 island.recordFailure(island.platformFailure(failure))
+            } catch (failure: ScheduleWidgetSettingsException) {
+                Log.e("ScheduleWidget", failure.code)
             } catch (failure: ScheduleWidgetException) {
                 showFailure(failure)
             } catch (failure: RuntimeException) {
@@ -215,6 +233,9 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 val problem = island.platformFailure(failure)
                 island.recordFailure(problem)
                 handler.post { result.error(problem.code, problem.message, null) }
+            } catch (failure: ScheduleWidgetSettingsException) {
+                Log.e("ScheduleWidget", failure.code)
+                handler.post { result.error(failure.code, failure.message, null) }
             } catch (failure: ScheduleWidgetException) {
                 showFailure(failure)
                 handler.post { result.error(failure.code, failure.message, null) }
@@ -320,7 +341,12 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         }
     }
 
-    private fun renderAndSchedule(snapshot: ScheduleWidgetSnapshot?, forceTimers: Boolean = false) {
+    private fun renderAndSchedule(
+        snapshot: ScheduleWidgetSnapshot?,
+        forceTimers: Boolean = false,
+        preserveScroll: Boolean = false,
+        committedSettings: ScheduleWidgetSettings? = null,
+    ) {
         val now = ZonedDateTime.now()
         val ids = manager.getAppWidgetIds(provider)
         val failure = store.failure
@@ -336,21 +362,32 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 island.recordFailure(cleanupFailure)
             }
         }
-        val savedTheme = store.theme(visibleSnapshot)
-        for (id in ids) {
-            manager.updateAppWidget(
-                id,
-                ScheduleWidgetRenderer.render(
-                    application,
-                    id,
-                    visibleSnapshot,
-                    blockingFailure?.message,
-                    now,
-                    savedTheme,
-                ),
-            )
+        var settingsFailure: ScheduleWidgetSettingsException? = null
+        val settings = try {
+            committedSettings ?: store.settings()
+        } catch (failure: ScheduleWidgetSettingsException) {
+            Log.e("ScheduleWidget", failure.code)
+            settingsFailure = failure
+            ScheduleWidgetSettings(showCountdown = false, showLocation = false, showTeacher = false)
         }
-        scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty())
+        val savedTheme = store.theme(visibleSnapshot)
+        widgetLists.keys.retainAll(ids.toSet())
+        for (id in ids) {
+            val rendering = ScheduleWidgetRenderer.render(
+                application,
+                id,
+                if (settingsFailure == null) visibleSnapshot else null,
+                blockingFailure?.message ?: settingsFailure?.message,
+                now,
+                savedTheme,
+                settings,
+                widgetLists[id].takeIf { preserveScroll && nextWidgetBoundary?.isAfter(now) == true },
+            )
+            manager.updateAppWidget(id, rendering.views)
+            val listState = rendering.listState
+            if (listState == null) widgetLists.remove(id) else widgetLists[id] = listState
+        }
+        scheduleNextUpdate(visibleSnapshot, now, ids.isNotEmpty(), settings)
         if (failure != null && blockingFailure == null) store.clearFailure()
         cleanupFailure?.let { throw it }
     }
@@ -359,21 +396,26 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         snapshot: ScheduleWidgetSnapshot?,
         now: ZonedDateTime,
         hasWidgets: Boolean,
+        settings: ScheduleWidgetSettings,
     ) {
         val alarm = application.getSystemService(AlarmManager::class.java)
-        val intent = Intent(application, ScheduleWidgetProvider::class.java).setAction(SCHEDULE_WIDGET_BOUNDARY)
-        val pending = PendingIntent.getBroadcast(
-            application, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        fun refreshIntent(action: String): PendingIntent = PendingIntent.getBroadcast(
+            application, 0, Intent(application, ScheduleWidgetProvider::class.java).setAction(action),
+            PendingIntent.FLAG_IMMUTABLE,
         )
+        val boundaryIntent = refreshIntent(SCHEDULE_WIDGET_BOUNDARY)
+        val countdownIntent = refreshIntent(SCHEDULE_WIDGET_COUNTDOWN)
         if (!hasWidgets) {
-            alarm.cancel(pending)
-            pending.cancel()
+            alarm.cancel(boundaryIntent)
+            alarm.cancel(countdownIntent)
+            nextWidgetBoundary = null
             return
         }
         val today = now.toLocalDate()
         val startOfDay = today.atStartOfDay()
         var next = today.plusDays(1).atStartOfDay(now.zone)
-        snapshot?.days?.firstOrNull { it.date == today }?.lessons?.forEach { lesson ->
+        val lessons = snapshot?.days?.firstOrNull { it.date == today }?.lessons.orEmpty()
+        lessons.forEach { lesson ->
             lesson.periods.forEach { period ->
                 for (minutes in listOf(period.start, period.end)) {
                     val boundary = startOfDay.plusMinutes(minutes.toLong()).atZone(now.zone)
@@ -381,8 +423,27 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 }
             }
         }
-        // Widgets do not need exact alarms or a wake-up while the screen is off.
-        alarm.setWindow(AlarmManager.RTC, next.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, pending)
+        val countdownUpdate = if (!settings.showCountdown) {
+            null
+        } else if (snapshot != null && ScheduleWidgetRenderer.hasCountdown(snapshot, now, settings)) {
+            now.plusMinutes(1).withSecond(0).withNano(0)
+        } else {
+            lessons.mapNotNull { lesson ->
+                lesson.start?.takeIf { it >= SCHEDULE_WIDGET_UPCOMING_MINUTES }?.let { start ->
+                    startOfDay.plusMinutes((start - SCHEDULE_WIDGET_UPCOMING_MINUTES).toLong()).atZone(now.zone)
+                }?.takeIf { it > now }
+            }.minOrNull()
+        }
+        // Keep the class boundary independent of best-effort countdown updates.
+        alarm.setWindow(AlarmManager.RTC, next.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, boundaryIntent)
+        nextWidgetBoundary = next
+        if (countdownUpdate != null && countdownUpdate < next) {
+            alarm.setWindow(
+                AlarmManager.RTC, countdownUpdate.toInstant().toEpochMilli(), UPDATE_WINDOW_MILLIS, countdownIntent,
+            )
+        } else {
+            alarm.cancel(countdownIntent)
+        }
     }
 
     private fun showFailure(failure: ScheduleWidgetException) {
@@ -400,13 +461,23 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
         try {
             val now = ZonedDateTime.now()
             val ids = manager.getAppWidgetIds(provider)
+            val settings = ScheduleWidgetSettings.defaults
             for (id in ids) {
                 manager.updateAppWidget(
                     id,
-                    ScheduleWidgetRenderer.render(application, id, null, failure.message, now, store.theme()),
+                    ScheduleWidgetRenderer.render(
+                        application,
+                        id,
+                        null,
+                        failure.message,
+                        now,
+                        store.theme(),
+                        settings,
+                    ).views,
                 )
+                widgetLists.remove(id)
             }
-            scheduleNextUpdate(null, now, ids.isNotEmpty())
+            scheduleNextUpdate(null, now, ids.isNotEmpty(), settings)
         } catch (renderFailure: RuntimeException) {
             // Keep the explicit persisted failure available to Flutter even if the host rejects RemoteViews.
             Log.e("ScheduleWidget", "widget_error_render_failed: ${renderFailure.javaClass.simpleName}")

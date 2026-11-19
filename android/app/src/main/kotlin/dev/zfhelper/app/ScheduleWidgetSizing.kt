@@ -14,6 +14,7 @@ internal data class ScheduleWidgetLayout(
     val size: SizeF,
     val style: ScheduleWidgetStyle,
     val detailed: Boolean = false,
+    val showCountdown: Boolean = false,
 )
 
 /** Size thresholds describe content that actually fits, including the user's text size. */
@@ -36,7 +37,17 @@ internal class ScheduleWidgetSizing(context: Context) {
 
     fun bodyHeight(text: String): Float = lineHeight(R.dimen.schedule_widget_body_text, text)
 
-    fun variants(): List<ScheduleWidgetLayout> {
+    fun countdownWidth(title: String, countdown: String): Float {
+        val gap = dp(R.dimen.schedule_widget_countdown_gap)
+        val pillPadding = dp(R.dimen.schedule_widget_countdown_padding)
+        val accentWidth = 3 + padding
+        return ceil(
+            4 * padding + timeColumnWidth + accentWidth + gap + 2 * pillPadding +
+                rowTitleWidth(title) + captionWidth(countdown) + 2,
+        )
+    }
+
+    fun variants(countdownWidth: Float?): List<ScheduleWidgetLayout> {
         // The first responsive breakpoint covers every launcher-reported narrow width.
         // Some launchers subtract host padding and report less than minResizeWidth.
         val narrowWidth = 1f
@@ -56,19 +67,21 @@ internal class ScheduleWidgetSizing(context: Context) {
             2 * padding + bodyLine + 4 + rowTitleLine + 2 * bodyLine + 22,
         )
         val wideWidth = dp(R.dimen.schedule_widget_wide_width)
+        val listWidths = listOfNotNull(narrowWidth, wideWidth, countdownWidth).distinct()
         return listOf(
             ScheduleWidgetLayout(SizeF(narrowWidth, minimumHeight), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, maxOf(minimumHeight + 8, twoLines)), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, maxOf(minimumHeight + 16, threeLines)), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, cardHeight), ScheduleWidgetStyle.CARD),
             ScheduleWidgetLayout(SizeF(narrowWidth, tallCardHeight), ScheduleWidgetStyle.CARD),
-            ScheduleWidgetLayout(SizeF(narrowWidth, todayHeight), ScheduleWidgetStyle.TODAY_LIST),
+        ) + listWidths.map { width ->
             ScheduleWidgetLayout(
-                SizeF(wideWidth, todayHeight),
+                SizeF(width, todayHeight),
                 ScheduleWidgetStyle.TODAY_LIST,
-                detailed = true,
-            ),
-        )
+                detailed = width >= wideWidth,
+                showCountdown = countdownWidth != null && width >= countdownWidth,
+            )
+        }
     }
 
     // Resource dimensions use Android's SP conversion, including Android 14's
@@ -100,5 +113,15 @@ internal class ScheduleWidgetSizing(context: Context) {
 
     private fun textWidth(value: String): Float = Paint().apply {
         textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_body_text).toFloat()
+    }.measureText(value) / density
+
+    private fun captionWidth(value: String): Float = Paint().apply {
+        textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_caption_text).toFloat()
+        typeface = Typeface.DEFAULT_BOLD
+    }.measureText(value) / density
+
+    private fun rowTitleWidth(value: String): Float = Paint().apply {
+        textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_row_title_text).toFloat()
+        typeface = Typeface.DEFAULT_BOLD
     }.measureText(value) / density
 }
