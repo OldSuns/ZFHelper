@@ -8,7 +8,8 @@ Install Flutter satisfying the root `pubspec.yaml` and the toolchain for Android
 
 ```powershell
 flutter doctor
-flutter pub get
+$env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
+flutter pub get --enforce-lockfile
 flutter run -d windows
 ```
 

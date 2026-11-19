@@ -11,10 +11,15 @@ Android requires the Flutter Android toolchain, with API 33 (Android 13) as the 
 From the repository root:
 
 ```powershell
-flutter pub get
+$env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
+flutter pub get --enforce-lockfile
 flutter devices
 flutter run -d windows
 ```
+
+Both committed lockfiles use `https://pub.flutter-io.cn`. Set `PUB_HOSTED_URL` to this source for local dependency restoration, matching all CI and release workflows. Strict restoration fails when the manifest, package source, or package hashes disagree with the lockfile. For an intentional dependency change, run `flutter pub get` in the root or `dart pub get` in the core package without `--enforce-lockfile`, then include the generated lockfile changes.
+
+The application temporarily pins `jni` to `1.1.2` and `jni_flutter` to `1.0.4+1` for compatibility with `path_provider_android 2.3.1`. The `jni 1.2.0` / `jni_flutter 1.1.0` combination reproduced an application-directory lookup failure on Android. Revisit both pins together after verifying an upstream fix in an Android release build, including school entry and persistent storage initialization.
 
 For Android, run `flutter run -d <device-id>` using an ID reported by `flutter devices`.
 
@@ -27,7 +32,7 @@ Ship the complete `build/windows/x64/runner/Release/` directory, not just its ex
 
 ## GitHub CI and releases
 
-Pull requests and pushes to `main` and `dev` run [.github/workflows/ci.yml](../.github/workflows/ci.yml): it restores both Dart packages, checks formatting, analyzes both packages, and runs their tests. It does not build or upload platform release artifacts.
+Pull requests and pushes to `main` and `dev` run [.github/workflows/ci.yml](../.github/workflows/ci.yml), which restores both Dart packages with `--enforce-lockfile`, checks formatting, analyzes both packages, and runs their tests. This quality workflow does not build or upload platform release artifacts. The release workflows also enforce the application lockfile and build with `--no-pub` to reuse the restored dependencies.
 
 ### Branch flow
 
@@ -73,7 +78,8 @@ flutter test --no-pub test/app_test.dart
 For pure-Dart core checks, change to `packages/zf_core` and run:
 
 ```powershell
-dart pub get
+$env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
+dart pub get --enforce-lockfile
 dart test test/src/schedule/period_time_plan_test.dart
 ```
 

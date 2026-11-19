@@ -114,6 +114,14 @@ void main() {
               'count': 1,
               'failure': failure,
             };
+          case 'settings':
+            return {
+              'showCountdown': true,
+              'showLocation': true,
+              'showTeacher': true,
+            };
+          case 'setSettings':
+            return null;
           default:
             throw StateError('Unexpected widget method: ${call.method}');
         }
@@ -159,6 +167,9 @@ void main() {
       expect(writes.last['days'], isEmpty);
       expect(writes.last['appearance'], 'dark');
       expect(model.busy, isFalse);
+      expect(model.settingsInitialized, isTrue);
+      expect(await model.updateSettings(showCountdown: false), isTrue);
+      expect(model.settings.showCountdown, isFalse);
 
       failNext = true;
       expect(await model.synchronize(), isFalse);
