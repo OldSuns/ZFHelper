@@ -18,20 +18,19 @@ abstract final class AppLayout {
 }
 
 abstract final class AppTheme {
+  // Shared callers still pass brightness; LXY always renders the Mocha palette.
   static const _buttonMinimumSize = Size(48, 48);
   static const _buttonPadding = EdgeInsets.symmetric(
     horizontal: 20,
     vertical: 12,
   );
 
-  static Color courseAccent(Brightness brightness, String groupKey) {
+  static Color courseAccent(Brightness _, String groupKey) {
     var hash = 0;
     for (final code in groupKey.codeUnits) {
       hash = (hash * 31 + code) & 0x7fffffff;
     }
-    final colors = brightness == Brightness.dark
-        ? _Catppuccin.mochaCourses
-        : _Catppuccin.latteCourses;
+    const colors = _Catppuccin.mochaCourses;
     // Keep hashing into the original eight accents so event-category colors
     // stay unchanged after the course palette grew to twelve; courses use
     // courseColorAssignments instead.
@@ -44,12 +43,10 @@ abstract final class AppTheme {
   /// exhausted. Callers must pass [names] in a deterministic order so every
   /// schedule surface agrees on the assignment.
   static Map<String, Color> courseColorAssignments(
-    Brightness brightness,
+    Brightness _,
     Iterable<String> names,
   ) {
-    final colors = brightness == Brightness.dark
-        ? _Catppuccin.mochaCourses
-        : _Catppuccin.latteCourses;
+    const colors = _Catppuccin.mochaCourses;
     final assignments = <String, Color>{};
     var index = 0;
     for (final name in names) {
@@ -58,24 +55,20 @@ abstract final class AppTheme {
     return assignments;
   }
 
-  static SystemUiOverlayStyle systemOverlayStyle(Brightness brightness) {
-    final iconBrightness = brightness == Brightness.light
-        ? Brightness.dark
-        : Brightness.light;
-    return SystemUiOverlayStyle(
+  static SystemUiOverlayStyle systemOverlayStyle(Brightness _) {
+    return const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: iconBrightness,
-      statusBarBrightness: brightness,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
       systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: iconBrightness,
+      systemNavigationBarIconBrightness: Brightness.light,
       systemStatusBarContrastEnforced: false,
       systemNavigationBarContrastEnforced: false,
     );
   }
 
-  static ThemeData build(Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
-    final palette = isDark ? _Catppuccin.mocha : _Catppuccin.latte;
+  static ThemeData build(Brightness _) {
+    const palette = _Catppuccin.mocha;
     final accentContainer = Color.alphaBlend(
       palette.mauve.withValues(alpha: 0.10),
       palette.base,
@@ -85,7 +78,7 @@ abstract final class AppTheme {
       palette.base,
     );
     final colors = ColorScheme(
-      brightness: brightness,
+      brightness: Brightness.dark,
       primary: palette.mauve,
       onPrimary: palette.base,
       primaryContainer: accentContainer,
@@ -117,7 +110,7 @@ abstract final class AppTheme {
       surface: palette.base,
       onSurface: palette.text,
       surfaceDim: palette.crust,
-      surfaceBright: isDark ? palette.surface0 : palette.base,
+      surfaceBright: palette.surface0,
       surfaceContainerLowest: palette.base,
       surfaceContainerLow: palette.base,
       surfaceContainer: palette.mantle,
@@ -126,8 +119,8 @@ abstract final class AppTheme {
       onSurfaceVariant: palette.subtext1,
       outline: palette.overlay2,
       outlineVariant: palette.surface0,
-      shadow: isDark ? palette.crust : palette.text,
-      scrim: isDark ? palette.crust : palette.text,
+      shadow: palette.crust,
+      scrim: palette.crust,
       inverseSurface: palette.text,
       onInverseSurface: palette.base,
       inversePrimary: palette.base,
@@ -155,7 +148,7 @@ abstract final class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        systemOverlayStyle: systemOverlayStyle(brightness),
+        systemOverlayStyle: systemOverlayStyle(Brightness.dark),
       ),
       cardTheme: CardThemeData(
         color: colors.surface,
@@ -243,20 +236,6 @@ abstract final class AppTheme {
 // Official swatches: https://github.com/catppuccin/palette
 // Keep the original accent colors instead of generating tones from a seed.
 abstract final class _Catppuccin {
-  static const latteCourses = [
-    Color(0xFF8839EF),
-    Color(0xFF1E66F5),
-    Color(0xFF179299),
-    Color(0xFFFE640B),
-    Color(0xFFEA76CB),
-    Color(0xFF40A02B),
-    Color(0xFFD20F39),
-    Color(0xFF7287FD),
-    Color(0xFFDF8E1D),
-    Color(0xFF04A5E5),
-    Color(0xFF209FB5),
-    Color(0xFFE64553),
-  ];
   static const mochaCourses = [
     Color(0xFFCBA6F7),
     Color(0xFF89B4FA),
@@ -272,17 +251,6 @@ abstract final class _Catppuccin {
     Color(0xFFEBA0AC),
   ];
 
-  static const latte = (
-    base: Color(0xFFEFF1F5),
-    mantle: Color(0xFFE6E9EF),
-    crust: Color(0xFFDCE0E8),
-    surface0: Color(0xFFCCD0DA),
-    overlay2: Color(0xFF7C7F93),
-    subtext1: Color(0xFF5C5F77),
-    text: Color(0xFF4C4F69),
-    mauve: Color(0xFF8839EF),
-    red: Color(0xFFD20F39),
-  );
   static const mocha = (
     base: Color(0xFF1E1E2E),
     mantle: Color(0xFF181825),

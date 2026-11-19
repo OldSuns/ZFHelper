@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zf_core/zf_core.dart';
 import 'package:zfhelper/data/repositories/schedule_repository.dart';
-import 'package:zfhelper/data/storage/appearance_store.dart';
 import 'package:zfhelper/data/storage/schedule_store.dart';
 import 'package:zfhelper/platform/schedule_widget_platform.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/schedule_widget_projection.dart';
@@ -152,12 +151,13 @@ void main() {
 
       final syncing = model.synchronize();
       await publishStarted.future;
-      await appearance.select(AppAppearance.dark);
+      final resync = model.synchronize();
       publishGate.complete();
       await statusStarted.future;
       expect(await repository.removeAccount(scheduleTestAccount.scope), isTrue);
       statusGate.complete();
       expect(await syncing, isTrue);
+      expect(await resync, isTrue);
       expect(writes.map((value) => value['status']), [
         'ready',
         'ready',

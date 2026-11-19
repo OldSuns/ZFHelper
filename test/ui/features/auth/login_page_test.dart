@@ -716,7 +716,7 @@ void main() {
           );
           expect(
             Theme.of(tester.element(find.byType(LoginPage))).brightness,
-            brightness,
+            Brightness.dark,
           );
           await tester.scrollUntilVisible(
             find.text('Cookie 导入'),

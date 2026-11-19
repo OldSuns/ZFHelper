@@ -6,7 +6,7 @@ The LXY Android edition of ZFHelper, a Flutter/Dart client for the newer Zhengfa
 
 ## Status
 
-Prepared LXY version: **0.2.3+14**, based on ordinary ZFHelper 0.2.3. The application UI is Simplified Chinese. Pull requests and branch pushes run quality checks without packaging APKs; `lxy-vX.Y.Z` tags on `LXY` run checks and publish a signed APK and checksum without taking GitHub's Latest designation. Shared changes can flow from `dev` to both `main` and `LXY` through separate PRs. School compatibility and signed upgrade behavior still require real-school and device acceptance.
+LXY version: **0.2.4+15**, based on ordinary ZFHelper 0.2.3. The application UI is Simplified Chinese. Pull requests and branch pushes run quality checks without packaging APKs; `lxy-vX.Y.Z` tags on `LXY` run checks and publish a signed APK and checksum without taking GitHub's Latest designation. Shared changes can flow from `dev` to both `main` and `LXY` through separate PRs. School compatibility and signed upgrade behavior still require real-school and device acceptance.
 
 For the first installation, download the LXY APK and install it over the ordinary edition without uninstalling. The application ID and local storage remain compatible; the signing certificate must match and the build number must be higher. Subsequent in-app updates stay in the LXY channel. Release visibility follows the repository's visibility. See [development](docs/development.md#lxy-apk-releases-and-installation) for release and migration requirements.
 
@@ -17,9 +17,9 @@ For the first installation, download the LXY APK and install it over the ordinar
 | Timetable | Weekly timetable and date-based agenda, term/week selection, search, course details, local edits, and offline viewing |
 | Courses | Available courses, teaching-class details and seat availability, selected records, immediate enrollment, manually started seat watching, and operation history |
 | Grades | Retrieval of published grades, local term/search/sort/filter controls, record details, reference statistics, and offline storage |
-| Settings | Schools and accounts, appearance, timetable import and management, calendar/period times, Android widget management, and local data information |
+| Settings | Schools and accounts, timetable import and management, calendar/period times, Android widget management, and local data information |
 
-Users enter their own school name and academic-system URL; no school is preconfigured. Multiple schools and accounts are supported. Session persistence and optional password saving are separate choices.
+LXY offers an editable 成都银杏酒店管理学院 school preset and still supports custom school names and academic-system URLs. For its academic-system address, Settings > Timetable > Calendar and period times offers 宜宾校区: select it, apply the built-in 13-period timetable, review the draft, and save. Existing times are not replaced automatically. Multiple schools and accounts are supported. Session persistence and optional password saving are separate choices.
 
 Import or update a timetable in **Settings > Timetable**. Set the first teaching week's Monday or correct the current teaching week in calendar settings. Teaching dates are not guessed from the month. Period times can be generated per campus for morning, afternoon, and evening, previewed, adjusted, and explicitly saved.
 
@@ -27,7 +27,7 @@ The agenda combines timetable courses with local personal events: to-dos, activi
 
 Saved data remains available until explicitly updated or cleared; failed refreshes preserve previous data. Logout retains offline data, while removing an account or school clears its local data. Enrollment success is confirmed against school-selected records, not merely a successful HTTP response.
 
-Appearance follows the system or uses persistent light/dark mode with Catppuccin Latte/Mocha colors.
+The app, Android launch screen, and home-screen widget always use the dark Catppuccin Mocha theme, including after upgrading from a saved light/system appearance.
 
 ## Platforms
 

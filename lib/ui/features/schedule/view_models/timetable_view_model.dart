@@ -84,6 +84,7 @@ final class TimetableViewModel extends ChangeNotifier {
   TimetableViewModel({
     required ScheduleRepository repository,
     required DateTime Function() clock,
+    this.resolveSchool,
     this._createTimer = Timer.new,
   }) : _repository = repository,
        _clock = clock,
@@ -96,6 +97,7 @@ final class TimetableViewModel extends ChangeNotifier {
   }
 
   final ScheduleRepository _repository;
+  final SchoolConnection? Function(String schoolId)? resolveSchool;
   final DateTime Function() _clock;
   final DateRefreshTimerFactory _createTimer;
   late final StreamSubscription<ScheduleRepositoryState> _subscription;
@@ -120,6 +122,11 @@ final class TimetableViewModel extends ChangeNotifier {
   ScheduleSettings get settings => data.settings;
   AcademicTerm? get selectedTerm => data.selectedTerm;
   StoredScheduleAccount? get account => data.account;
+  SchoolConnection? get school {
+    final schoolId = account?.account.scope.schoolId;
+    return schoolId == null ? null : resolveSchool?.call(schoolId);
+  }
+
   ScheduleTarget? get editTarget => data.target;
   ScheduleAdjustmentContext? get adjustmentContext {
     final state = data;

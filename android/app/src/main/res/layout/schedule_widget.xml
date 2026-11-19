@@ -56,6 +56,7 @@
             android:includeFontPadding="false"
             android:maxLines="1"
             android:text="@string/schedule_widget_focus"
+            android:textColor="#CBA6F7"
             android:textSize="@dimen/schedule_widget_caption_text" />
 
         <TextView
@@ -67,6 +68,7 @@
             android:includeFontPadding="false"
             android:maxLines="2"
             android:text="@string/schedule_widget_start"
+            android:textColor="#CDD6F4"
             android:textSize="@dimen/schedule_widget_title_text"
             android:textStyle="bold" />
 

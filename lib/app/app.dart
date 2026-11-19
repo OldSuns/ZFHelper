@@ -25,9 +25,9 @@ class ZfHelperApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: AppTheme.build(Brightness.light),
+      theme: AppTheme.build(Brightness.dark),
       darkTheme: AppTheme.build(Brightness.dark),
-      themeMode: configuration.appearance.themeMode,
+      themeMode: ThemeMode.dark,
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: AppTheme.systemOverlayStyle(Theme.of(context).brightness),
         child: child!,

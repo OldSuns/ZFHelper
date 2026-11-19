@@ -24,10 +24,10 @@ final class SecureAppearanceStore implements AppearanceStore {
         null || 'system' => AppAppearance.system,
         'light' => AppAppearance.light,
         'dark' => AppAppearance.dark,
-        _ => throw const AppearanceStorageException('保存的外观设置无法识别，请重新选择外观。'),
+        _ => throw const AppearanceStorageException('保存的外观设置无法识别，请恢复深色设置。'),
       };
     } on PlatformException {
-      throw const AppearanceStorageException('无法读取外观设置，请重试读取或重新选择。');
+      throw const AppearanceStorageException('无法读取外观设置，请重试或恢复深色设置。');
     }
   }
 
@@ -36,7 +36,7 @@ final class SecureAppearanceStore implements AppearanceStore {
     try {
       await _storage.write(key: _key, value: appearance.name);
     } on PlatformException {
-      throw const AppearanceStorageException('外观设置未能保存，请重新选择并重试。');
+      throw const AppearanceStorageException('外观设置未能保存，请重试。');
     }
   }
 }

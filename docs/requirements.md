@@ -8,11 +8,11 @@ ZFHelper is an Android-first Zhengfang academic-system client with Windows suppo
 
 The main destinations are Timetable (default), Courses, Grades, and Settings. Timetable contains timetable and agenda views. Narrow windows use bottom navigation; wider windows use a sidebar and, where appropriate, split panes.
 
-Settings has five subsections: Schools and accounts, Web portal, Appearance, Timetable, and Data and application. Timetable settings centralize import/update, term selection, local courses, calendar and period times, reschedule/cancellation/makeup history, view preferences, hidden-entry restoration, saved timetables, and widget management. Personal events are managed in agenda. There is no separate import-information screen or selection-task destination. Web portal opens the school portal in an in-app browser, seeding the selected account's saved cookies to reuse its session; no credentials are entered or stored there.
+Settings has four subsections: Schools and accounts, Web portal, Timetable, and Data and application. LXY has no appearance menu. Timetable settings centralize import/update, term selection, local courses, calendar and period times, reschedule/cancellation/makeup history, view preferences, hidden-entry restoration, saved timetables, and widget management. Personal events are managed in agenda. There is no separate import-information screen or selection-task destination. Web portal opens the school portal in an in-app browser, seeding the selected account's saved cookies to reuse its session; no credentials are entered or stored there.
 
 ### Schools and authentication
 
-- Users supply school names and academic-system URLs, with configurable endpoint paths and a separate web-login address when needed. No school or allowlist is preconfigured.
+- LXY offers an editable school preset for 成都银杏酒店管理学院 at `https://jwxt.gingkoc.edu.cn/xtgl/login_slogin.html`. Users can still supply custom school names and academic-system URLs, with configurable endpoint paths and a separate web-login address when needed. The preset is not an allowlist and does not connect or save automatically.
 - Password/captcha login, web login, and cookie import are supported. A verified school identity is required before a session counts as connected.
 - Schools can be added, edited, selected, and removed, each with multiple accounts; stable school IDs survive name/address edits.
 - Valid saved sessions can be restored. Optional password saving is distinct from session persistence. Connection changes invalidate old sessions without deleting business data.
@@ -33,6 +33,7 @@ Settings has five subsections: Schools and accounts, Web portal, Appearance, Tim
 - Campus choices include campuses found in timetable entries as well as period times. Without an explicitly saved campus selection, editing starts from generic times shared across campuses.
 - Editing a period or break can shift later periods within the same section while preserving their existing lengths and gaps; other sections keep independent start times. Overlaps must be corrected before saving, and cross-day overflow is an explicit error rather than wrapping or clamping.
 - Period-time edits are drafts with undo and restoration of school times; applying a generated preview changes the draft, and only saving calendar settings persists it.
+- For the preset school's normalized academic-system address, including a manually entered address, the campus selector also offers 宜宾校区. Its explicit apply action replaces only that campus's draft with 13 periods grouped as morning (1–5), afternoon (6–10), and evening (11–13). The exact clocks are maintained in [school_presets.dart](../lib/data/school_presets.dart), including the 60-minute fifth period. Other schools receive no preset; existing times are not automatically overwritten, and term dates remain user-supplied.
 - Calendar and timetable settings are school/account/term-scoped. School refreshes do not overwrite local additions or calendar settings; stale editors cannot overwrite newer settings.
 
 ### Agenda and personal events
@@ -63,7 +64,7 @@ Seat watching needs notification permission and an Android foreground service; o
 
 Timetables, grades, course snapshots, selected records, and operations are isolated by school/account with term/round scope where appropriate. Viewing saved data does not implicitly re-import it, failed explicit updates preserve old data and timestamps, and a newly selected round without a cache may need a query.
 
-Appearance supports system, light, and dark modes across restarts with Catppuccin Latte/Mocha colors and a Mauve accent. Course accents are assigned deterministically by course name in first grid-appearance order, so an unchanged semester keeps each course the same color across grid, agenda, and details. Local data settings show actual saved content and read failures.
+LXY always uses the dark Catppuccin Mocha palette and Mauve accent, including the Android launch screen and widget. There is no light/system appearance selector; legacy appearance preferences migrate to dark without changing business data. Course accents are assigned deterministically by course name in first grid-appearance order, so an unchanged semester keeps each course the same color across grid, agenda, and details. Local data settings show actual saved content and read failures.
 
 ### Update checking
 
@@ -73,7 +74,7 @@ On Android the matching LXY APK is downloaded in-app with progress (mirror first
 
 ### Android timetable widget
 
-The home-screen widget is a read-only offline projection of the selected timetable account and term, following application appearance and using the effective timetable, calendar, period times, and local adjustments. It excludes personal events and credentials, and is unavailable on Windows.
+The home-screen widget is a read-only offline projection of the selected timetable account and term, using the fixed dark theme and the effective timetable, calendar, period times, and local adjustments. It stays dark even with an old light/system preference, a missing snapshot, or a stopped Flutter process. It excludes personal events and credentials, and is unavailable on Windows.
 
 The phone-first 3×2 default and wider 4×2 size use the same vertically scrollable list for one course day. The current or nearest upcoming lesson stays first, followed by later lessons in order; earlier lessons with known end times are omitted. On period-ordered days, lessons with unknown end times remain after the focused lesson in their source order because the widget cannot determine whether they have finished. Normal refreshes reposition the list at the first lesson, while countdown-only refreshes preserve the user's position when the course source, date, and visible lessons have not changed and the scheduled course boundary has not passed. Later entries that have already finished are also omitted, including overlapping courses. After the day's courses end, the list advances to the next course day when available; otherwise a compact card shows that today's courses have ended. The list keeps exact times and course details visible and lets the following course card peek into view. Launcher page navigation alone is not an application refresh event and may retain the user's scroll position. Smaller sizes retain a compact current/next card; widening the widget does not switch to an untimed week summary.
 

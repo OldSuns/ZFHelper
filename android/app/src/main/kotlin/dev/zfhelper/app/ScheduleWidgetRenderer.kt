@@ -46,7 +46,7 @@ internal object ScheduleWidgetRenderer {
             snapshot,
             snapshot?.days?.firstOrNull { it.date == today },
             focus(snapshot, failure, now, settings),
-            colors(context, snapshot, savedTheme),
+            colors(snapshot, savedTheme),
             now,
             settings,
         )
@@ -488,34 +488,24 @@ internal object ScheduleWidgetRenderer {
     }
 
     private fun colors(
-        context: Context,
         snapshot: ScheduleWidgetSnapshot?,
         savedTheme: ScheduleWidgetTheme?,
     ): WidgetColors {
-        val theme = savedTheme ?: snapshot?.let { ScheduleWidgetTheme(it.appearance, it.light, it.dark) }
-        val light = theme?.light ?: ScheduleWidgetColors(
-            context.getColor(android.R.color.system_neutral1_50),
-            context.getColor(android.R.color.system_accent1_600),
-            context.getColor(android.R.color.system_neutral1_900),
-            context.getColor(android.R.color.system_neutral2_600),
-            context.getColor(android.R.color.system_neutral2_200),
+        // Ignore legacy appearance choices, including before Flutter starts.
+        val dark = savedTheme?.dark ?: snapshot?.dark ?: ScheduleWidgetColors(
+            surface = 0xff1e1e2e.toInt(),
+            primary = 0xffcba6f7.toInt(),
+            text = 0xffcdd6f4.toInt(),
+            secondary = 0xffbac2de.toInt(),
+            outline = 0xff313244.toInt(),
+            card = 0xff302c42.toInt(),
         )
-        val dark = theme?.dark ?: ScheduleWidgetColors(
-            context.getColor(android.R.color.system_neutral1_900),
-            context.getColor(android.R.color.system_accent1_200),
-            context.getColor(android.R.color.system_neutral1_50),
-            context.getColor(android.R.color.system_neutral2_200),
-            context.getColor(android.R.color.system_neutral2_700),
-        )
-        val appearance = theme?.appearance
-        val day = if (appearance == "dark") dark else light
-        val night = if (appearance == "light") light else dark
         return WidgetColors(
-            WidgetColor(day.surface, night.surface),
-            WidgetColor(day.card, night.card),
-            WidgetColor(day.primary, night.primary),
-            WidgetColor(day.text, night.text),
-            WidgetColor(day.secondary, night.secondary),
+            WidgetColor(dark.surface, dark.surface),
+            WidgetColor(dark.card, dark.card),
+            WidgetColor(dark.primary, dark.primary),
+            WidgetColor(dark.text, dark.text),
+            WidgetColor(dark.secondary, dark.secondary),
         )
     }
 

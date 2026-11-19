@@ -205,7 +205,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
           final payload = {
             ...projectScheduleWidget(_repository.state),
             'generatedAt': _clock().millisecondsSinceEpoch,
-            'appearance': _appearance.appearance.name,
+            'appearance': 'dark',
             'palette': _palette,
           };
           try {
@@ -256,8 +256,9 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   }
 
   static final _palette = {
-    for (final brightness in Brightness.values)
-      brightness.name: _colors(AppTheme.build(brightness).colorScheme),
+    // Keep both wire keys so existing native snapshots remain compatible.
+    for (final key in ['light', 'dark'])
+      key: _colors(AppTheme.build(Brightness.dark).colorScheme),
   };
 
   static Map<String, int> _colors(ColorScheme colors) => {

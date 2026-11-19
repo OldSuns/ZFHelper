@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <bool name="light_system_bars">true</bool>
-    <style name="BaseTheme" parent="@android:style/Theme.Light.NoTitleBar" />
+    <bool name="light_system_bars">false</bool>
+    <style name="BaseTheme" parent="@android:style/Theme.Black.NoTitleBar" />
     <style name="NormalTheme" parent="BaseTheme">
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:colorBackground">@color/app_base</item>

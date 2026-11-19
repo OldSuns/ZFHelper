@@ -6,7 +6,7 @@ final class AppearanceViewModel extends ChangeNotifier {
   AppearanceViewModel({required this._store});
 
   final AppearanceStore _store;
-  AppAppearance _appearance = AppAppearance.system;
+  AppAppearance _appearance = AppAppearance.dark;
   bool _initialized = false;
   bool _saving = false;
   bool _disposed = false;
@@ -17,19 +17,7 @@ final class AppearanceViewModel extends ChangeNotifier {
   bool get initialized => _initialized;
   bool get busy => _initializing != null || _saving;
   String? get failure => _failure;
-  String get label => labelFor(_appearance);
-
-  ThemeMode get themeMode => switch (_appearance) {
-    AppAppearance.system => ThemeMode.system,
-    AppAppearance.light => ThemeMode.light,
-    AppAppearance.dark => ThemeMode.dark,
-  };
-
-  static String labelFor(AppAppearance value) => switch (value) {
-    AppAppearance.system => '跟随系统',
-    AppAppearance.light => '浅色',
-    AppAppearance.dark => '深色',
-  };
+  String get label => '深色';
 
   Future<void> initialize() {
     if (_initialized || _disposed) return Future.value();
@@ -43,7 +31,9 @@ final class AppearanceViewModel extends ChangeNotifier {
     _failure = null;
     _notify();
     try {
-      _appearance = await _store.read();
+      if (await _store.read() != AppAppearance.dark) {
+        await _store.write(AppAppearance.dark);
+      }
       _initialized = true;
     } on AppearanceStorageException catch (error) {
       _failure = error.message;
@@ -51,7 +41,7 @@ final class AppearanceViewModel extends ChangeNotifier {
   }
 
   Future<bool> select(AppAppearance value) async {
-    if (busy || _disposed) return false;
+    if (busy || _disposed || value != AppAppearance.dark) return false;
     if (_initialized && value == _appearance && _failure == null) return true;
     _saving = true;
     _failure = null;

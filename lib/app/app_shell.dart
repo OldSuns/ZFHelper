@@ -63,6 +63,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _timetable = TimetableViewModel(
       repository: widget.configuration.schedule,
       clock: widget.configuration.clock,
+      resolveSchool: (schoolId) => widget.configuration.auth.state.schools
+          .where((school) => school.profile.school.id == schoolId)
+          .firstOrNull
+          ?.profile,
     );
     _auth = AuthViewModel(
       widget.configuration.auth,
@@ -377,7 +381,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
       AppDestination.settings => SettingsPage(
         auth: _auth,
-        appearance: widget.configuration.appearance,
         timetable: _timetable,
         grades: _grades,
         courses: _courses,

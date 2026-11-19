@@ -6,20 +6,17 @@ import '../../auth/view_models/auth_view_model.dart';
 import '../../courses/view_models/courses_view_model.dart';
 import '../../grades/view_models/grades_view_model.dart';
 import '../../schedule/view_models/timetable_view_model.dart';
-import '../view_models/appearance_view_model.dart';
 import '../view_models/schedule_island_view_model.dart';
 import '../view_models/schedule_widget_view_model.dart';
 import '../view_models/update_check_view_model.dart';
 import '../widgets/settings_section.dart';
 import 'account_settings_page.dart';
 import 'app_settings_page.dart';
-import 'display_settings_page.dart';
 import 'schedule_settings_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
     required this.auth,
-    required this.appearance,
     required this.timetable,
     required this.grades,
     required this.courses,
@@ -30,7 +27,6 @@ class SettingsPage extends StatelessWidget {
   });
 
   final AuthViewModel auth;
-  final AppearanceViewModel appearance;
   final TimetableViewModel timetable;
   final GradesViewModel grades;
   final CoursesViewModel courses;
@@ -40,7 +36,7 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([auth, appearance]),
+    listenable: auth,
     builder: (context, _) {
       final school = auth.state.profile?.name;
       final account = auth.state.selectedAccount?.account;
@@ -83,19 +79,6 @@ class SettingsPage extends StatelessWidget {
                           ),
                         ),
                       ),
-              ),
-              SettingsEntry(
-                icon: Icons.palette_outlined,
-                title: '显示',
-                subtitle:
-                    appearance.failure ??
-                    (appearance.busy ? '正在保存或读取外观设置…' : appearance.label),
-                onTap: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        DisplaySettingsPage(viewModel: appearance),
-                  ),
-                ),
               ),
               SettingsEntry(
                 icon: Icons.calendar_view_week_outlined,

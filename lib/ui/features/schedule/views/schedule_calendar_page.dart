@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../../data/school_presets.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/period_times_view_model.dart';
 import '../view_models/timetable_view_model.dart';
@@ -24,6 +25,7 @@ Future<bool> showScheduleCalendar(
         snapshot: snapshot,
         settings: settings,
         today: today,
+        schoolAddress: viewModel.school?.baseUri,
         onSave: (value) async =>
             await viewModel.saveSettings(
               value,
@@ -45,12 +47,14 @@ class ScheduleCalendarPage extends StatefulWidget {
     required this.snapshot,
     required this.settings,
     required this.today,
+    this.schoolAddress,
     this.onSave,
   });
 
   final ScheduleSnapshot snapshot;
   final ScheduleSettings settings;
   final DateTime today;
+  final Uri? schoolAddress;
   final Future<String?> Function(ScheduleSettings)? onSave;
 
   @override
@@ -85,6 +89,10 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
       schoolTimes: widget.snapshot.periodTimes,
       settings: widget.settings,
       entryCampuses: widget.snapshot.entries.map((entry) => entry.campus),
+      campusPresets: {
+        if (GingkoSchoolPreset.matches(widget.schoolAddress))
+          GingkoSchoolPreset.yibinCampus: GingkoSchoolPreset.yibinTimes,
+      },
     )..addListener(_timesChanged);
   }
 
@@ -489,6 +497,7 @@ class _ScheduleCalendarPageState extends State<ScheduleCalendarPage> {
       periodSections: _times.useCustomTimes ? _times.plan.sections : const [],
       useCustomPeriodTimes: _times.useCustomTimes,
       periodCampus: _times.campus,
+      clearPeriodCampus: _times.campus == null,
     );
     final save = widget.onSave;
     if (save != null) {

@@ -84,6 +84,13 @@ class PeriodTimesEditor extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              if (viewModel.hasCampusPreset)
+                FilledButton.tonalIcon(
+                  key: const ValueKey('period-apply-preset'),
+                  onPressed: () => _applyPreset(context),
+                  icon: const Icon(Icons.school_outlined),
+                  label: Text('套用${viewModel.campus}作息'),
+                ),
               FilledButton.tonalIcon(
                 key: const ValueKey('period-quick-arrange'),
                 onPressed: () => _generate(context),
@@ -238,6 +245,19 @@ class PeriodTimesEditor extends StatelessWidget {
       ),
     );
     if (context.mounted && next != null) viewModel.change((_) => next);
+  }
+
+  Future<void> _applyPreset(BuildContext context) async {
+    final campus = viewModel.campus;
+    final confirmed = await _confirm(
+      context,
+      '套用$campus作息？',
+      '将替换$campus的作息预览，其他校区保持原有设置。可以继续编辑或撤销，保存设置后生效。',
+      '套用',
+    );
+    if (confirmed && context.mounted && viewModel.campus == campus) {
+      viewModel.applyCampusPreset();
+    }
   }
 
   Future<void> _edit(BuildContext context, [PeriodTime? period]) => showDialog(

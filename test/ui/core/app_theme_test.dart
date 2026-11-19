@@ -37,14 +37,14 @@ void main() {
 
     test('keeps hashed accents within the original eight colors', () {
       const original = [
-        Color(0xFF8839EF),
-        Color(0xFF1E66F5),
-        Color(0xFF179299),
-        Color(0xFFFE640B),
-        Color(0xFFEA76CB),
-        Color(0xFF40A02B),
-        Color(0xFFD20F39),
-        Color(0xFF7287FD),
+        Color(0xFFCBA6F7),
+        Color(0xFF89B4FA),
+        Color(0xFF94E2D5),
+        Color(0xFFFAB387),
+        Color(0xFFF5C2E7),
+        Color(0xFFA6E3A1),
+        Color(0xFFF38BA8),
+        Color(0xFFB4BEFE),
       ];
       for (final key in ['event:提醒', 'event:考试', '高数']) {
         expect(
@@ -61,7 +61,7 @@ void main() {
       final dark = AppTheme.courseColorAssignments(Brightness.dark, names);
       expect(first, equals(second));
       expect(dark, hasLength(first.length));
-      expect(dark['高数'], isNot(equals(first['高数'])));
+      expect(dark, equals(first));
     });
   });
 }

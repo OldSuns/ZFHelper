@@ -15,7 +15,7 @@ import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
 import 'package:zfhelper/ui/features/schedule/view_models/timetable_view_model.dart';
 import 'package:zfhelper/ui/features/settings/views/account_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/app_settings_page.dart';
-import 'package:zfhelper/ui/features/settings/views/display_settings_page.dart';
+import 'package:zfhelper/ui/features/settings/views/schedule_widget_settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/settings_page.dart';
 import 'package:zfhelper/ui/features/settings/views/update_check_page.dart';
 
@@ -106,7 +106,9 @@ void main() {
     expect(model.section, ScheduleSection.agenda);
     await tester.tap(navigationLabel('设置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, '显示'));
+    await tester.tap(find.widgetWithText(ListTile, '课表'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '桌面小组件'));
     await tester.pumpAndSettle();
     await messenger.handlePlatformMessage(
       channel.name,
@@ -116,35 +118,28 @@ void main() {
       null,
     );
     await tester.pumpAndSettle();
-    expect(find.byType(DisplaySettingsPage), findsNothing);
+    expect(find.byType(ScheduleWidgetSettingsPage), findsNothing);
     expect(find.byType(TimetablePage), findsOneWidget);
     expect(model.section, ScheduleSection.timetable);
     expect(model.agendaDate, DateTime(2026, 9, 12));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('appearance choices apply globally and survive app recreation', (
+  testWidgets('dark appearance replaces legacy choices and survives restart', (
     tester,
   ) async {
-    FlutterSecureStorage.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({
+      'zfhelper.appearance.v1': 'light',
+    });
     await pumpApp(tester, appearanceStore: SecureAppearanceStore());
     await tester.tap(navigationLabel('设置'));
     await tester.pumpAndSettle();
 
-    Future<void> choose(String label) async {
-      if (find.byType(DisplaySettingsPage).evaluate().isEmpty) {
-        await tester.tap(find.widgetWithText(ListTile, '显示'));
-        await tester.pumpAndSettle();
-      }
-      final choice = find.text(label);
-      await tester.scrollUntilVisible(choice, 150);
-      await tester.tap(choice);
-      await tester.pumpAndSettle();
-    }
-
-    await choose('深色');
+    expect(find.widgetWithText(ListTile, '显示'), findsNothing);
+    expect(find.text('浅色'), findsNothing);
+    expect(find.text('跟随系统'), findsNothing);
     expect(
-      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(SettingsPage))).brightness,
       Brightness.dark,
     );
     expect(await SecureAppearanceStore().read(), AppAppearance.dark);
@@ -155,28 +150,19 @@ void main() {
       Theme.of(tester.element(find.byType(TimetablePage))).brightness,
       Brightness.dark,
     );
-    await tester.tap(navigationLabel('设置'));
-    await tester.pumpAndSettle();
-    await choose('浅色');
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await tester.pumpAndSettle();
     expect(
-      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
-      Brightness.light,
-    );
-
-    await choose('跟随系统');
-    expect(
-      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
+      Theme.of(tester.element(find.byType(TimetablePage))).brightness,
       Brightness.dark,
     );
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
     await tester.pumpAndSettle();
     expect(
-      Theme.of(tester.element(find.byType(DisplaySettingsPage))).brightness,
-      Brightness.light,
+      Theme.of(tester.element(find.byType(TimetablePage))).brightness,
+      Brightness.dark,
     );
-    expect(await SecureAppearanceStore().read(), AppAppearance.system);
+    expect(await SecureAppearanceStore().read(), AppAppearance.dark);
     expect(tester.takeException(), isNull);
   });
 
@@ -242,7 +228,7 @@ void main() {
       await tester.tap(navigationLabel('设置'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
-      expect(find.byType(ListTile), findsNWidgets(5));
+      expect(find.byType(ListTile), findsNWidgets(4));
       await tester.tap(find.widgetWithText(ListTile, '账号与学校'));
       await tester.pumpAndSettle();
       expect(find.byType(AccountSettingsPage), findsOneWidget);
@@ -317,7 +303,7 @@ void main() {
         );
         expect(
           Theme.of(tester.element(find.byType(TimetablePage))).brightness,
-          brightness,
+          Brightness.dark,
         );
         expect(tester.takeException(), isNull);
 

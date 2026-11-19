@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zf_core/zf_core.dart';
 
+import '../../../../data/school_presets.dart';
 import '../../../core/app_theme.dart';
 import '../view_models/school_address_view_model.dart';
 import 'auth_notice.dart';
@@ -230,6 +231,20 @@ class _SchoolConnectionPageState extends State<SchoolConnectionPage> {
   ];
 
   List<Widget> _fields({required bool wide}) => [
+    OutlinedButton.icon(
+      key: const ValueKey('school-gingko-preset'),
+      onPressed: _saving
+          ? null
+          : () {
+              _name.text = GingkoSchoolPreset.name;
+              _viewModel.changeName(_name.text);
+              _address.text = GingkoSchoolPreset.loginAddress;
+              _changeAddress(_address.text);
+            },
+      icon: const Icon(Icons.school_outlined),
+      label: const Text(GingkoSchoolPreset.name),
+    ),
+    const SizedBox(height: 16),
     TextField(
       key: const ValueKey('school-address'),
       controller: _address,
