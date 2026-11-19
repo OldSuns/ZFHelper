@@ -1,8 +1,7 @@
 # Highlights
 
-- The Android timetable widget can show minutes remaining in the current class or until today's next class when it starts within 30 minutes, when space allows. Countdown updates preserve the scroll position when the course list is unchanged; Android background restrictions may delay refreshes.
-- Timetable settings now include persistent switches for widget countdowns, locations, and teacher names, with an option to reset display settings. Changes apply to existing widgets immediately.
-- Tapping the widget now opens the weekly timetable; course notifications continue to open the corresponding agenda date.
+- Pin compatible Android JNI dependencies to address the application-data directory initialization failure observed in the previous test release.
+- CI and release builds now restore dependencies from the source recorded in the lockfiles and enforce their locked versions. Release builds reuse those restored dependencies to prevent dependency drift.
 
 ## Installation
 
