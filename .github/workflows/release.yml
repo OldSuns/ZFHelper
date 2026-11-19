@@ -11,6 +11,7 @@ permissions:
 
 env:
   FLUTTER_VERSION: 3.47.4
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
 
 concurrency:
   group: release-${{ github.ref }}
@@ -72,7 +73,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Restore dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Prepare Android signing
         id: signing
@@ -109,13 +110,13 @@ jobs:
           }
 
       - name: Build Android app bundle
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --no-pub
 
       - name: Build Android APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-pub
 
       - name: Build Windows application
-        run: flutter build windows --release
+        run: flutter build windows --release --no-pub
 
       - name: Package and checksum artifacts
         id: artifacts

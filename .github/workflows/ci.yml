@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -31,7 +34,7 @@ jobs:
           cache: true
 
       - name: Restore application dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Check application formatting
         run: dart format --output=none --set-exit-if-changed lib test
@@ -44,7 +47,7 @@ jobs:
 
       - name: Restore core dependencies
         working-directory: packages/zf_core
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
 
       - name: Check core formatting
         working-directory: packages/zf_core
