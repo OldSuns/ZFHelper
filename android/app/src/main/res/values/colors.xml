@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Match Catppuccin Mocha Base in lib/ui/core/app_theme.dart. -->
+    <!-- Match the fixed Catppuccin Mocha theme in lib/ui/core/app_theme.dart. -->
     <color name="app_base">#1e1e2e</color>
+    <color name="widget_card">#302c42</color>
+    <color name="widget_countdown">#4b4162</color>
+    <color name="widget_primary">#cba6f7</color>
+    <color name="widget_text">#cdd6f4</color>
+    <color name="widget_secondary">#bac2de</color>
 </resources>

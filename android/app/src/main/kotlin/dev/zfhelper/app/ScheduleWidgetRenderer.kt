@@ -3,12 +3,10 @@ package dev.zfhelper.app
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RemoteViews
-import androidx.core.graphics.ColorUtils
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -37,7 +35,6 @@ internal object ScheduleWidgetRenderer {
         snapshot: ScheduleWidgetSnapshot?,
         failure: String?,
         now: ZonedDateTime,
-        savedTheme: ScheduleWidgetTheme?,
         settings: ScheduleWidgetSettings = ScheduleWidgetSettings.defaults,
         previousListState: ScheduleWidgetListState? = null,
     ): ScheduleWidgetRendering {
@@ -46,7 +43,6 @@ internal object ScheduleWidgetRenderer {
             snapshot,
             snapshot?.days?.firstOrNull { it.date == today },
             focus(snapshot, failure, now, settings),
-            colors(snapshot, savedTheme),
             now,
             settings,
         )
@@ -81,7 +77,7 @@ internal object ScheduleWidgetRenderer {
         lessons: List<ScheduleWidgetLesson>,
         resetScroll: Boolean,
     ): RemoteViews {
-        val (snapshot, _, focus, colors, now, _) = frame
+        val (snapshot, _, focus) = frame
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
         val listDay = preparedDay.takeIf { variant.style == ScheduleWidgetStyle.TODAY_LIST }
         val showList = listDay != null
@@ -99,7 +95,6 @@ internal object ScheduleWidgetRenderer {
         views.visible(R.id.schedule_widget_list, showList)
         views.visible(R.id.schedule_widget_focus, !showList)
         bindFocus(views, frame, variant, sizing, strip, showList)
-        views.tintBackground(R.id.schedule_widget_root, colors.surface)
         val headerDate = listDay?.date ?: focus.date
         val headerDay = snapshot?.days?.firstOrNull { it.date == headerDate }
         val dateLabel = headerDate.format(shortDateFormat)
@@ -115,12 +110,6 @@ internal object ScheduleWidgetRenderer {
             listOfNotNull(dateLabel, summary, snapshot?.accountLabel, snapshot?.termLabel)
                 .joinToString("，"),
         )
-        views.setTextColor(R.id.schedule_widget_date, colors.text)
-        views.setTextColor(R.id.schedule_widget_context, colors.secondary)
-        views.setTextColor(R.id.schedule_widget_focus_label, colors.primary)
-        views.setTextColor(R.id.schedule_widget_focus_title, colors.text)
-        views.setTextColor(R.id.schedule_widget_focus_meta, colors.secondary)
-        views.setTextColor(R.id.schedule_widget_focus_location, colors.secondary)
         views.setOnClickPendingIntent(
             R.id.schedule_widget_header,
             openDate(context, widgetId, headerDate),
@@ -226,7 +215,6 @@ internal object ScheduleWidgetRenderer {
                 lessonRow(
                     context,
                     lesson,
-                    frame.colors,
                     day.date,
                     minutes,
                     variant,
@@ -272,7 +260,6 @@ internal object ScheduleWidgetRenderer {
     private fun lessonRow(
         context: Context,
         lesson: ScheduleWidgetLesson,
-        colors: WidgetColors,
         date: LocalDate,
         minutes: Int,
         variant: ScheduleWidgetLayout,
@@ -293,28 +280,13 @@ internal object ScheduleWidgetRenderer {
         row.visible(R.id.schedule_widget_lesson_time, columns)
         row.visible(R.id.schedule_widget_lesson_when, !columns)
         row.visible(R.id.schedule_widget_lesson_accent, focused)
-        row.tintBackground(R.id.schedule_widget_lesson_root, colors.card)
         row.visible(R.id.schedule_widget_lesson_state, focused)
         row.visible(R.id.schedule_widget_lesson_status_row, true)
         row.setTextViewText(R.id.schedule_widget_lesson_state, focusLabel.orEmpty())
-        row.setTextColor(R.id.schedule_widget_lesson_state, colors.primary)
         row.visible(R.id.schedule_widget_lesson_countdown, countdown != null)
         if (countdown != null) {
             row.setTextViewText(R.id.schedule_widget_lesson_countdown, countdown)
-            row.setTextColor(R.id.schedule_widget_lesson_countdown, colors.text)
-            row.tintBackground(
-                R.id.schedule_widget_lesson_countdown,
-                WidgetColor(
-                    ColorUtils.blendARGB(colors.card.day, colors.primary.day, 0.18f),
-                    ColorUtils.blendARGB(colors.card.night, colors.primary.night, 0.18f),
-                ),
-            )
         }
-        row.setWidgetColor(
-            R.id.schedule_widget_lesson_accent,
-            "setBackgroundColor",
-            colors.primary,
-        )
         val phase = lesson.phaseAt(minutes)
         row.setTextViewText(R.id.schedule_widget_lesson_start, lesson.start?.let(::scheduleWidgetClock))
         row.setTextViewText(
@@ -343,12 +315,6 @@ internal object ScheduleWidgetRenderer {
         ).joinToString(" · ")
         row.setTextViewText(R.id.schedule_widget_lesson_detail, detail)
         row.visible(R.id.schedule_widget_lesson_detail, detail.isNotBlank())
-        row.setTextColor(R.id.schedule_widget_lesson_when, colors.primary)
-        row.setTextColor(R.id.schedule_widget_lesson_start, colors.primary)
-        row.setTextColor(R.id.schedule_widget_lesson_end, colors.secondary)
-        row.setTextColor(R.id.schedule_widget_lesson_title, colors.text)
-        row.setTextColor(R.id.schedule_widget_lesson_location, colors.secondary)
-        row.setTextColor(R.id.schedule_widget_lesson_detail, colors.secondary)
         row.setOnClickFillInIntent(
             R.id.schedule_widget_lesson_root,
             Intent().putExtra(SCHEDULE_WIDGET_DATE, date.toString()),
@@ -487,59 +453,13 @@ internal object ScheduleWidgetRenderer {
         )
     }
 
-    private fun colors(
-        snapshot: ScheduleWidgetSnapshot?,
-        savedTheme: ScheduleWidgetTheme?,
-    ): WidgetColors {
-        // Ignore legacy appearance choices, including before Flutter starts.
-        val dark = savedTheme?.dark ?: snapshot?.dark ?: ScheduleWidgetColors(
-            surface = 0xff1e1e2e.toInt(),
-            primary = 0xffcba6f7.toInt(),
-            text = 0xffcdd6f4.toInt(),
-            secondary = 0xffbac2de.toInt(),
-            outline = 0xff313244.toInt(),
-            card = 0xff302c42.toInt(),
-        )
-        return WidgetColors(
-            WidgetColor(dark.surface, dark.surface),
-            WidgetColor(dark.card, dark.card),
-            WidgetColor(dark.primary, dark.primary),
-            WidgetColor(dark.text, dark.text),
-            WidgetColor(dark.secondary, dark.secondary),
-        )
-    }
-
-    private fun RemoteViews.setTextColor(viewId: Int, color: WidgetColor) =
-        setWidgetColor(viewId, "setTextColor", color)
-
     private fun RemoteViews.visible(viewId: Int, visible: Boolean) =
         setViewVisibility(viewId, if (visible) View.VISIBLE else View.GONE)
-
-    private fun RemoteViews.tintBackground(viewId: Int, color: WidgetColor) = setColorStateList(
-        viewId,
-        "setBackgroundTintList",
-        ColorStateList.valueOf(color.day),
-        ColorStateList.valueOf(color.night),
-    )
-
-    private fun RemoteViews.setWidgetColor(viewId: Int, method: String, color: WidgetColor) =
-        setColorInt(viewId, method, color.day, color.night)
-
-    private data class WidgetColor(val day: Int, val night: Int)
-
-    private data class WidgetColors(
-        val surface: WidgetColor,
-        val card: WidgetColor,
-        val primary: WidgetColor,
-        val text: WidgetColor,
-        val secondary: WidgetColor,
-    )
 
     private data class WidgetFrame(
         val snapshot: ScheduleWidgetSnapshot?,
         val day: ScheduleWidgetDay?,
         val focus: WidgetFocus,
-        val colors: WidgetColors,
         val now: ZonedDateTime,
         val settings: ScheduleWidgetSettings,
     )

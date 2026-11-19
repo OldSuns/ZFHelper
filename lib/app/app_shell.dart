@@ -93,7 +93,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (widgetPlatform != null) {
       _scheduleWidget = ScheduleWidgetViewModel(
         repository: widget.configuration.schedule,
-        appearance: widget.configuration.appearance,
         platform: widgetPlatform,
         clock: widget.configuration.clock,
       );
@@ -109,7 +108,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(_grades.initialize());
     unawaited(_courses.initialize());
     unawaited(_auth.restore());
-    unawaited(widget.configuration.appearance.initialize());
     unawaited(_updateCheck.autoCheck());
     WidgetsBinding.instance.addObserver(this);
   }
@@ -126,7 +124,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     unawaited(_widgetLaunches?.cancel());
     _scheduleWidget?.dispose();
     _scheduleIsland?.dispose();
-    widget.configuration.appearance.dispose();
     unawaited(widget.configuration.schedule.dispose());
     unawaited(widget.configuration.grades.dispose());
     unawaited(widget.configuration.courses.dispose());
@@ -232,7 +229,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _synchronizeWidgetAfterRemoval() async {
     final model = _scheduleWidget;
     if (model == null) return;
-    await widget.configuration.appearance.initialize();
     if (!await model.synchronize()) {
       throw LoginFailure(
         LoginFailureCode.storage,

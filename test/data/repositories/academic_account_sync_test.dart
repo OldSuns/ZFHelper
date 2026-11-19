@@ -12,7 +12,6 @@ import '../../support/auth_fakes.dart';
 import '../../support/course_fakes.dart';
 import '../../support/grade_fakes.dart';
 import '../../support/schedule_fakes.dart';
-import '../../support/settings_fakes.dart';
 
 void main() {
   test(
@@ -50,7 +49,6 @@ void main() {
         source: AuthenticatedCourseSource(auth: auth, clock: DateTime.now),
       );
       final app = AppConfiguration(
-        appearance: testAppearance(),
         auth: auth,
         schedule: schedule,
         grades: grades,
@@ -61,7 +59,6 @@ void main() {
       addTearDown(schedule.dispose);
       addTearDown(grades.dispose);
       addTearDown(courses.dispose);
-      addTearDown(app.appearance.dispose);
       await auth.restore();
       await Future.wait([
         schedule.initialize(),

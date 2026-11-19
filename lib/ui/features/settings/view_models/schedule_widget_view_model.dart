@@ -1,29 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../app/app_identity.dart';
 import '../../../../data/repositories/schedule_repository.dart';
 import '../../../../platform/schedule_widget_platform.dart';
-import '../../../core/app_theme.dart';
 import '../../schedule/view_models/schedule_widget_projection.dart';
-import 'appearance_view_model.dart';
 
 /// Publishes a derived, read-only timetable whenever its saved source changes.
 final class ScheduleWidgetViewModel extends ChangeNotifier {
   ScheduleWidgetViewModel({
     required this._repository,
-    required this._appearance,
     required this._platform,
     required this._clock,
   }) {
     _subscription = _repository.changes.listen((_) => _sourceChanged());
-    _appearance.addListener(_sourceChanged);
   }
 
   final ScheduleRepository _repository;
-  final AppearanceViewModel _appearance;
   final ScheduleWidgetPlatform _platform;
   final DateTime Function() _clock;
   late final StreamSubscription<ScheduleRepositoryState> _subscription;
@@ -47,7 +42,7 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   bool get settingsInitialized => _settingsInitialized;
   bool get settingsBusy => _settingsSaving;
   bool get busy => _sync != null || _pinning || _settingsSaving;
-  bool get canSync => _repository.state.initialized && _appearance.initialized;
+  bool get canSync => _repository.state.initialized;
   String? get settingsReadFailure => _settingsReadFailure;
   String? get failure {
     final messages = [
@@ -79,9 +74,6 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
     if (!state.initialized) {
       return state.failure?.message ?? '正在读取本机课表';
     }
-    if (!_appearance.initialized) {
-      return _appearance.failure ?? '正在读取外观设置';
-    }
     if (state.account == null) return '先添加账号并导入课表，小组件才会显示课程。';
     if (state.imported == null) return '所选学期尚未导入课表。';
     if (state.effective!.calendar.firstWeekMonday == null) {
@@ -97,7 +89,6 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
       state.selectedTerm?.key,
       state.imported,
       state.account?.settings[state.selectedTerm?.key],
-      _appearance.appearance,
     );
   }
 
@@ -205,8 +196,6 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
           final payload = {
             ...projectScheduleWidget(_repository.state),
             'generatedAt': _clock().millisecondsSinceEpoch,
-            'appearance': 'dark',
-            'palette': _palette,
           };
           try {
             await _platform.publish(jsonEncode(payload));
@@ -255,21 +244,6 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
     }
   }
 
-  static final _palette = {
-    // Keep both wire keys so existing native snapshots remain compatible.
-    for (final key in ['light', 'dark'])
-      key: _colors(AppTheme.build(Brightness.dark).colorScheme),
-  };
-
-  static Map<String, int> _colors(ColorScheme colors) => {
-    'surface': colors.surface.toARGB32(),
-    'card': colors.primaryContainer.toARGB32(),
-    'primary': colors.primary.toARGB32(),
-    'text': colors.onSurface.toARGB32(),
-    'secondary': colors.onSurfaceVariant.toARGB32(),
-    'outline': colors.outlineVariant.toARGB32(),
-  };
-
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -277,7 +251,6 @@ final class ScheduleWidgetViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _appearance.removeListener(_sourceChanged);
     unawaited(_subscription.cancel());
     unawaited(_platform.dispose());
     super.dispose();

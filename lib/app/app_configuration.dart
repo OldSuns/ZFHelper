@@ -17,11 +17,9 @@ import '../data/storage/sqlite_selection_store.dart';
 import '../data/storage/update_preferences_store.dart';
 import '../platform/app_installer_platform.dart';
 import '../platform/secure_login_vault.dart';
-import '../platform/secure_appearance_store.dart';
 import '../platform/selection_runtime.dart';
 import '../platform/schedule_island_platform.dart';
 import '../platform/schedule_widget_platform.dart';
-import '../ui/features/settings/view_models/appearance_view_model.dart';
 import '../ui/features/settings/view_models/update_check_view_model.dart';
 import 'app_identity.dart';
 
@@ -34,7 +32,6 @@ final class AppConfiguration {
     required this.schedule,
     required this.grades,
     required this.courses,
-    required this.appearance,
     this.scheduleWidgetPlatform,
     this.scheduleIslandPlatform,
     ReleaseRepository? releases,
@@ -93,7 +90,6 @@ final class AppConfiguration {
         await updates.create(recursive: true);
         return updates.path;
       },
-      appearance: AppearanceViewModel(store: SecureAppearanceStore()),
       auth: auth,
       clock: DateTime.now,
       courses: CourseRepository(
@@ -139,7 +135,6 @@ final class AppConfiguration {
   final UpdatePreferencesStore updatePreferences;
   final AppInstallerPlatform? appInstaller;
   final DownloadDirectoryResolver? updateDownloadDirectory;
-  final AppearanceViewModel appearance;
   final ScheduleWidgetPlatform? scheduleWidgetPlatform;
   final ScheduleIslandPlatform? scheduleIslandPlatform;
 

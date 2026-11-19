@@ -11,7 +11,6 @@ import 'package:zfhelper/ui/features/schedule/view_models/schedule_widget_projec
 import 'package:zfhelper/ui/features/settings/view_models/schedule_widget_view_model.dart';
 
 import '../../../support/schedule_fakes.dart';
-import '../../../support/settings_fakes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -133,18 +132,14 @@ void main() {
           ),
         ),
       );
-      final appearance = testAppearance();
       await repository.initialize();
-      await appearance.initialize();
       final model = ScheduleWidgetViewModel(
         repository: repository,
-        appearance: appearance,
         platform: AndroidScheduleWidgetPlatform(channel: channel),
         clock: () => DateTime(2026, 9, 16),
       );
       addTearDown(() async {
         model.dispose();
-        appearance.dispose();
         await repository.dispose();
         messenger.setMockMethodCallHandler(channel, null);
       });
@@ -165,7 +160,8 @@ void main() {
       ]);
       expect(writes.last['account'], isNull);
       expect(writes.last['days'], isEmpty);
-      expect(writes.last['appearance'], 'dark');
+      expect(writes.last.containsKey('appearance'), isFalse);
+      expect(writes.last.containsKey('palette'), isFalse);
       expect(model.busy, isFalse);
       expect(model.settingsInitialized, isTrue);
       expect(await model.updateSettings(showCountdown: false), isTrue);

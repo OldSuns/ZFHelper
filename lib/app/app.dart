@@ -13,26 +13,21 @@ class ZfHelperApp extends StatelessWidget {
   final AppConfiguration configuration;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: configuration.appearance,
-    builder: (context, _) => MaterialApp(
-      title: appDisplayName,
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('zh', 'CN'),
-      supportedLocales: const [Locale('zh', 'CN')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      theme: AppTheme.build(Brightness.dark),
-      darkTheme: AppTheme.build(Brightness.dark),
-      themeMode: ThemeMode.dark,
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: AppTheme.systemOverlayStyle(Theme.of(context).brightness),
-        child: child!,
-      ),
-      home: AppShell(configuration: configuration),
+  Widget build(BuildContext context) => MaterialApp(
+    title: appDisplayName,
+    debugShowCheckedModeBanner: false,
+    locale: const Locale('zh', 'CN'),
+    supportedLocales: const [Locale('zh', 'CN')],
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    theme: AppTheme.build(Brightness.dark),
+    builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppTheme.systemOverlayStyle(Theme.of(context).brightness),
+      child: child!,
     ),
+    home: AppShell(configuration: configuration),
   );
 }

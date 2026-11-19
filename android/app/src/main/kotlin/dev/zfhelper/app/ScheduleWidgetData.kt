@@ -30,21 +30,6 @@ internal class ScheduleWidgetSettingsException(
     override val message: String,
 ) : Exception(message)
 
-internal data class ScheduleWidgetColors(
-    val surface: Int,
-    val primary: Int,
-    val text: Int,
-    val secondary: Int,
-    val outline: Int,
-    val card: Int = surface,
-)
-
-internal data class ScheduleWidgetTheme(
-    val appearance: String,
-    val light: ScheduleWidgetColors,
-    val dark: ScheduleWidgetColors,
-)
-
 internal data class ScheduleWidgetSettings(
     val showCountdown: Boolean = true,
     val showLocation: Boolean = true,
@@ -131,13 +116,10 @@ internal data class ScheduleWidgetDay(
 
 internal data class ScheduleWidgetSnapshot(
     val generatedAt: Long,
-    val appearance: String,
     val status: String,
     val accountLabel: String?,
     val termLabel: String?,
     val source: ScheduleWidgetSource?,
-    val light: ScheduleWidgetColors,
-    val dark: ScheduleWidgetColors,
     val days: List<ScheduleWidgetDay>,
 ) {
     companion object {
@@ -146,13 +128,12 @@ internal data class ScheduleWidgetSnapshot(
                 val tokenizer = JSONTokener(payload)
                 val json = tokenizer.nextValue() as? JSONObject
                     ?: invalidWidgetPayload("根对象")
+                // Old snapshots may contain theme metadata; retain their courses without using those colors.
                 json.allowedKeys("version", "generatedAt", "appearance", "status", "account", "term", "palette", "days")
                 widgetPayloadCheck(tokenizer.nextClean() == '\u0000', "根对象")
                 widgetPayloadCheck(json.integer("version") == 1L, "version")
                 val generatedAt = json.integer("generatedAt")
                 widgetPayloadCheck(generatedAt >= 0, "generatedAt")
-                val appearance = json.string("appearance")
-                widgetPayloadCheck(appearance in setOf("system", "light", "dark"), "appearance")
                 val status = json.string("status")
                 widgetPayloadCheck(
                     status in setOf("ready", "noAccount", "noSchedule", "calendarMissing"),
@@ -172,8 +153,6 @@ internal data class ScheduleWidgetSnapshot(
                     it.nonEmptyString("key")
                     it.nonEmptyString("label")
                 }
-                val palette = json.objectValue("palette")
-                palette.allowedKeys("light", "dark")
                 val days = json.array("days").objects().map(::parseDay)
                 widgetPayloadCheck(
                     days.zipWithNext().all { (first, second) -> first.date < second.date },
@@ -187,30 +166,16 @@ internal data class ScheduleWidgetSnapshot(
                 )
                 widgetPayloadCheck(status != "noAccount" || term == null, "term 状态")
                 return ScheduleWidgetSnapshot(
-                    generatedAt, appearance, status, accountLabel, termLabel,
+                    generatedAt, status, accountLabel, termLabel,
                     if (account != null && term != null) ScheduleWidgetSource(
                         account.nonEmptyString("schoolId"), account.nonEmptyString("accountId"),
                         term.nonEmptyString("key"),
                     ) else null,
-                    parseColors(palette.objectValue("light")),
-                    parseColors(palette.objectValue("dark")), days,
+                    days,
                 )
             } catch (_: JSONException) {
                 invalidWidgetPayload("JSON")
             }
-        }
-
-        fun parseColors(json: JSONObject): ScheduleWidgetColors {
-            json.allowedKeys("surface", "primary", "text", "secondary", "outline", "card")
-            val surface = json.color("surface")
-            return ScheduleWidgetColors(
-                surface,
-                json.color("primary"),
-                json.color("text"),
-                json.color("secondary"),
-                json.color("outline"),
-                if (json.has("card")) json.color("card") else surface,
-            )
         }
 
         private fun parseDay(json: JSONObject): ScheduleWidgetDay {
@@ -309,42 +274,6 @@ internal class ScheduleWidgetStore(context: Context) {
         return ScheduleWidgetSnapshot.parse(payload)
     }
 
-    fun theme(snapshot: ScheduleWidgetSnapshot? = null): ScheduleWidgetTheme? {
-        val saved = try {
-            preferences.getString("theme", null)
-        } catch (_: ClassCastException) {
-            Log.e("ScheduleWidget", "widget_saved_theme_invalid")
-            null
-        }
-        val savedTheme = if (saved == null) {
-            null
-        } else {
-            try {
-                val json = JSONObject(saved)
-                json.allowedKeys("appearance", "light", "dark")
-                val appearance = json.string("appearance")
-                widgetPayloadCheck(appearance in setOf("system", "light", "dark"), "外观")
-                ScheduleWidgetTheme(
-                    appearance,
-                    ScheduleWidgetSnapshot.parseColors(json.objectValue("light")),
-                    ScheduleWidgetSnapshot.parseColors(json.objectValue("dark")),
-                )
-            } catch (_: JSONException) {
-                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
-                null
-            } catch (_: ScheduleWidgetException) {
-                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
-                null
-            }
-        }
-        if (savedTheme != null || snapshot == null) return savedTheme
-        val legacyTheme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
-        if (!preferences.edit().putString("theme", legacyTheme.toJson().toString()).commit()) {
-            Log.e("ScheduleWidget", "widget_saved_theme_migration_failed")
-        }
-        return legacyTheme
-    }
-
     fun settings(): ScheduleWidgetSettings {
         fun readFailure() = ScheduleWidgetSettingsException(
             "widget_settings_read_failed", "小组件显示设置未能读取，请重试",
@@ -397,17 +326,7 @@ internal class ScheduleWidgetStore(context: Context) {
     }
 
     fun write(payload: String) {
-        val snapshot = ScheduleWidgetSnapshot.parse(payload)
-        val theme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
-            .toJson()
-            .toString()
-        if (!preferences.edit().putString("theme", theme).commit()) {
-            throw ScheduleWidgetException(
-                "widget_theme_write_failed",
-                "小组件外观设置未能保存，请重新同步",
-                ScheduleWidgetFailureKind.SNAPSHOT,
-            )
-        }
+        ScheduleWidgetSnapshot.parse(payload)
         val stream = try {
             file.startWrite()
         } catch (_: IOException) {
@@ -428,19 +347,6 @@ internal class ScheduleWidgetStore(context: Context) {
             throw ScheduleWidgetException("widget_write_failed", "小组件课表未能保存，请检查本机存储后重试")
         }
     }
-
-    private fun ScheduleWidgetColors.toJson(): JSONObject = JSONObject()
-        .put("surface", surface)
-        .put("primary", primary)
-        .put("text", text)
-        .put("secondary", secondary)
-        .put("outline", outline)
-        .put("card", card)
-
-    private fun ScheduleWidgetTheme.toJson(): JSONObject = JSONObject()
-        .put("appearance", appearance)
-        .put("light", light.toJson())
-        .put("dark", dark.toJson())
 
     fun clearFailure() {
         if (!preferences.edit().remove("failure").commit()) {
@@ -507,10 +413,6 @@ private fun JSONObject.minute(key: String): Int = integer(key).also {
 
 private fun JSONObject.nullableMinute(key: String): Int? =
     if (get(key) === JSONObject.NULL) null else minute(key)
-
-private fun JSONObject.color(key: String): Int = integer(key).also {
-    widgetPayloadCheck(it in Int.MIN_VALUE.toLong()..0xffffffffL, key)
-}.toInt()
 
 private fun JSONObject.objectValue(key: String): JSONObject =
     get(key) as? JSONObject ?: invalidWidgetPayload(key)

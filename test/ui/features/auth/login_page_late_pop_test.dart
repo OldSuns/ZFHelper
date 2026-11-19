@@ -12,7 +12,6 @@ import '../../../support/auth_fakes.dart';
 import '../../../support/schedule_fakes.dart';
 import '../../../support/grade_fakes.dart';
 import '../../../support/course_fakes.dart';
-import '../../../support/settings_fakes.dart';
 
 void main() {
   testWidgets('finishing a save during back navigation keeps settings open', (
@@ -40,7 +39,6 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
-          appearance: testAppearance(),
           courses: testCourseRepository(),
           grades: testGradeRepository(),
           schedule: testScheduleRepository(),

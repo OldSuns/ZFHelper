@@ -6,7 +6,7 @@ ZFHelper 的 LXY Android 定制版，面向新正方教务系统，使用 Flutte
 
 ## 项目状态
 
-LXY 版本为 **0.2.4+15**，基于普通版 ZFHelper 0.2.3。界面使用简体中文。PR 和分支推送只运行质量检查，不打包 APK；`LXY` 上的 `lxy-vX.Y.Z` 标签通过检查后发布签名 APK 和校验文件，不占用 GitHub 的 Latest。通用改动可以从 `dev` 分别通过 PR 进入 `main` 和 `LXY`。学校兼容性和签名覆盖升级仍需真实学校及设备验收。
+LXY 版本为 **0.2.5+16**，基于普通版 ZFHelper 0.2.3。界面使用简体中文。PR 和分支推送只运行质量检查，不打包 APK；`LXY` 上的 `lxy-vX.Y.Z` 标签通过检查后发布签名 APK 和校验文件，不占用 GitHub 的 Latest。通用改动可以从 `dev` 分别通过 PR 进入 `main` 和 `LXY`。学校兼容性和签名覆盖升级仍需真实学校及设备验收。
 
 首次使用时下载 LXY APK，直接覆盖安装普通版，不要先卸载。应用 ID 和本地存储保持兼容；签名证书必须相同，构建号必须更高。后续应用内更新只接收 LXY 版本。发布内容的可见性沿用仓库设置。发布与迁移要求见[开发说明](docs/development.md#lxy-apk-releases-and-installation)。
 

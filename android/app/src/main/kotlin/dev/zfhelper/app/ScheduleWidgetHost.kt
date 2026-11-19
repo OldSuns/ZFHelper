@@ -370,7 +370,6 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
             settingsFailure = failure
             ScheduleWidgetSettings(showCountdown = false, showLocation = false, showTeacher = false)
         }
-        val savedTheme = store.theme(visibleSnapshot)
         widgetLists.keys.retainAll(ids.toSet())
         for (id in ids) {
             val rendering = ScheduleWidgetRenderer.render(
@@ -379,7 +378,6 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                 if (settingsFailure == null) visibleSnapshot else null,
                 blockingFailure?.message ?: settingsFailure?.message,
                 now,
-                savedTheme,
                 settings,
                 widgetLists[id].takeIf { preserveScroll && nextWidgetBoundary?.isAfter(now) == true },
             )
@@ -471,7 +469,6 @@ class ScheduleWidgetHost(private val application: ZfHelperApplication) : MethodC
                         null,
                         failure.message,
                         now,
-                        store.theme(),
                         settings,
                     ).views,
                 )

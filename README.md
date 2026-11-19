@@ -6,7 +6,7 @@ The LXY Android edition of ZFHelper, a Flutter/Dart client for the newer Zhengfa
 
 ## Status
 
-LXY version: **0.2.4+15**, based on ordinary ZFHelper 0.2.3. The application UI is Simplified Chinese. Pull requests and branch pushes run quality checks without packaging APKs; `lxy-vX.Y.Z` tags on `LXY` run checks and publish a signed APK and checksum without taking GitHub's Latest designation. Shared changes can flow from `dev` to both `main` and `LXY` through separate PRs. School compatibility and signed upgrade behavior still require real-school and device acceptance.
+LXY version: **0.2.5+16**, based on ordinary ZFHelper 0.2.3. The application UI is Simplified Chinese. Pull requests and branch pushes run quality checks without packaging APKs; `lxy-vX.Y.Z` tags on `LXY` run checks and publish a signed APK and checksum without taking GitHub's Latest designation. Shared changes can flow from `dev` to both `main` and `LXY` through separate PRs. School compatibility and signed upgrade behavior still require real-school and device acceptance.
 
 For the first installation, download the LXY APK and install it over the ordinary edition without uninstalling. The application ID and local storage remain compatible; the signing certificate must match and the build number must be higher. Subsequent in-app updates stay in the LXY channel. Release visibility follows the repository's visibility. See [development](docs/development.md#lxy-apk-releases-and-installation) for release and migration requirements.
 

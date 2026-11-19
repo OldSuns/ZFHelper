@@ -5,6 +5,7 @@
     android:layout_height="wrap_content"
     android:layout_marginBottom="4dp"
     android:background="@drawable/schedule_widget_lesson_background"
+    android:forceDarkAllowed="false"
     android:minHeight="48dp"
     android:orientation="vertical"
     android:paddingBottom="5dp"
@@ -27,6 +28,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_start"
+                android:textColor="@color/widget_primary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
@@ -37,6 +39,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_end"
+                android:textColor="@color/widget_secondary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -51,7 +54,7 @@
             android:layout_width="3dp"
             android:layout_height="match_parent"
             android:layout_marginEnd="8dp"
-            android:background="@android:color/transparent"
+            android:background="@color/widget_primary"
             android:visibility="gone" />
 
         <LinearLayout
@@ -62,6 +65,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_state"
+                android:textColor="@color/widget_primary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
@@ -81,6 +85,7 @@
 
                 <TextView
                     android:id="@+id/schedule_widget_lesson_title"
+                    android:textColor="@color/widget_text"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -92,6 +97,7 @@
 
                 <TextView
                     android:id="@+id/schedule_widget_lesson_countdown"
+                    android:textColor="@color/widget_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/schedule_widget_countdown_gap"
@@ -107,6 +113,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_when"
+                android:textColor="@color/widget_primary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -118,6 +125,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_location"
+                android:textColor="@color/widget_secondary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -128,6 +136,7 @@
 
             <TextView
                 android:id="@+id/schedule_widget_lesson_detail"
+                android:textColor="@color/widget_secondary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"

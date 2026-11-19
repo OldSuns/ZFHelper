@@ -64,7 +64,7 @@ Seat watching needs notification permission and an Android foreground service; o
 
 Timetables, grades, course snapshots, selected records, and operations are isolated by school/account with term/round scope where appropriate. Viewing saved data does not implicitly re-import it, failed explicit updates preserve old data and timestamps, and a newly selected round without a cache may need a query.
 
-LXY always uses the dark Catppuccin Mocha palette and Mauve accent, including the Android launch screen and widget. There is no light/system appearance selector; legacy appearance preferences migrate to dark without changing business data. Course accents are assigned deterministically by course name in first grid-appearance order, so an unchanged semester keeps each course the same color across grid, agenda, and details. Local data settings show actual saved content and read failures.
+LXY always uses the dark Catppuccin Mocha palette and Mauve accent, including the Android launch screen and widget. Appearance selection and persistence are removed; legacy preferences are ignored without changing business data. Course accents are assigned deterministically by course name in first grid-appearance order, so an unchanged semester keeps each course the same color across grid, agenda, and details. Local data settings show actual saved content and read failures.
 
 ### Update checking
 
@@ -80,7 +80,7 @@ The phone-first 3×2 default and wider 4×2 size use the same vertically scrolla
 
 When there is room in the list, the focused lesson shows a rounded badge with minutes until class ends, or minutes until today's next class starts if it starts within 30 minutes. Classes without complete clock times, breaks, and future course days have no badge. Tapping the widget opens the weekly timetable; course notifications still open the corresponding agenda date.
 
-The widget has no manual refresh button: timetable, account, calendar, or appearance changes synchronize it, and system updates plus inexact alarms provide background refresh opportunities. The selected application appearance remains available if the timetable snapshot is temporarily unreadable. Power management can delay background updates, so the badge shows the countdown as of the latest refresh and is not a precise reminder service.
+The widget has no manual refresh button: timetable, account, or calendar changes synchronize it, and system updates plus inexact alarms provide background refresh opportunities. Its backgrounds, course cards, countdown badges, and text use fixed Mocha resources, including when the snapshot is unreadable. They do not depend on runtime background tinting or saved theme data. Power management can delay background updates, so the badge shows the countdown as of the latest refresh and is not a precise reminder service.
 
 Timetable settings > Desktop widget lets users choose whether course countdowns, locations, and teacher names are shown. These display choices are enabled by default, persist across app restarts, and take effect on existing widgets immediately; disabling countdowns cancels their background refreshes while retaining course-boundary refreshes. If display settings cannot be read, the widget shows an error without course details, and account removal still clears old widget courses and notifications. The settings page offers a confirmed reset to enable all three display choices again; reading settings successfully clears the read error without hiding independent save or synchronization errors.
 

@@ -6,9 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:zfhelper/app/app.dart';
 import 'package:zfhelper/app/app_configuration.dart';
 import 'package:zfhelper/data/repositories/release_repository.dart';
-import 'package:zfhelper/data/storage/appearance_store.dart';
 import 'package:zfhelper/data/storage/update_preferences_store.dart';
-import 'package:zfhelper/platform/secure_appearance_store.dart';
 import 'package:zfhelper/platform/schedule_widget_platform.dart';
 import 'package:zfhelper/ui/features/courses/views/courses_page.dart';
 import 'package:zfhelper/ui/features/schedule/views/timetable_page.dart';
@@ -33,7 +31,6 @@ void main() {
     double textScale = 1,
     Brightness brightness = Brightness.light,
     AppClock? clock,
-    AppearanceStore? appearanceStore,
     ScheduleWidgetPlatform? scheduleWidgetPlatform,
     ReleaseRepository? releases,
     UpdatePreferencesStore? updatePreferences,
@@ -50,7 +47,6 @@ void main() {
     await tester.pumpWidget(
       ZfHelperApp(
         configuration: AppConfiguration(
-          appearance: testAppearance(store: appearanceStore),
           scheduleWidgetPlatform: scheduleWidgetPlatform,
           releases: releases,
           updatePreferences: updatePreferences,
@@ -125,13 +121,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('dark appearance replaces legacy choices and survives restart', (
+  testWidgets('dark appearance ignores legacy choices and survives restart', (
     tester,
   ) async {
     FlutterSecureStorage.setMockInitialValues({
       'zfhelper.appearance.v1': 'light',
     });
-    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    await pumpApp(tester);
     await tester.tap(navigationLabel('设置'));
     await tester.pumpAndSettle();
 
@@ -142,10 +138,9 @@ void main() {
       Theme.of(tester.element(find.byType(SettingsPage))).brightness,
       Brightness.dark,
     );
-    expect(await SecureAppearanceStore().read(), AppAppearance.dark);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await pumpApp(tester, appearanceStore: SecureAppearanceStore());
+    await pumpApp(tester);
     expect(
       Theme.of(tester.element(find.byType(TimetablePage))).brightness,
       Brightness.dark,
@@ -162,7 +157,6 @@ void main() {
       Theme.of(tester.element(find.byType(TimetablePage))).brightness,
       Brightness.dark,
     );
-    expect(await SecureAppearanceStore().read(), AppAppearance.dark);
     expect(tester.takeException(), isNull);
   });
 
