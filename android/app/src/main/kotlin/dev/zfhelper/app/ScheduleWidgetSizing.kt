@@ -8,12 +8,13 @@ import android.text.TextPaint
 import android.util.SizeF
 import kotlin.math.ceil
 
-internal enum class ScheduleWidgetStyle { NEXT, CARD, TODAY_LIST, TWO_DAY, WEEK }
+internal enum class ScheduleWidgetStyle { NEXT, CARD, TODAY_LIST }
 
 internal data class ScheduleWidgetLayout(
     val size: SizeF,
     val style: ScheduleWidgetStyle,
     val detailed: Boolean = false,
+    val showCountdown: Boolean = false,
 )
 
 /** Size thresholds describe content that actually fits, including the user's text size. */
@@ -23,23 +24,30 @@ internal class ScheduleWidgetSizing(context: Context) {
     val padding = dp(R.dimen.schedule_widget_padding)
     val compactPadding = dp(R.dimen.schedule_widget_compact_padding)
     val cardPadding = dp(R.dimen.schedule_widget_card_padding)
-    val titleLine = lineHeight(R.dimen.schedule_widget_title_text)
     val bodyLine = lineHeight(R.dimen.schedule_widget_body_text)
     val captionLine = lineHeight(R.dimen.schedule_widget_caption_text)
     private val rowTitleLine = lineHeight(R.dimen.schedule_widget_row_title_text)
+    val titleLine = lineHeight(R.dimen.schedule_widget_title_text)
     val stripTitleLine = rowTitleLine
     val titlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_title_text).toFloat()
     val stripTitlePixels = resources.getDimensionPixelSize(R.dimen.schedule_widget_row_title_text).toFloat()
     val timeColumnWidth = ceil(maxOf(textWidth("00:00"), textWidth("待上课")) + padding)
-    val headerHeight = bodyLine + captionLine + 6
-    val compactRowHeight = rowTitleLine + bodyLine + 12
 
     fun pixels(dp: Float): Int = (dp * density).toInt()
 
     fun bodyHeight(text: String): Float = lineHeight(R.dimen.schedule_widget_body_text, text)
 
-    fun variants(): List<ScheduleWidgetLayout> {
-        val minimumWidth = dp(R.dimen.schedule_widget_min_width)
+    fun countdownWidth(title: String, countdown: String): Float {
+        val gap = dp(R.dimen.schedule_widget_countdown_gap)
+        val pillPadding = dp(R.dimen.schedule_widget_countdown_padding)
+        val accentWidth = 3 + padding
+        return ceil(
+            4 * padding + timeColumnWidth + accentWidth + gap + 2 * pillPadding +
+                rowTitleWidth(title) + captionWidth(countdown) + 2,
+        )
+    }
+
+    fun variants(countdownWidth: Float?): List<ScheduleWidgetLayout> {
         // The first responsive breakpoint covers every launcher-reported narrow width.
         // Some launchers subtract host padding and report less than minResizeWidth.
         val narrowWidth = 1f
@@ -47,44 +55,34 @@ internal class ScheduleWidgetSizing(context: Context) {
         val twoLines = 2 * compactPadding + stripTitleLine + bodyLine + 6
         val threeLines = twoLines + bodyLine + 2
         val cardHeight = maxOf(
-            dp(R.dimen.schedule_widget_default_height),
-            2 * cardPadding + captionLine + titleLine + 2 * bodyLine + 8,
+            minimumHeight + 24,
+            2 * cardPadding + captionLine + stripTitleLine + 2 * bodyLine + 12,
         )
         val tallCardHeight = maxOf(
             cardHeight + 8,
-            2 * cardPadding + captionLine + 2 * titleLine + 2 * bodyLine + 8,
+            2 * cardPadding + captionLine + 2 * stripTitleLine + 2 * bodyLine + 12,
         )
         val todayHeight = maxOf(
-            tallCardHeight + 16,
-            2 * padding + headerHeight + 2 * rowTitleLine + 4 * bodyLine + 18,
+            dp(R.dimen.schedule_widget_default_height),
+            2 * padding + bodyLine + 4 + rowTitleLine + 2 * bodyLine + 22,
         )
-        val twoDayWidth = maxOf(300f, 2 * minimumWidth + 3 * padding)
-        val twoDayHeight = maxOf(150f, 2 * padding + headerHeight + 2 * compactRowHeight + captionLine + 8)
-        val weekWidth = maxOf(280f, twoDayWidth)
-        val weekHeight = maxOf(
-            260f,
-            2 * padding + maxOf(48f, headerHeight) + 7 * maxOf(28f, bodyLine + 6),
-        )
+        val wideWidth = dp(R.dimen.schedule_widget_wide_width)
+        val listWidths = listOfNotNull(narrowWidth, wideWidth, countdownWidth).distinct()
         return listOf(
             ScheduleWidgetLayout(SizeF(narrowWidth, minimumHeight), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, maxOf(minimumHeight + 8, twoLines)), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, maxOf(minimumHeight + 16, threeLines)), ScheduleWidgetStyle.NEXT),
             ScheduleWidgetLayout(SizeF(narrowWidth, cardHeight), ScheduleWidgetStyle.CARD),
             ScheduleWidgetLayout(SizeF(narrowWidth, tallCardHeight), ScheduleWidgetStyle.CARD),
-            ScheduleWidgetLayout(SizeF(narrowWidth, todayHeight), ScheduleWidgetStyle.TODAY_LIST),
-            ScheduleWidgetLayout(SizeF(twoDayWidth, twoDayHeight), ScheduleWidgetStyle.TWO_DAY),
+        ) + listWidths.map { width ->
             ScheduleWidgetLayout(
-                SizeF(narrowWidth, todayHeight + compactRowHeight + 2 * captionLine),
+                SizeF(width, todayHeight),
                 ScheduleWidgetStyle.TODAY_LIST,
-                detailed = true,
-            ),
-            ScheduleWidgetLayout(SizeF(weekWidth, weekHeight), ScheduleWidgetStyle.WEEK, detailed = true),
-        )
+                detailed = width >= wideWidth,
+                showCountdown = countdownWidth != null && width >= countdownWidth,
+            )
+        }
     }
-
-    fun twoDayRowLimit(height: Float): Int =
-        ((height - 2 * padding - headerHeight - captionLine - 16) / compactRowHeight)
-            .toInt().coerceIn(1, 4)
 
     // Resource dimensions use Android's SP conversion, including Android 14's
     // nonlinear font scaling. Multiplying breakpoints by fontScale is inaccurate.
@@ -115,5 +113,15 @@ internal class ScheduleWidgetSizing(context: Context) {
 
     private fun textWidth(value: String): Float = Paint().apply {
         textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_body_text).toFloat()
+    }.measureText(value) / density
+
+    private fun captionWidth(value: String): Float = Paint().apply {
+        textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_caption_text).toFloat()
+        typeface = Typeface.DEFAULT_BOLD
+    }.measureText(value) / density
+
+    private fun rowTitleWidth(value: String): Float = Paint().apply {
+        textSize = resources.getDimensionPixelSize(R.dimen.schedule_widget_row_title_text).toFloat()
+        typeface = Typeface.DEFAULT_BOLD
     }.measureText(value) / density
 }

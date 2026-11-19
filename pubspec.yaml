@@ -1,7 +1,7 @@
 name: zfhelper
 description: "Android-first academic timetable and course client for ZFHelper."
 publish_to: 'none'
-version: 0.2.2+8
+version: 0.2.3-dev.3+11
 
 environment:
   sdk: ^3.13.3
@@ -28,6 +28,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+dependency_overrides:
+  # Temporary compatibility pins for path_provider_android 2.3.1's JNI bindings.
+  # Revisit together after an upstream fix is verified in an Android release build.
+  jni: 1.1.2
+  jni_flutter: 1.0.4+1
 
 flutter:
   uses-material-design: true

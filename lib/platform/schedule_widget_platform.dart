@@ -36,14 +36,54 @@ final class ScheduleWidgetCapabilities {
   final String? failure;
 }
 
+final class ScheduleWidgetSettings {
+  const ScheduleWidgetSettings({
+    this.showCountdown = true,
+    this.showLocation = true,
+    this.showTeacher = true,
+  });
+
+  final bool showCountdown;
+  final bool showLocation;
+  final bool showTeacher;
+
+  Map<String, bool> toMap() => {
+    'showCountdown': showCountdown,
+    'showLocation': showLocation,
+    'showTeacher': showTeacher,
+  };
+
+  static ScheduleWidgetSettings fromMap(Object? value) {
+    if (value is! Map<Object?, Object?> || value.length != 3) {
+      throw const ScheduleWidgetException('桌面小组件返回了无效显示设置');
+    }
+    final showCountdown = value['showCountdown'];
+    final showLocation = value['showLocation'];
+    final showTeacher = value['showTeacher'];
+    if (showCountdown is! bool ||
+        showLocation is! bool ||
+        showTeacher is! bool) {
+      throw const ScheduleWidgetException('桌面小组件返回了无效显示设置');
+    }
+    return ScheduleWidgetSettings(
+      showCountdown: showCountdown,
+      showLocation: showLocation,
+      showTeacher: showTeacher,
+    );
+  }
+}
+
 final class ScheduleWidgetException implements Exception {
-  const ScheduleWidgetException(this.message);
+  const ScheduleWidgetException(this.message, {this.code});
   final String message;
+  final String? code;
 }
 
 abstract interface class ScheduleWidgetPlatform {
   Stream<ScheduleWidgetLaunch> get launches;
   Future<ScheduleWidgetCapabilities> capabilities();
+  Future<ScheduleWidgetSettings> settings();
+  Future<void> setSettings(ScheduleWidgetSettings settings);
   Future<void> publish(String payload);
   Future<bool> requestPin();
   Future<ScheduleWidgetLaunch?> consumeLaunch();
@@ -79,6 +119,7 @@ final class AndroidScheduleWidgetPlatform implements ScheduleWidgetPlatform {
     } on PlatformException catch (error) {
       throw ScheduleWidgetException(
         error.message ?? '桌面小组件操作失败（${error.code}）',
+        code: error.code,
       );
     } on MissingPluginException {
       throw const ScheduleWidgetException('桌面小组件服务不可用，请完整重启新版应用');
@@ -112,6 +153,14 @@ final class AndroidScheduleWidgetPlatform implements ScheduleWidgetPlatform {
     }
     throw const ScheduleWidgetException('桌面小组件返回了无效状态');
   }
+
+  @override
+  Future<ScheduleWidgetSettings> settings() async =>
+      ScheduleWidgetSettings.fromMap(await _invoke('settings'));
+
+  @override
+  Future<void> setSettings(ScheduleWidgetSettings settings) async =>
+      _invoke('setSettings', settings.toMap());
 
   @override
   Future<void> publish(String payload) async =>

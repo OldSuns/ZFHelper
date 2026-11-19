@@ -8,15 +8,28 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RemoteViews
+import androidx.core.graphics.ColorUtils
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+internal const val SCHEDULE_WIDGET_UPCOMING_MINUTES = 30
+
+internal data class ScheduleWidgetListState(
+    val source: ScheduleWidgetSource?,
+    val date: LocalDate,
+    val lessons: List<ScheduleWidgetLesson>,
+)
+
+internal data class ScheduleWidgetRendering(
+    val views: RemoteViews,
+    val listState: ScheduleWidgetListState?,
+)
+
 internal object ScheduleWidgetRenderer {
     private val dateFormat = DateTimeFormatter.ofPattern("M月d日 EEE", Locale.SIMPLIFIED_CHINESE)
     private val shortDateFormat = DateTimeFormatter.ofPattern("M/d EEE", Locale.SIMPLIFIED_CHINESE)
-    private val weekdayFormat = DateTimeFormatter.ofPattern("EEE", Locale.SIMPLIFIED_CHINESE)
 
     fun render(
         context: Context,
@@ -24,27 +37,37 @@ internal object ScheduleWidgetRenderer {
         snapshot: ScheduleWidgetSnapshot?,
         failure: String?,
         now: ZonedDateTime,
-    ): RemoteViews {
+        savedTheme: ScheduleWidgetTheme?,
+        settings: ScheduleWidgetSettings = ScheduleWidgetSettings.defaults,
+        previousListState: ScheduleWidgetListState? = null,
+    ): ScheduleWidgetRendering {
         val today = now.toLocalDate()
         val frame = WidgetFrame(
             snapshot,
             snapshot?.days?.firstOrNull { it.date == today },
-            focus(snapshot, failure, now),
-            colors(context, snapshot),
+            focus(snapshot, failure, now, settings),
+            colors(context, snapshot, savedTheme),
             now,
+            settings,
         )
+        val listDay = snapshot?.days?.firstOrNull { day ->
+            day.date == frame.focus.date && day.lessons.any { it.id == frame.focus.lessonId }
+        }
+        val listState = listDay?.let { day ->
+            ScheduleWidgetListState(snapshot.source, day.date, listLessons(day, frame))
+        }
         val sizing = ScheduleWidgetSizing(context)
-        return RemoteViews(
-            sizing.variants().associate { variant ->
-                variant.size to when {
-                    !frame.focus.usable -> focusLayout(context, widgetId, variant, sizing, frame)
-                    variant.style == ScheduleWidgetStyle.TWO_DAY ->
-                        twoDayLayout(context, widgetId, variant, sizing, frame)
-                    variant.style == ScheduleWidgetStyle.WEEK && snapshot?.weekAt(today) != null ->
-                        weekLayout(context, widgetId, snapshot.weekAt(today)!!, frame)
-                    else -> focusLayout(context, widgetId, variant, sizing, frame)
-                }
-            },
+        val countdownWidth = frame.focus.countdown?.let { sizing.countdownWidth(frame.focus.title, it) }
+        return ScheduleWidgetRendering(
+            RemoteViews(
+                sizing.variants(countdownWidth).associate { variant ->
+                    variant.size to focusLayout(
+                        context, widgetId, variant, sizing, frame, listDay,
+                        listState?.lessons.orEmpty(), listState != previousListState,
+                    )
+                },
+            ),
+            listState,
         )
     }
 
@@ -54,14 +77,13 @@ internal object ScheduleWidgetRenderer {
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
         frame: WidgetFrame,
+        preparedDay: ScheduleWidgetDay?,
+        lessons: List<ScheduleWidgetLesson>,
+        resetScroll: Boolean,
     ): RemoteViews {
-        val (snapshot, _, focus, colors, now) = frame
+        val (snapshot, _, focus, colors, now, _) = frame
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
-        val listDay = if (variant.style == ScheduleWidgetStyle.TODAY_LIST) {
-            snapshot?.days?.firstOrNull { it.date == focus.date && it.lessons.isNotEmpty() }
-        } else {
-            null
-        }
+        val listDay = preparedDay.takeIf { variant.style == ScheduleWidgetStyle.TODAY_LIST }
         val showList = listDay != null
         val strip = variant.style == ScheduleWidgetStyle.NEXT
         val padding = sizing.pixels(sizing.padding)
@@ -74,14 +96,13 @@ internal object ScheduleWidgetRenderer {
         )
         views.setViewPadding(R.id.schedule_widget_root, padding, verticalPadding, padding, verticalPadding)
         views.visible(R.id.schedule_widget_header, showList)
-        views.visible(R.id.schedule_widget_refresh, showList)
         views.visible(R.id.schedule_widget_list, showList)
         views.visible(R.id.schedule_widget_focus, !showList)
         bindFocus(views, frame, variant, sizing, strip, showList)
         views.tintBackground(R.id.schedule_widget_root, colors.surface)
         val headerDate = listDay?.date ?: focus.date
         val headerDay = snapshot?.days?.firstOrNull { it.date == headerDate }
-        val dateLabel = headerDate.format(if (showList) dateFormat else shortDateFormat)
+        val dateLabel = headerDate.format(shortDateFormat)
         views.setTextViewText(R.id.schedule_widget_date, dateLabel)
         val summary = listOfNotNull(
             headerDay?.week?.let { "第 $it 周" },
@@ -100,8 +121,6 @@ internal object ScheduleWidgetRenderer {
         views.setTextColor(R.id.schedule_widget_focus_title, colors.text)
         views.setTextColor(R.id.schedule_widget_focus_meta, colors.secondary)
         views.setTextColor(R.id.schedule_widget_focus_location, colors.secondary)
-        views.setWidgetColor(R.id.schedule_widget_refresh, "setColorFilter", colors.primary)
-        views.setOnClickPendingIntent(R.id.schedule_widget_refresh, refresh(context))
         views.setOnClickPendingIntent(
             R.id.schedule_widget_header,
             openDate(context, widgetId, headerDate),
@@ -113,228 +132,7 @@ internal object ScheduleWidgetRenderer {
             listOf(focus.date.format(dateFormat), focus.label, focus.title, focus.meta, focus.location)
                 .filter(String::isNotBlank).joinToString("，"),
         )
-        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing)
-        return views
-    }
-
-    private fun twoDayLayout(
-        context: Context,
-        widgetId: Int,
-        variant: ScheduleWidgetLayout,
-        sizing: ScheduleWidgetSizing,
-        frame: WidgetFrame,
-    ): RemoteViews {
-        val today = frame.now.toLocalDate()
-        val tomorrow = today.plusDays(1)
-        val todayDay = frame.snapshot?.days?.firstOrNull { it.date == today }
-        val tomorrowDay = frame.snapshot?.days?.firstOrNull { it.date == tomorrow }
-        val minutes = frame.now.hour * 60 + frame.now.minute
-        val remaining = todayDay?.lessons.orEmpty().filter { it.end == null || it.end > minutes }
-        val tomorrowLessons = tomorrowDay?.lessons.orEmpty()
-        if (remaining.isEmpty() && tomorrowLessons.isEmpty()) {
-            return focusLayout(context, widgetId, variant, sizing, frame)
-        }
-        val views = RemoteViews(context.packageName, R.layout.schedule_widget_two_day)
-        val week = frame.snapshot?.weekAt(today)?.number
-        views.tintBackground(R.id.schedule_widget_two_day_root, frame.colors.surface)
-        views.setTextViewText(R.id.schedule_widget_two_day_title, "今明课程")
-        views.setTextViewText(
-            R.id.schedule_widget_two_day_context,
-            listOfNotNull(week?.let { "第 $it 周" }, frame.snapshot?.termLabel)
-                .joinToString(" · "),
-        )
-        views.setTextViewText(
-            R.id.schedule_widget_today_heading,
-            "今天 ${today.format(shortDateFormat)}",
-        )
-        views.setTextViewText(
-            R.id.schedule_widget_tomorrow_heading,
-            "明天 ${tomorrow.format(shortDateFormat)}",
-        )
-        val rowLimit = sizing.twoDayRowLimit(variant.size.height)
-        bindCompactDay(
-            context,
-            widgetId,
-            views,
-            R.id.schedule_widget_today_courses,
-            R.id.schedule_widget_today_footer,
-            today,
-            remaining,
-            rowLimit,
-            frame.colors,
-            when {
-                todayDay == null -> "今天无课"
-                remaining.isEmpty() -> "今日课程已结束"
-                else -> "剩余 ${remaining.size} 门"
-            },
-        )
-        bindCompactDay(
-            context,
-            widgetId,
-            views,
-            R.id.schedule_widget_tomorrow_courses,
-            R.id.schedule_widget_tomorrow_footer,
-            tomorrow,
-            tomorrowLessons,
-            rowLimit,
-            frame.colors,
-            if (tomorrowLessons.isEmpty()) "明天无课" else "共 ${tomorrowLessons.size} 门",
-        )
-        for (id in listOf(
-            R.id.schedule_widget_two_day_title,
-            R.id.schedule_widget_today_heading,
-            R.id.schedule_widget_tomorrow_heading,
-        )) {
-            views.setTextColor(id, frame.colors.text)
-        }
-        for (id in listOf(
-            R.id.schedule_widget_two_day_context,
-            R.id.schedule_widget_today_footer,
-            R.id.schedule_widget_tomorrow_footer,
-        )) {
-            views.setTextColor(id, frame.colors.secondary)
-        }
-        views.setWidgetColor(R.id.schedule_widget_day_divider, "setBackgroundColor", frame.colors.outline)
-        views.setWidgetColor(R.id.schedule_widget_two_day_refresh, "setColorFilter", frame.colors.primary)
-        views.setOnClickPendingIntent(R.id.schedule_widget_two_day_refresh, refresh(context))
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_today_column,
-            openDate(context, widgetId, today),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_tomorrow_column,
-            openDate(context, widgetId, tomorrow),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_two_day_root,
-            openDate(context, widgetId, today),
-        )
-        views.setContentDescription(
-            R.id.schedule_widget_two_day_root,
-            "今明课程，今天${remaining.size}门剩余课程，明天${tomorrowLessons.size}门课程",
-        )
-        return views
-    }
-
-    private fun bindCompactDay(
-        context: Context,
-        widgetId: Int,
-        views: RemoteViews,
-        containerId: Int,
-        footerId: Int,
-        date: LocalDate,
-        lessons: List<ScheduleWidgetLesson>,
-        rowLimit: Int,
-        colors: WidgetColors,
-        footer: String,
-    ) {
-        lessons.take(rowLimit).forEach { lesson ->
-            val row = RemoteViews(context.packageName, R.layout.schedule_widget_compact_lesson)
-            val timing = if (lesson.start != null) {
-                scheduleWidgetClock(lesson.start)
-            } else {
-                lesson.periodLabel.ifBlank { lesson.timeLabel }
-            }
-            val meta = listOf(timing, lesson.location).filter(String::isNotBlank).joinToString(" · ")
-            row.setTextViewText(R.id.schedule_widget_compact_lesson_title, lesson.title)
-            row.setTextViewText(R.id.schedule_widget_compact_lesson_meta, meta)
-            row.setTextColor(R.id.schedule_widget_compact_lesson_title, colors.text)
-            row.setTextColor(R.id.schedule_widget_compact_lesson_meta, colors.secondary)
-            row.setOnClickPendingIntent(
-                R.id.schedule_widget_compact_lesson_root,
-                openDate(context, widgetId, date),
-            )
-            row.setContentDescription(
-                R.id.schedule_widget_compact_lesson_root,
-                listOf(lesson.title, timing, lesson.location).filter(String::isNotBlank)
-                    .joinToString("，"),
-            )
-            views.addView(containerId, row)
-        }
-        val hidden = lessons.size - rowLimit
-        views.setTextViewText(footerId, if (hidden > 0) "$footer · 还有 $hidden 门" else footer)
-    }
-
-    private fun weekLayout(
-        context: Context,
-        widgetId: Int,
-        week: ScheduleWidgetWeek,
-        frame: WidgetFrame,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.schedule_widget_week)
-        val today = frame.now.toLocalDate()
-        val first = week.days.first().date
-        val last = week.days.last().date
-        views.tintBackground(R.id.schedule_widget_week_root, frame.colors.surface)
-        views.setTextViewText(R.id.schedule_widget_week_title, "本周 · 第 ${week.number} 周")
-        views.setTextViewText(
-            R.id.schedule_widget_week_context,
-            "${first.monthValue}/${first.dayOfMonth}–${last.monthValue}/${last.dayOfMonth} · ${week.days.sumOf { it.lessons.size }} 门课",
-        )
-        views.setTextColor(R.id.schedule_widget_week_title, frame.colors.text)
-        views.setTextColor(R.id.schedule_widget_week_context, frame.colors.secondary)
-        views.setWidgetColor(R.id.schedule_widget_week_refresh, "setColorFilter", frame.colors.primary)
-        views.setOnClickPendingIntent(R.id.schedule_widget_week_refresh, refresh(context))
-        val rows = RemoteViews.RemoteCollectionItems.Builder().setViewTypeCount(1)
-        week.days.forEachIndexed { index, day ->
-            val row = RemoteViews(context.packageName, R.layout.schedule_widget_week_day)
-            val isToday = day.date == today
-            val names = day.lessons.map { it.title }.distinct()
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_label,
-                if (isToday) "今天" else day.date.format(weekdayFormat),
-            )
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_courses,
-                if (names.isEmpty()) "无课" else names.joinToString("、"),
-            )
-            row.setTextViewText(
-                R.id.schedule_widget_week_day_count,
-                if (day.lessons.isEmpty()) "" else "${day.lessons.size} 门",
-            )
-            row.setTextColor(
-                R.id.schedule_widget_week_day_label,
-                if (isToday) frame.colors.primary else frame.colors.text,
-            )
-            row.setTextColor(R.id.schedule_widget_week_day_courses, frame.colors.text)
-            row.setTextColor(R.id.schedule_widget_week_day_count, frame.colors.secondary)
-            row.setOnClickFillInIntent(
-                R.id.schedule_widget_week_day_root,
-                Intent().putExtra(SCHEDULE_WIDGET_DATE, day.date.toString()),
-            )
-            row.setContentDescription(
-                R.id.schedule_widget_week_day_root,
-                "${day.date.format(dateFormat)}，${if (names.isEmpty()) "无课" else names.joinToString("、")}",
-            )
-            rows.addItem(index.toLong(), row)
-        }
-        views.setRemoteAdapter(R.id.schedule_widget_week_days, rows.build())
-        val template = Intent(context, MainActivity::class.java).apply {
-            action = "dev.zfhelper.app.SCHEDULE_WIDGET_OPEN_WEEK_LIST"
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        views.setPendingIntentTemplate(
-            R.id.schedule_widget_week_days,
-            PendingIntent.getActivity(
-                context,
-                widgetId,
-                template,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-            ),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_week_header,
-            openDate(context, widgetId, today),
-        )
-        views.setOnClickPendingIntent(
-            R.id.schedule_widget_week_root,
-            openDate(context, widgetId, today),
-        )
-        views.setContentDescription(
-            R.id.schedule_widget_week_root,
-            "第${week.number}周，本周${week.days.sumOf { it.lessons.size }}门课",
-        )
+        if (showList) bindDayList(context, widgetId, views, listDay, frame, variant, sizing, lessons, resetScroll)
         return views
     }
 
@@ -413,6 +211,8 @@ internal object ScheduleWidgetRenderer {
         frame: WidgetFrame,
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
+        lessons: List<ScheduleWidgetLesson>,
+        resetScroll: Boolean,
     ) {
         val rows = RemoteViews.RemoteCollectionItems.Builder().setViewTypeCount(1)
         val minutes = if (day.date == frame.now.toLocalDate()) {
@@ -420,15 +220,27 @@ internal object ScheduleWidgetRenderer {
         } else {
             -1
         }
-        day.lessons.forEachIndexed { index, lesson ->
+        lessons.forEachIndexed { index, lesson ->
             rows.addItem(
                 index.toLong(),
-                lessonRow(context, lesson, frame.colors, day.date, minutes, variant, sizing),
+                lessonRow(
+                    context,
+                    lesson,
+                    frame.colors,
+                    day.date,
+                    minutes,
+                    variant,
+                    sizing,
+                    focusLabel = frame.focus.label.takeIf { lesson.id == frame.focus.lessonId },
+                    countdown = frame.focus.countdown.takeIf {
+                        variant.showCountdown && lesson.id == frame.focus.lessonId
+                    },
+                    settings = frame.settings,
+                ),
             )
         }
         views.setRemoteAdapter(R.id.schedule_widget_list, rows.build())
-        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
-        if (focusedIndex >= 0) views.setScrollPosition(R.id.schedule_widget_list, focusedIndex)
+        if (resetScroll) views.setScrollPosition(R.id.schedule_widget_list, 0)
         val template = Intent(context, MainActivity::class.java).apply {
             action = "dev.zfhelper.app.SCHEDULE_WIDGET_OPEN_LIST"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -445,6 +257,18 @@ internal object ScheduleWidgetRenderer {
         )
     }
 
+    private fun listLessons(day: ScheduleWidgetDay, frame: WidgetFrame): List<ScheduleWidgetLesson> {
+        val minutes = if (day.date == frame.now.toLocalDate()) frame.now.hour * 60 + frame.now.minute else -1
+        val focusedIndex = day.lessons.indexOfFirst { it.id == frame.focus.lessonId }
+        val focused = day.lessons[focusedIndex]
+        val remaining = day.lessons.filterIndexed { index, lesson ->
+            lesson.id != focused.id &&
+                (index > focusedIndex || day.byPeriod && lesson.end == null) &&
+                lesson.phaseAt(minutes) != ScheduleWidgetPhase.FINISHED
+        }
+        return listOf(focused) + remaining
+    }
+
     private fun lessonRow(
         context: Context,
         lesson: ScheduleWidgetLesson,
@@ -453,10 +277,14 @@ internal object ScheduleWidgetRenderer {
         minutes: Int,
         variant: ScheduleWidgetLayout,
         sizing: ScheduleWidgetSizing,
+        focusLabel: String?,
+        countdown: String?,
+        settings: ScheduleWidgetSettings,
     ): RemoteViews {
         val row = RemoteViews(context.packageName, R.layout.schedule_widget_lesson)
+        val focused = focusLabel != null
         val timed = lesson.start != null && lesson.end != null
-        val columns = variant.detailed && timed
+        val columns = timed
         row.setViewLayoutWidth(
             R.id.schedule_widget_lesson_time,
             sizing.timeColumnWidth,
@@ -464,13 +292,35 @@ internal object ScheduleWidgetRenderer {
         )
         row.visible(R.id.schedule_widget_lesson_time, columns)
         row.visible(R.id.schedule_widget_lesson_when, !columns)
+        row.visible(R.id.schedule_widget_lesson_accent, focused)
+        row.tintBackground(R.id.schedule_widget_lesson_root, colors.card)
+        row.visible(R.id.schedule_widget_lesson_state, focused)
+        row.visible(R.id.schedule_widget_lesson_status_row, true)
+        row.setTextViewText(R.id.schedule_widget_lesson_state, focusLabel.orEmpty())
+        row.setTextColor(R.id.schedule_widget_lesson_state, colors.primary)
+        row.visible(R.id.schedule_widget_lesson_countdown, countdown != null)
+        if (countdown != null) {
+            row.setTextViewText(R.id.schedule_widget_lesson_countdown, countdown)
+            row.setTextColor(R.id.schedule_widget_lesson_countdown, colors.text)
+            row.tintBackground(
+                R.id.schedule_widget_lesson_countdown,
+                WidgetColor(
+                    ColorUtils.blendARGB(colors.card.day, colors.primary.day, 0.18f),
+                    ColorUtils.blendARGB(colors.card.night, colors.primary.night, 0.18f),
+                ),
+            )
+        }
+        row.setWidgetColor(
+            R.id.schedule_widget_lesson_accent,
+            "setBackgroundColor",
+            colors.primary,
+        )
         val phase = lesson.phaseAt(minutes)
         row.setTextViewText(R.id.schedule_widget_lesson_start, lesson.start?.let(::scheduleWidgetClock))
         row.setTextViewText(
             R.id.schedule_widget_lesson_end,
-            lesson.end?.let { "${scheduleWidgetClock(it)}\n${phase.label}" },
+            lesson.end?.let(::scheduleWidgetClock),
         )
-        row.setInt(R.id.schedule_widget_lesson_end, "setMaxLines", 2)
         row.setTextViewText(
             R.id.schedule_widget_lesson_when,
             listOf(
@@ -479,28 +329,33 @@ internal object ScheduleWidgetRenderer {
             ).joinToString(" · "),
         )
         row.setTextViewText(R.id.schedule_widget_lesson_title, lesson.title)
-        row.setTextViewText(R.id.schedule_widget_lesson_location, lesson.location)
-        row.visible(R.id.schedule_widget_lesson_location, lesson.location.isNotBlank())
+        row.setInt(
+            R.id.schedule_widget_lesson_title,
+            "setMaxLines",
+            if (countdown != null) 1 else 2,
+        )
+        val location = lesson.location.takeIf { settings.showLocation }.orEmpty()
+        row.setTextViewText(R.id.schedule_widget_lesson_location, location)
+        row.visible(R.id.schedule_widget_lesson_location, location.isNotBlank())
         val detail = listOfNotNull(
-            lesson.periodLabel.takeIf { timed && it.isNotBlank() },
-            lesson.teacher?.takeIf(String::isNotBlank),
+            lesson.periodLabel.takeIf(String::isNotBlank),
+            lesson.teacher?.takeIf { settings.showTeacher && variant.detailed && it.isNotBlank() },
         ).joinToString(" · ")
         row.setTextViewText(R.id.schedule_widget_lesson_detail, detail)
-        row.visible(R.id.schedule_widget_lesson_detail, variant.detailed && detail.isNotBlank())
+        row.visible(R.id.schedule_widget_lesson_detail, detail.isNotBlank())
         row.setTextColor(R.id.schedule_widget_lesson_when, colors.primary)
         row.setTextColor(R.id.schedule_widget_lesson_start, colors.primary)
         row.setTextColor(R.id.schedule_widget_lesson_end, colors.secondary)
         row.setTextColor(R.id.schedule_widget_lesson_title, colors.text)
         row.setTextColor(R.id.schedule_widget_lesson_location, colors.secondary)
         row.setTextColor(R.id.schedule_widget_lesson_detail, colors.secondary)
-        row.setWidgetColor(R.id.schedule_widget_lesson_divider, "setBackgroundColor", colors.outline)
         row.setOnClickFillInIntent(
             R.id.schedule_widget_lesson_root,
             Intent().putExtra(SCHEDULE_WIDGET_DATE, date.toString()),
         )
         row.setContentDescription(
             R.id.schedule_widget_lesson_root,
-            listOf(lesson.title, lesson.periodLabel, lesson.timeLabel, lesson.location, detail, phase.label)
+            listOfNotNull(lesson.title, lesson.periodLabel, lesson.timeLabel, location, detail, phase.label, countdown)
                 .filter(String::isNotBlank).joinToString("，"),
         )
         return row
@@ -510,6 +365,7 @@ internal object ScheduleWidgetRenderer {
         snapshot: ScheduleWidgetSnapshot?,
         failure: String?,
         now: ZonedDateTime,
+        settings: ScheduleWidgetSettings,
     ): WidgetFocus {
         val today = now.toLocalDate()
         if (failure != null) return WidgetFocus(today, "同步异常", "课表暂不可用", failure)
@@ -539,7 +395,18 @@ internal object ScheduleWidgetRenderer {
         val minutes = now.hour * 60 + now.minute
         val day = snapshot.days.firstOrNull { it.date == today }
         val active = day?.lessons?.firstOrNull { it.phaseAt(minutes).isActive }
-        if (active != null) return lessonFocus(today, active.phaseAt(minutes).label, active)
+        if (active != null) {
+            val phase = active.phaseAt(minutes)
+            val countdown = active.end?.takeIf { settings.showCountdown && phase == ScheduleWidgetPhase.IN_CLASS && it > minutes }
+                ?.let { "剩 ${it - minutes} 分钟" }
+            return lessonFocus(today, phase.label, active, settings, countdown)
+        }
+        val next = day?.lessons?.filter { it.start != null && it.start > minutes }?.minByOrNull { it.start!! }
+        val untilNext = next?.start?.minus(minutes)
+        if (next != null && untilNext != null && untilNext <= SCHEDULE_WIDGET_UPCOMING_MINUTES) {
+            val countdown = if (settings.showCountdown) "还有 $untilNext 分钟" else null
+            return lessonFocus(today, "下一节", next, settings, countdown)
+        }
         if (day != null && (day.byPeriod || day.lessons.any { it.start == null })) {
             val pending = day.lessons.firstOrNull { it.end == null || it.end > minutes }
             if (pending != null) {
@@ -547,11 +414,11 @@ internal object ScheduleWidgetRenderer {
                     today,
                     if (day.byPeriod) "今日课程 · 按节次" else "今日课程",
                     pending,
+                    settings,
                 )
             }
         }
-        val next = day?.lessons?.firstOrNull { it.start != null && it.start > minutes }
-        if (next != null) return lessonFocus(today, "下一节", next)
+        if (next != null) return lessonFocus(today, "下一节", next, settings)
         val later = snapshot.days.firstOrNull { it.date > today }
         if (later != null) {
             val label = when {
@@ -559,13 +426,13 @@ internal object ScheduleWidgetRenderer {
                 later.lessons.any { it.start == null } -> "后续课程"
                 else -> "下一节"
             }
-            return lessonFocus(later.date, label, later.lessons.first())
+            return lessonFocus(later.date, label, later.lessons.first(), settings)
         }
         return WidgetFocus(
             today,
             "今日课表",
             if (day == null) "今天没有课程" else "今天的课程已结束",
-            "点击查看课表与日程",
+            "点击查看周课表",
             usable = true,
         )
     }
@@ -574,6 +441,8 @@ internal object ScheduleWidgetRenderer {
         date: LocalDate,
         label: String,
         lesson: ScheduleWidgetLesson,
+        settings: ScheduleWidgetSettings,
+        countdown: String? = null,
     ): WidgetFocus {
         val timing = listOfNotNull(
             lesson.periodLabel.takeIf(String::isNotBlank),
@@ -589,19 +458,19 @@ internal object ScheduleWidgetRenderer {
             label,
             lesson.title,
             timing,
-            lesson.location,
+            lesson.location.takeIf { settings.showLocation }.orEmpty(),
             usable = true,
             shortMeta = shortMeta,
             lessonId = lesson.id,
+            countdown = countdown,
         )
     }
 
-    private fun refresh(context: Context): PendingIntent = PendingIntent.getBroadcast(
-        context,
-        0,
-        Intent(context, ScheduleWidgetProvider::class.java).setAction(SCHEDULE_WIDGET_REFRESH),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    fun hasCountdown(
+        snapshot: ScheduleWidgetSnapshot,
+        now: ZonedDateTime,
+        settings: ScheduleWidgetSettings = ScheduleWidgetSettings.defaults,
+    ): Boolean = focus(snapshot, null, now, settings).countdown != null
 
     private fun openDate(context: Context, widgetId: Int, date: LocalDate): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -618,29 +487,35 @@ internal object ScheduleWidgetRenderer {
         )
     }
 
-    private fun colors(context: Context, snapshot: ScheduleWidgetSnapshot?): WidgetColors {
-        val light = snapshot?.light ?: ScheduleWidgetColors(
+    private fun colors(
+        context: Context,
+        snapshot: ScheduleWidgetSnapshot?,
+        savedTheme: ScheduleWidgetTheme?,
+    ): WidgetColors {
+        val theme = savedTheme ?: snapshot?.let { ScheduleWidgetTheme(it.appearance, it.light, it.dark) }
+        val light = theme?.light ?: ScheduleWidgetColors(
             context.getColor(android.R.color.system_neutral1_50),
             context.getColor(android.R.color.system_accent1_600),
             context.getColor(android.R.color.system_neutral1_900),
             context.getColor(android.R.color.system_neutral2_600),
             context.getColor(android.R.color.system_neutral2_200),
         )
-        val dark = snapshot?.dark ?: ScheduleWidgetColors(
+        val dark = theme?.dark ?: ScheduleWidgetColors(
             context.getColor(android.R.color.system_neutral1_900),
             context.getColor(android.R.color.system_accent1_200),
             context.getColor(android.R.color.system_neutral1_50),
             context.getColor(android.R.color.system_neutral2_200),
             context.getColor(android.R.color.system_neutral2_700),
         )
-        val day = if (snapshot?.appearance == "dark") dark else light
-        val night = if (snapshot?.appearance == "light") light else dark
+        val appearance = theme?.appearance
+        val day = if (appearance == "dark") dark else light
+        val night = if (appearance == "light") light else dark
         return WidgetColors(
             WidgetColor(day.surface, night.surface),
+            WidgetColor(day.card, night.card),
             WidgetColor(day.primary, night.primary),
             WidgetColor(day.text, night.text),
             WidgetColor(day.secondary, night.secondary),
-            WidgetColor(day.outline, night.outline),
         )
     }
 
@@ -664,10 +539,10 @@ internal object ScheduleWidgetRenderer {
 
     private data class WidgetColors(
         val surface: WidgetColor,
+        val card: WidgetColor,
         val primary: WidgetColor,
         val text: WidgetColor,
         val secondary: WidgetColor,
-        val outline: WidgetColor,
     )
 
     private data class WidgetFrame(
@@ -676,6 +551,7 @@ internal object ScheduleWidgetRenderer {
         val focus: WidgetFocus,
         val colors: WidgetColors,
         val now: ZonedDateTime,
+        val settings: ScheduleWidgetSettings,
     )
 
     private data class WidgetFocus(
@@ -687,5 +563,6 @@ internal object ScheduleWidgetRenderer {
         val usable: Boolean = false,
         val shortMeta: String? = null,
         val lessonId: String? = null,
+        val countdown: String? = null,
     )
 }

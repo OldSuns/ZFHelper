@@ -8,12 +8,14 @@ import org.json.JSONException
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.time.LocalDate
-import java.time.DayOfWeek
 import java.time.format.DateTimeParseException
-import java.time.temporal.ChronoUnit
-import java.time.temporal.TemporalAdjusters
 
 internal enum class ScheduleWidgetFailureKind { SNAPSHOT, DISPLAY }
 
@@ -23,13 +25,58 @@ internal class ScheduleWidgetException(
     val kind: ScheduleWidgetFailureKind = ScheduleWidgetFailureKind.SNAPSHOT,
 ) : Exception(message)
 
+internal class ScheduleWidgetSettingsException(
+    val code: String,
+    override val message: String,
+) : Exception(message)
+
 internal data class ScheduleWidgetColors(
     val surface: Int,
     val primary: Int,
     val text: Int,
     val secondary: Int,
     val outline: Int,
+    val card: Int = surface,
 )
+
+internal data class ScheduleWidgetTheme(
+    val appearance: String,
+    val light: ScheduleWidgetColors,
+    val dark: ScheduleWidgetColors,
+)
+
+internal data class ScheduleWidgetSettings(
+    val showCountdown: Boolean = true,
+    val showLocation: Boolean = true,
+    val showTeacher: Boolean = true,
+) {
+    fun toMap(): Map<String, Boolean> = mapOf(
+        "showCountdown" to showCountdown,
+        "showLocation" to showLocation,
+        "showTeacher" to showTeacher,
+    )
+
+    companion object {
+        val defaults = ScheduleWidgetSettings()
+
+        fun fromArguments(arguments: Any?): ScheduleWidgetSettings {
+            val values = arguments as? Map<*, *> ?: invalidSettings("格式错误")
+            if (values.keys.any { it !in setOf("showCountdown", "showLocation", "showTeacher") }) {
+                invalidSettings("未知选项")
+            }
+            fun read(key: String): Boolean = values[key] as? Boolean
+                ?: invalidSettings(key)
+            return ScheduleWidgetSettings(
+                showCountdown = read("showCountdown"),
+                showLocation = read("showLocation"),
+                showTeacher = read("showTeacher"),
+            )
+        }
+
+        private fun invalidSettings(field: String): Nothing =
+            throw ScheduleWidgetSettingsException("widget_settings_invalid", "小组件显示设置无效（$field）")
+    }
+}
 
 internal data class ScheduleWidgetPeriod(val start: Int, val end: Int)
 
@@ -81,38 +128,6 @@ internal data class ScheduleWidgetDay(
     val byPeriod: Boolean,
     val lessons: List<ScheduleWidgetLesson>,
 )
-
-internal data class ScheduleWidgetWeekDay(
-    val date: LocalDate,
-    val lessons: List<ScheduleWidgetLesson>,
-)
-
-internal data class ScheduleWidgetWeek(
-    val number: Int,
-    val days: List<ScheduleWidgetWeekDay>,
-)
-
-internal fun ScheduleWidgetSnapshot.weekAt(date: LocalDate): ScheduleWidgetWeek? {
-    if (days.isEmpty()) return null
-    val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val firstMonday = days.first().date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val lastSunday = days.last().date.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
-    if (date < firstMonday || date > lastSunday) return null
-    val anchor = days.minBy { kotlin.math.abs(ChronoUnit.DAYS.between(it.date, date)) }
-    val anchorMonday = anchor.date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val number = anchor.week + ChronoUnit.WEEKS.between(anchorMonday, monday).toInt()
-    if (number < 1) return null
-    return ScheduleWidgetWeek(
-        number,
-        List(7) { offset ->
-            val day = monday.plusDays(offset.toLong())
-            ScheduleWidgetWeekDay(
-                day,
-                days.firstOrNull { it.date == day }?.lessons.orEmpty(),
-            )
-        },
-    )
-}
 
 internal data class ScheduleWidgetSnapshot(
     val generatedAt: Long,
@@ -185,11 +200,16 @@ internal data class ScheduleWidgetSnapshot(
             }
         }
 
-        private fun parseColors(json: JSONObject): ScheduleWidgetColors {
-            json.allowedKeys("surface", "primary", "text", "secondary", "outline")
+        fun parseColors(json: JSONObject): ScheduleWidgetColors {
+            json.allowedKeys("surface", "primary", "text", "secondary", "outline", "card")
+            val surface = json.color("surface")
             return ScheduleWidgetColors(
-                json.color("surface"), json.color("primary"), json.color("text"),
-                json.color("secondary"), json.color("outline"),
+                surface,
+                json.color("primary"),
+                json.color("text"),
+                json.color("secondary"),
+                json.color("outline"),
+                if (json.has("card")) json.color("card") else surface,
             )
         }
 
@@ -250,6 +270,7 @@ internal fun scheduleWidgetClock(minutes: Int): String =
 
 internal class ScheduleWidgetStore(context: Context) {
     private val file = AtomicFile(File(context.filesDir, "schedule_widget.json"))
+    private val settingsFile = File(context.filesDir, "schedule_widget_settings.json")
     private val preferences = context.getSharedPreferences("schedule_widget_status", Context.MODE_PRIVATE)
     private var memoryFailure: ScheduleWidgetException? = null
 
@@ -288,7 +309,105 @@ internal class ScheduleWidgetStore(context: Context) {
         return ScheduleWidgetSnapshot.parse(payload)
     }
 
+    fun theme(snapshot: ScheduleWidgetSnapshot? = null): ScheduleWidgetTheme? {
+        val saved = try {
+            preferences.getString("theme", null)
+        } catch (_: ClassCastException) {
+            Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+            null
+        }
+        val savedTheme = if (saved == null) {
+            null
+        } else {
+            try {
+                val json = JSONObject(saved)
+                json.allowedKeys("appearance", "light", "dark")
+                val appearance = json.string("appearance")
+                widgetPayloadCheck(appearance in setOf("system", "light", "dark"), "外观")
+                ScheduleWidgetTheme(
+                    appearance,
+                    ScheduleWidgetSnapshot.parseColors(json.objectValue("light")),
+                    ScheduleWidgetSnapshot.parseColors(json.objectValue("dark")),
+                )
+            } catch (_: JSONException) {
+                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+                null
+            } catch (_: ScheduleWidgetException) {
+                Log.e("ScheduleWidget", "widget_saved_theme_invalid")
+                null
+            }
+        }
+        if (savedTheme != null || snapshot == null) return savedTheme
+        val legacyTheme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
+        if (!preferences.edit().putString("theme", legacyTheme.toJson().toString()).commit()) {
+            Log.e("ScheduleWidget", "widget_saved_theme_migration_failed")
+        }
+        return legacyTheme
+    }
+
+    fun settings(): ScheduleWidgetSettings {
+        fun readFailure() = ScheduleWidgetSettingsException(
+            "widget_settings_read_failed", "小组件显示设置未能读取，请重试",
+        )
+        try {
+            val json = JSONObject(Files.readAllBytes(settingsFile.toPath()).toString(Charsets.UTF_8))
+            return ScheduleWidgetSettings.fromArguments(json.keys().asSequence().associateWith { json.get(it) })
+        } catch (_: NoSuchFileException) {
+            // Preserve preferences saved before settings moved to their own file.
+            return legacySettings()
+        } catch (_: IOException) {
+            throw readFailure()
+        } catch (_: SecurityException) {
+            throw readFailure()
+        } catch (_: JSONException) {
+            throw readFailure()
+        } catch (_: ScheduleWidgetSettingsException) {
+            throw readFailure()
+        }
+    }
+
+    private fun legacySettings(): ScheduleWidgetSettings = try {
+        ScheduleWidgetSettings(
+            showCountdown = preferences.getBoolean("show_countdown", true),
+            showLocation = preferences.getBoolean("show_location", true),
+            showTeacher = preferences.getBoolean("show_teacher", true),
+        )
+    } catch (_: ClassCastException) {
+        Log.e("ScheduleWidget", "widget_saved_settings_invalid")
+        ScheduleWidgetSettings.defaults
+    }
+
+    fun writeSettings(settings: ScheduleWidgetSettings) {
+        fun writeFailure() = ScheduleWidgetSettingsException(
+            "widget_settings_write_failed", "小组件显示设置未能保存，请重试",
+        )
+        val pending = File(settingsFile.parentFile, "${settingsFile.name}.new")
+        try {
+            FileOutputStream(pending).use { stream ->
+                stream.write(JSONObject(settings.toMap()).toString().toByteArray(Charsets.UTF_8))
+                stream.fd.sync()
+            }
+            // Readers only see the new settings after the file is replaced. A retry overwrites a failed draft.
+            Files.move(pending.toPath(), settingsFile.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+        } catch (_: IOException) {
+            throw writeFailure()
+        } catch (_: SecurityException) {
+            throw writeFailure()
+        }
+    }
+
     fun write(payload: String) {
+        val snapshot = ScheduleWidgetSnapshot.parse(payload)
+        val theme = ScheduleWidgetTheme(snapshot.appearance, snapshot.light, snapshot.dark)
+            .toJson()
+            .toString()
+        if (!preferences.edit().putString("theme", theme).commit()) {
+            throw ScheduleWidgetException(
+                "widget_theme_write_failed",
+                "小组件外观设置未能保存，请重新同步",
+                ScheduleWidgetFailureKind.SNAPSHOT,
+            )
+        }
         val stream = try {
             file.startWrite()
         } catch (_: IOException) {
@@ -309,6 +428,19 @@ internal class ScheduleWidgetStore(context: Context) {
             throw ScheduleWidgetException("widget_write_failed", "小组件课表未能保存，请检查本机存储后重试")
         }
     }
+
+    private fun ScheduleWidgetColors.toJson(): JSONObject = JSONObject()
+        .put("surface", surface)
+        .put("primary", primary)
+        .put("text", text)
+        .put("secondary", secondary)
+        .put("outline", outline)
+        .put("card", card)
+
+    private fun ScheduleWidgetTheme.toJson(): JSONObject = JSONObject()
+        .put("appearance", appearance)
+        .put("light", light.toJson())
+        .put("dark", dark.toJson())
 
     fun clearFailure() {
         if (!preferences.edit().remove("failure").commit()) {
